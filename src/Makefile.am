@@ -1,0 +1,3 @@
+bin_PROGRAMS=ovsdb_example
+ovsdb_example_SOURCES=ovsdb_example.c
+

@@ -51,6 +51,7 @@ if test "$HAVE_SSL" == "1"; then
 fi
 AC_SEARCH_LIBS([ovsrec_init], [openvswitch])
 
+AX_LIBXML2_CHECK()
 
 # Checks for header files.
 AC_CHECK_HEADERS([stdint.h stdlib.h string.h])

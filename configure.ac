@@ -71,6 +71,7 @@ AC_HELP_STRING([--with-ovs-dbpath=PATH],[Change default path to OVS database (de
 AC_DEFINE_UNQUOTED([DEFAULT_OVS_DBPATH], ["$OVS_DBPATH"], [Default path to OVS database])
 
 AC_CONFIG_FILES([Makefile
+		server/Makefile
 		src/Makefile])
 AC_OUTPUT
 echo

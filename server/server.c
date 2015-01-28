@@ -30,20 +30,6 @@
 /* TODO: move this into configure */
 #define CONFDIR "/etc/ofconfig/"
 
-/*
-#define _GNU_SOURCE
-#include <libgen.h>
-#include <limits.h>
-
-#include <libxml/tree.h>
-#include <libxml/parser.h>
-
-#include <libnetconf_xml.h>
-
-#include "comm.h"
-#include "server_operations.h"
-*/
-
 /* ietf-netconf-server transAPI structure from netconf-server-transapi.c */
 extern struct transapi server_transapi;
 

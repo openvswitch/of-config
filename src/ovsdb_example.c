@@ -1,37 +1,18 @@
-/*
- * LICENSE TERMS
+/* Copyright (c) 2015 Open Networking Foundation.
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:
- * 1. Redistributions of source code must retain the above copyright
- *    notice, this list of conditions and the following disclaimer.
- * 2. Redistributions in binary form must reproduce the above copyright
- *    notice, this list of conditions and the following disclaimer in
- *    the documentation and/or other materials provided with the
- *    distribution.
- * 3. Neither the name of the Company nor the names of its contributors
- *    may be used to endorse or promote products derived from this
- *    software without specific prior written permission.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at:
  *
- * ALTERNATIVELY, provided that this notice is retained in full, this
- * product may be distributed under the terms of the GNU General Public
- * License (GPL) version 2 or later, in which case the provisions
- * of the GPL apply INSTEAD OF those given above.
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * This software is provided ``as is'', and any express or implied
- * warranties, including, but not limited to, the implied warranties of
- * merchantability and fitness for a particular purpose are disclaimed.
- * In no event shall the company or contributors be liable for any
- * direct, indirect, incidental, special, exemplary, or consequential
- * damages (including, but not limited to, procurement of substitute
- * goods or services; loss of use, data, or profits; or business
- * interruption) however caused and on any theory of liability, whether
- * in contract, strict liability, or tort (including negligence or
- * otherwise) arising in any way out of the use of this software, even
- * if advised of the possibility of such damage.
- *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
+
 #include <config.h>
 
 #include <stdio.h>

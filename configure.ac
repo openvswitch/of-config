@@ -54,7 +54,8 @@ AC_SEARCH_LIBS([ovsrec_init], [openvswitch])
 AX_LIBXML2_CHECK()
 
 # Checks for header files.
-AC_CHECK_HEADERS([stdint.h stdlib.h string.h])
+AC_CHECK_HEADERS([stdint.h stdlib.h string.h openvswitch/lib/dynamic-string.h openvswitch/lib/ovsdb-idl-provider.h openvswitch/lib/vlog.h openvswitch/lib/vswitch-idl.h])
+
 
 # Checks for typedefs, structures, and compiler characteristics.
 AC_TYPE_INT64_T

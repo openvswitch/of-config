@@ -33,6 +33,9 @@
 /* ietf-netconf-server transAPI structure from netconf-server-transapi.c */
 extern struct transapi server_transapi;
 
+/* of-config transAPI structure from ofconfig-transapi.c */
+extern struct transapi ofc_transapi;
+
 /* OF-CONFIG datastore functions from ofconfig-datastore.c */
 extern struct ncds_custom_funcs ofcds_funcs;
 
@@ -107,8 +110,10 @@ main(int argc, char **argv)
     struct {
         struct ncds_ds *server;
         ncds_id server_id;
+        struct ncds_ds *ofc;
+        ncds_id ofc_id;
     } ds = {
-    NULL, -1};
+    NULL, -1, NULL, -1};
 
 #if 0
     conn_t *conn = NULL;
@@ -217,6 +222,23 @@ main(int argc, char **argv)
         goto cleanup;
     }
 
+    /* prepare the of-config module */
+    ds.ofc = ncds_new_transapi_static(NCDS_TYPE_CUSTOM,
+                                      CONFDIR "/of-config/of-config.yin",
+                                      &ofc_transapi);
+    if (ds.ofc == NULL) {
+        retval = EXIT_FAILURE;
+        nc_verb_error("Creating of-config datastore failed.");
+        goto cleanup;
+    }
+    ncds_custom_set_data(ds.ofc, NULL, &ofcds_funcs);
+    if ((ds.ofc_id = ncds_init(ds.ofc)) < 0) {
+        retval = EXIT_FAILURE;
+        nc_verb_error("Initiating of-config datastore failed (error code %d).",
+                      ds.ofc_id);
+        goto cleanup;
+    }
+
     if (ncds_consolidate() != 0) {
         retval = EXIT_FAILURE;
         nc_verb_error("Consoidating data models failed.");
@@ -226,6 +248,12 @@ main(int argc, char **argv)
     if (ncds_device_init(&(ds.server_id), NULL, 1) != 0) {
         retval = EXIT_FAILURE;
         nc_verb_error("Initiating ietf-netconf-server module failed.");
+        goto cleanup;
+    }
+
+    if (ncds_device_init(&(ds.ofc_id), NULL, 1) != 0) {
+        retval = EXIT_FAILURE;
+        nc_verb_error("Initiating of-config module failed.");
         goto cleanup;
     }
 

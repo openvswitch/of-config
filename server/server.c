@@ -92,7 +92,7 @@ signal_handler(int sig)
 int
 main(int argc, char **argv)
 {
-    const char* optstring = "fhv:";
+    const char *optstring = "fhv:";
     const struct option longopts[] = {
         {"foreground", no_argument, 0, 'f'},
         {"help", no_argument, 0, 'h'},
@@ -129,7 +129,7 @@ main(int argc, char **argv)
 
     /* parse given options */
     while ((next_option = getopt_long(argc, argv, optstring, longopts,
-                    &longindex)) != -1) {
+                                      &longindex)) != -1) {
         switch (next_option) {
         case 'f':
             daemonize = 0;

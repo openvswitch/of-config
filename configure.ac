@@ -3,7 +3,7 @@
 
 AC_PREREQ([2.69])
 AC_INIT([of-config], [0.0.1], [])
-AC_CONFIG_SRCDIR([src/ovsdb_example.c])
+AC_CONFIG_SRCDIR([server/server.c])
 AC_CONFIG_HEADERS([config.h])
 AM_INIT_AUTOMAKE
 
@@ -72,7 +72,7 @@ AC_DEFINE_UNQUOTED([DEFAULT_OVS_DBPATH], ["$OVS_DBPATH"], [Default path to OVS d
 
 AC_CONFIG_FILES([Makefile
 		server/Makefile
-		src/Makefile])
+		examples/Makefile])
 AC_OUTPUT
 echo
 echo

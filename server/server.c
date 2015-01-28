@@ -95,11 +95,17 @@ main(int argc, char **argv)
     };
     int longindex, next_option;
     int daemonize = 1, verbose = 0;
-    int ret;
+    int retval = EXIT_SUCCESS, r;
     char *aux_string;
 
     struct sigaction action;
     sigset_t block_mask;
+
+    struct {
+        struct ncds_ds *server;
+        ncds_id server_id;
+    } ds = {
+    NULL, -1};
 
 #if 0
     conn_t *conn = NULL;
@@ -170,30 +176,55 @@ main(int argc, char **argv)
     /* TODO */
 
     /* init libnetconf for a multilayer server */
-    if ((ret = nc_init(NC_INIT_ALL | NC_INIT_MULTILAYER)) < 0) {
+    if ((r = nc_init(NC_INIT_ALL | NC_INIT_MULTILAYER)) < 0) {
         nc_verb_error("libnetconf initialization failed.");
         return (EXIT_FAILURE);
     }
 
 #if 0
     /* Initiate communication subsystem for communication with agents */
-    conn = comm_init(ret);
+    conn = comm_init(r);
     if (conn == NULL) {
         nc_verb_error("Communication subsystem not initiated.");
         return (EXIT_FAILURE);
     }
 #endif
 
-#if 0
-    /* start the ietf-netconf-server module */
-    ncds_new_transapi_static(NCDS_TYPE_FILE,
-                             CONFDIR
-                             "/ietf-netconf-server/ietf-netconf-server.yin",
-                             &server_transapi);
+    /* prepare the ietf-netconf-server module */
+    ncds_add_model(CONFDIR "/ietf-netconf-server/ietf-x509-cert-to-name.yin");
+    ds.server = ncds_new_transapi_static(NCDS_TYPE_FILE,
+                                         CONFDIR
+                                         "/ietf-netconf-server/ietf-netconf-server.yin",
+                                         &server_transapi);
+    if (ds.server == NULL) {
+        retval = EXIT_FAILURE;
+        nc_verb_error("Creating ietf-netconf-server datastore failed.");
+        goto cleanup;
+    }
+    ncds_file_set_path(ds.server,
+                       CONFDIR "/ietf-netconf-server/datastore.xml");
+    ncds_add_model(CONFDIR "/ietf-netconf-server/ietf-x509-cert-to-name.yin");
+    ncds_feature_enable("ietf-netconf-server", "ssh");
+    ncds_feature_enable("ietf-netconf-server", "inbound-ssh");
+    if ((ds.server_id = ncds_init(ds.server)) < 0) {
+        retval = EXIT_FAILURE;
+        nc_verb_error
+            ("Initiating ietf-netconf-server datastore failed (error code %d).",
+             ds.ofc_id);
+        goto cleanup;
+    }
 
-    /* start the of-config module */
-    /* TODO */
-#endif
+    if (ncds_consolidate() != 0) {
+        retval = EXIT_FAILURE;
+        nc_verb_error("Consoidating data models failed.");
+        goto cleanup;
+    }
+
+    if (ncds_device_init(&(ds.server_id), NULL, 1) != 0) {
+        retval = EXIT_FAILURE;
+        nc_verb_error("Initiating ietf-netconf-server module failed.");
+        goto cleanup;
+    }
 
     nc_verb_verbose("OF-CONFIG server successfully initialized.");
 
@@ -205,10 +236,10 @@ main(int argc, char **argv)
 #endif
     }
 
-    /* unload static transAPI modules */
+cleanup:
 
     /* cleanup */
     nc_close();
 
-    return (EXIT_SUCCESS);
+    return (retval);
 }

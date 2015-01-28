@@ -1,2 +1,2 @@
 bin_PROGRAMS=ofconfig
-ofconfig_SOURCES=common.c common.h server.c
+ofconfig_SOURCES=common.c common.h server.c netconf-server-transapi.c

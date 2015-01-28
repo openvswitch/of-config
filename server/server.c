@@ -33,6 +33,9 @@
 /* ietf-netconf-server transAPI structure from netconf-server-transapi.c */
 extern struct transapi server_transapi;
 
+/* OF-CONFIG datastore functions from ofconfig-datastore.c */
+extern struct ncds_custom_funcs ofcds_funcs;
+
 /* main loop flag */
 volatile int mainloop = 0;
 

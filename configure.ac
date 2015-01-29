@@ -17,23 +17,28 @@ LT_INIT()
 m4_pattern_forbid([LT_INIT]) dnl Make autoconf fail if libtool is missing.
 
 # configuration parameters
-AC_ARG_WITH([ovs-path],
-AC_HELP_STRING([--with-ovs-path=PATH],[Set path to the OVS repository (because of header files).]),
-[CPPFLAGS+="-I${withval}/lib/ -I${withval}/include/"],
-[AC_MSG_ERROR(Missing --with-ovs-path that specifies path to the Open vSwitch repository.)]
-)
-
-AC_ARG_WITH([ovs-libpath],
-AC_HELP_STRING([--with-ovs-libpath=PATH],[Set path to the OVS libraries.]),
-[LDFLAGS+="-L${withval}"], []
+AC_ARG_WITH([ovs-srcdir],
+AC_HELP_STRING([--with-ovs-srcdir=PATH],[Set path to the OVS package directory (because of header files).]),
+[CPPFLAGS+="-I${withval}/lib/ -I${withval}/include/"
+LDFLAGS+="-L${withval}/lib/.libs/"],
+[AC_MSG_ERROR(Missing --with-ovs-srcdir that specifies path to the Open vSwitch repository.)]
 )
 
 AC_ARG_WITH([ovs-dbpath],
-AC_HELP_STRING([--with-ovs-dbpath=PATH],[Change default path to OVS database (default: unix:/var/run/openvswitch/db.sock)]),
+AC_HELP_STRING([--with-ovs-dbpath=PATH],[Change default path to OVSDB socket (default: unix:/var/run/openvswitch/db.sock)]),
 [OVS_DBPATH="$withval"],
 [OVS_DBPATH="unix:/var/run/openvswitch/db.sock"]
 )
-AC_DEFINE_UNQUOTED([DEFAULT_OVS_DBPATH], ["$OVS_DBPATH"], [Default path to OVS database])
+AC_DEFINE_UNQUOTED([DEFAULT_OVS_DBPATH], ["$OVS_DBPATH"],
+    [Default path to OVSDB socket])
+
+AC_ARG_WITH([ovs-ofdir],
+AC_HELP_STRING([--with-ovs-ofdir=PATH],[Change default path to OpenFlow control socket directory (default: /var/run/openvswitch/)]),
+[DEFAULT_OVS_OFSOCKET_DIR="$withval"],
+[DEFAULT_OVS_OFSOCKET_DIR="/var/run/openvswitch/"]
+)
+AC_DEFINE_UNQUOTED([DEFAULT_OVS_OFSOCKET_DIR], ["$DEFAULT_OVS_OFSOCKET_DIR"],
+    [Change default path to OpenFlow control socket directory])
 
 # Checks for libraries.
 AC_SEARCH_LIBS([shm_open], [rt])

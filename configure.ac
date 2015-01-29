@@ -79,6 +79,10 @@ AC_SEARCH_LIBS([ovsrec_init], [openvswitch], [], [AC_MSG_ERROR([libopenvswitch.a
 
 AX_LIBXML2_CHECK()
 
+OFCONFIG_DATADIR="${localstatedir}/ofconfig"
+AC_SUBST([OFCONFIG_DATADIR])
+AC_DEFINE_DIR([OFCONFIG_DATADIR], [OFCONFIG_DATADIR], [Datastore&model files directory.])
+
 # Checks for header files.
 AC_CHECK_HEADERS([stdint.h stdlib.h string.h dynamic-string.h ovsdb-idl-provider.h vlog.h vswitch-idl.h])
 
@@ -92,6 +96,7 @@ AC_CHECK_FUNCS([strdup])
 
 
 AC_CONFIG_FILES([Makefile
+		model/Makefile
 		server/Makefile
 		examples/Makefile])
 AC_OUTPUT

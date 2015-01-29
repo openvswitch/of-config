@@ -1,3 +1,4 @@
-bin_PROGRAMS=ovsdb_example
+bin_PROGRAMS=ovsdb_example of_example
 ovsdb_example_SOURCES=ovsdb_example.c
+of_example_SOURCES=of_example.c
 

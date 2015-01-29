@@ -211,7 +211,6 @@ main(int argc, char **argv)
     }
     ncds_file_set_path(ds.server,
                        CONFDIR "/ietf-netconf-server/datastore.xml");
-    ncds_add_model(CONFDIR "/ietf-netconf-server/ietf-x509-cert-to-name.yin");
     ncds_feature_enable("ietf-netconf-server", "ssh");
     ncds_feature_enable("ietf-netconf-server", "inbound-ssh");
     if ((ds.server_id = ncds_init(ds.server)) < 0) {

@@ -79,6 +79,10 @@ AC_SEARCH_LIBS([ovsrec_init], [openvswitch], [], [AC_MSG_ERROR([libopenvswitch.a
 
 AX_LIBXML2_CHECK()
 
+OFCONFIG_CONFDIR="${sysconfdir}/ofconfig"
+AC_SUBST([OFCONFIG_CONFDIR])
+AC_DEFINE_DIR([OFCONFIG_CONFDIR], [OFCONFIG_CONFDIR], [Configuration files directory.])
+
 OFCONFIG_DATADIR="${localstatedir}/ofconfig"
 AC_SUBST([OFCONFIG_DATADIR])
 AC_DEFINE_DIR([OFCONFIG_DATADIR], [OFCONFIG_DATADIR], [Datastore&model files directory.])

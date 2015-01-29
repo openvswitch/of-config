@@ -16,6 +16,25 @@ AM_PROG_CC_C_O
 LT_INIT()
 m4_pattern_forbid([LT_INIT]) dnl Make autoconf fail if libtool is missing.
 
+# configuration parameters
+AC_ARG_WITH([ovs-path],
+AC_HELP_STRING([--with-ovs-path=PATH],[Set path to the OVS repository (because of header files).]),
+[CPPFLAGS+="-I${withval}/lib/ -I${withval}/include/"],
+[AC_MSG_ERROR(Missing --with-ovs-path that specifies path to the Open vSwitch repository.)]
+)
+
+AC_ARG_WITH([ovs-libpath],
+AC_HELP_STRING([--with-ovs-libpath=PATH],[Set path to the OVS libraries.]),
+[LDFLAGS+="-L${withval}"], []
+)
+
+AC_ARG_WITH([ovs-dbpath],
+AC_HELP_STRING([--with-ovs-dbpath=PATH],[Change default path to OVS database (default: unix:/var/run/openvswitch/db.sock)]),
+[OVS_DBPATH="$withval"],
+[OVS_DBPATH="unix:/var/run/openvswitch/db.sock"]
+)
+AC_DEFINE_UNQUOTED([DEFAULT_OVS_DBPATH], ["$OVS_DBPATH"], [Default path to OVS database])
+
 # Checks for libraries.
 AC_SEARCH_LIBS([shm_open], [rt])
 
@@ -49,12 +68,12 @@ if test "$HAVE_SSL" == "1"; then
 	CFLAGS="$OPENSSL_CFLAGS $CFLAGS "
 	CC="$PTHREAD_CC"
 fi
-AC_SEARCH_LIBS([ovsrec_init], [openvswitch])
+AC_SEARCH_LIBS([ovsrec_init], [openvswitch], [], [AC_MSG_ERROR([libopenvswitch.a was not found. Try --with-ovs-libpath])])
 
 AX_LIBXML2_CHECK()
 
 # Checks for header files.
-AC_CHECK_HEADERS([stdint.h stdlib.h string.h openvswitch/lib/dynamic-string.h openvswitch/lib/ovsdb-idl-provider.h openvswitch/lib/vlog.h openvswitch/lib/vswitch-idl.h])
+AC_CHECK_HEADERS([stdint.h stdlib.h string.h dynamic-string.h ovsdb-idl-provider.h vlog.h vswitch-idl.h])
 
 
 # Checks for typedefs, structures, and compiler characteristics.
@@ -64,12 +83,6 @@ AC_CHECK_HEADER_STDBOOL
 # Checks for library functions.
 AC_CHECK_FUNCS([strdup])
 
-AC_ARG_WITH([ovs-dbpath],
-AC_HELP_STRING([--with-ovs-dbpath=PATH],[Change default path to OVS database (default: unix:/var/run/openvswitch/db.sock)]),
-[OVS_DBPATH="$withval"],
-[OVS_DBPATH="unix:/var/run/openvswitch/db.sock"]
-)
-AC_DEFINE_UNQUOTED([DEFAULT_OVS_DBPATH], ["$OVS_DBPATH"], [Default path to OVS database])
 
 AC_CONFIG_FILES([Makefile
 		server/Makefile

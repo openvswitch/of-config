@@ -19,10 +19,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
-#include <openvswitch/lib/dynamic-string.h>
-#include <openvswitch/lib/ovsdb-idl-provider.h>
-#include <openvswitch/lib/vlog.h>
-#include <openvswitch/lib/vswitch-idl.h>
+#include <dynamic-string.h>
+#include <ovsdb-idl-provider.h>
+#include <vlog.h>
+#include <vswitch-idl.h>
 
 #ifndef DEFAULT_OVS_DBPATH
 #define DEFAULT_OVS_DBPATH  "unix:/var/run/openvswitch/db.sock"

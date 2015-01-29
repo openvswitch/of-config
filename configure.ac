@@ -100,6 +100,7 @@ AC_CHECK_FUNCS([strdup])
 
 
 AC_CONFIG_FILES([Makefile
+		config/Makefile
 		model/Makefile
 		server/Makefile
 		examples/Makefile])

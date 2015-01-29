@@ -55,13 +55,7 @@ print_usage(char *progname)
 
 #define OPTSTRING "fhv:"
 
-/*!
- * \brief Signal handler
- *
- * Handles received UNIX signals and sets value to control main loop
- *
- * \param sig 	signal number
- */
+/* Signal handler - controls main loop */
 void
 signal_handler(int sig)
 {

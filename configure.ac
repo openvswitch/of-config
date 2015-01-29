@@ -20,7 +20,9 @@ m4_pattern_forbid([LT_INIT]) dnl Make autoconf fail if libtool is missing.
 AC_ARG_WITH([ovs-srcdir],
 AC_HELP_STRING([--with-ovs-srcdir=PATH],[Set path to the OVS package directory (because of header files).]),
 [CPPFLAGS+="-I${withval}/lib/ -I${withval}/include/"
-LDFLAGS+="-L${withval}/lib/.libs/"],
+LDFLAGS+="-L${withval}/lib/.libs/"
+OVS_SRCDIR="${withval}"
+AC_SUBST(OVS_SRCDIR)],
 [AC_MSG_ERROR(Missing --with-ovs-srcdir that specifies path to the Open vSwitch repository.)]
 )
 

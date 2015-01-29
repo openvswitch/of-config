@@ -1,2 +1,4 @@
 ACLOCAL_AMFLAGS=-I m4
 SUBDIRS=examples server
+
+DISTCHECK_CONFIGURE_FLAGS="--with-ovs-srcdir=@OVS_SRCDIR@"

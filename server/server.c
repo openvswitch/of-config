@@ -30,22 +30,14 @@
 /* TODO: move this into configure */
 #define CONFDIR "/etc/ofconfig/"
 
-/*
-#define _GNU_SOURCE
-#include <libgen.h>
-#include <limits.h>
-
-#include <libxml/tree.h>
-#include <libxml/parser.h>
-
-#include <libnetconf_xml.h>
-
-#include "comm.h"
-#include "server_operations.h"
-*/
-
 /* ietf-netconf-server transAPI structure from netconf-server-transapi.c */
 extern struct transapi server_transapi;
+
+/* of-config transAPI structure from ofconfig-transapi.c */
+extern struct transapi ofc_transapi;
+
+/* OF-CONFIG datastore functions from ofconfig-datastore.c */
+extern struct ncds_custom_funcs ofcds_funcs;
 
 /* main loop flag */
 volatile int mainloop = 0;
@@ -100,7 +92,7 @@ signal_handler(int sig)
 int
 main(int argc, char **argv)
 {
-    const char* optstring = "fhv:";
+    const char *optstring = "fhv:";
     const struct option longopts[] = {
         {"foreground", no_argument, 0, 'f'},
         {"help", no_argument, 0, 'h'},
@@ -109,11 +101,19 @@ main(int argc, char **argv)
     };
     int longindex, next_option;
     int daemonize = 1, verbose = 0;
-    int ret;
+    int retval = EXIT_SUCCESS, r;
     char *aux_string;
 
     struct sigaction action;
     sigset_t block_mask;
+
+    struct {
+        struct ncds_ds *server;
+        ncds_id server_id;
+        struct ncds_ds *ofc;
+        ncds_id ofc_id;
+    } ds = {
+    NULL, -1, NULL, -1};
 
 #if 0
     conn_t *conn = NULL;
@@ -129,7 +129,7 @@ main(int argc, char **argv)
 
     /* parse given options */
     while ((next_option = getopt_long(argc, argv, optstring, longopts,
-                    &longindex)) != -1) {
+                                      &longindex)) != -1) {
         switch (next_option) {
         case 'f':
             daemonize = 0;
@@ -184,30 +184,78 @@ main(int argc, char **argv)
     /* TODO */
 
     /* init libnetconf for a multilayer server */
-    if ((ret = nc_init(NC_INIT_ALL | NC_INIT_MULTILAYER)) < 0) {
+    if ((r = nc_init(NC_INIT_ALL | NC_INIT_MULTILAYER)) < 0) {
         nc_verb_error("libnetconf initialization failed.");
         return (EXIT_FAILURE);
     }
 
 #if 0
     /* Initiate communication subsystem for communication with agents */
-    conn = comm_init(ret);
+    conn = comm_init(r);
     if (conn == NULL) {
         nc_verb_error("Communication subsystem not initiated.");
         return (EXIT_FAILURE);
     }
 #endif
 
-#if 0
-    /* start the ietf-netconf-server module */
-    ncds_new_transapi_static(NCDS_TYPE_FILE,
-                             CONFDIR
-                             "/ietf-netconf-server/ietf-netconf-server.yin",
-                             &server_transapi);
+    /* prepare the ietf-netconf-server module */
+    ncds_add_model(CONFDIR "/ietf-netconf-server/ietf-x509-cert-to-name.yin");
+    ds.server = ncds_new_transapi_static(NCDS_TYPE_FILE,
+                                         CONFDIR
+                                         "/ietf-netconf-server/ietf-netconf-server.yin",
+                                         &server_transapi);
+    if (ds.server == NULL) {
+        retval = EXIT_FAILURE;
+        nc_verb_error("Creating ietf-netconf-server datastore failed.");
+        goto cleanup;
+    }
+    ncds_file_set_path(ds.server,
+                       CONFDIR "/ietf-netconf-server/datastore.xml");
+    ncds_add_model(CONFDIR "/ietf-netconf-server/ietf-x509-cert-to-name.yin");
+    ncds_feature_enable("ietf-netconf-server", "ssh");
+    ncds_feature_enable("ietf-netconf-server", "inbound-ssh");
+    if ((ds.server_id = ncds_init(ds.server)) < 0) {
+        retval = EXIT_FAILURE;
+        nc_verb_error
+            ("Initiating ietf-netconf-server datastore failed (error code %d).",
+             ds.ofc_id);
+        goto cleanup;
+    }
 
-    /* start the of-config module */
-    /* TODO */
-#endif
+    /* prepare the of-config module */
+    ds.ofc = ncds_new_transapi_static(NCDS_TYPE_CUSTOM,
+                                      CONFDIR "/of-config/of-config.yin",
+                                      &ofc_transapi);
+    if (ds.ofc == NULL) {
+        retval = EXIT_FAILURE;
+        nc_verb_error("Creating of-config datastore failed.");
+        goto cleanup;
+    }
+    ncds_custom_set_data(ds.ofc, NULL, &ofcds_funcs);
+    if ((ds.ofc_id = ncds_init(ds.ofc)) < 0) {
+        retval = EXIT_FAILURE;
+        nc_verb_error("Initiating of-config datastore failed (error code %d).",
+                      ds.ofc_id);
+        goto cleanup;
+    }
+
+    if (ncds_consolidate() != 0) {
+        retval = EXIT_FAILURE;
+        nc_verb_error("Consoidating data models failed.");
+        goto cleanup;
+    }
+
+    if (ncds_device_init(&(ds.server_id), NULL, 1) != 0) {
+        retval = EXIT_FAILURE;
+        nc_verb_error("Initiating ietf-netconf-server module failed.");
+        goto cleanup;
+    }
+
+    if (ncds_device_init(&(ds.ofc_id), NULL, 1) != 0) {
+        retval = EXIT_FAILURE;
+        nc_verb_error("Initiating of-config module failed.");
+        goto cleanup;
+    }
 
     nc_verb_verbose("OF-CONFIG server successfully initialized.");
 
@@ -219,10 +267,10 @@ main(int argc, char **argv)
 #endif
     }
 
-    /* unload static transAPI modules */
+cleanup:
 
     /* cleanup */
     nc_close();
 
-    return (EXIT_SUCCESS);
+    return (retval);
 }

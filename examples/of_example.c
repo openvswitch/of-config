@@ -82,13 +82,13 @@ open_vconn(const char *name, const char *target, struct vconn **vconnp)
     int ofp_version;
     int error;
 
-    bridge_path = xasprintf("%s/%s.%s", PATH_TO_OFSOCKET, name, suffix);
+    bridge_path = xasprintf("%s/%s.%s", OFC_OVS_OFSOCKET_DIR, name, suffix);
 
     /* changed to called function */
     dp_parse_name(name, &datapath_name, &datapath_type);
 
     socket_name =
-        xasprintf("%s/%s.%s", PATH_TO_OFSOCKET, datapath_name, suffix);
+        xasprintf("%s/%s.%s", OFC_OVS_OFSOCKET_DIR, datapath_name, suffix);
     free(datapath_name);
     free(datapath_type);
 

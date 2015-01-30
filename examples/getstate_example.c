@@ -22,7 +22,7 @@
 
 int main(int argc, char **argv)
 {
-    ofconf_t *ofc = ofconf_init(DEFAULT_OVS_DBPATH);
+    ofconf_t *ofc = ofconf_init(OFC_OVS_DBPATH);
     
     char *state_data = get_state_data(ofc);
     puts(state_data);

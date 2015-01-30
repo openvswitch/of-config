@@ -17,14 +17,6 @@
 #ifndef OVS_DATA_H
 #define OVS_DATA_H 1
 
-#ifndef DEFAULT_OVS_DBPATH
-#define DEFAULT_OVS_DBPATH  "unix:/var/run/openvswitch/db.sock"
-#endif
-
-#ifndef DEFAULT_OVS_OFSOCKET_DIR
-#define DEFAULT_OVS_OFSOCKET_DIR	"/var/run/openvswitch"
-#endif
-
 #ifndef OFC_VERBOSITY
 #define OFC_VERBOSITY   0
 #endif

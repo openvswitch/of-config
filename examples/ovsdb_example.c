@@ -24,10 +24,6 @@
 #include <vlog.h>
 #include <vswitch-idl.h>
 
-#ifndef DEFAULT_OVS_DBPATH
-#define DEFAULT_OVS_DBPATH  "unix:/var/run/openvswitch/db.sock"
-#endif
-
 char *
 print_uuid(const struct uuid *uuid)
 {
@@ -46,7 +42,7 @@ main(int argc, char **argv)
     char end = 0, change = 1;
     static struct ovsdb_idl_txn *status_txn;
     enum ovsdb_idl_txn_status status;
-    char *ovs_db_path = DEFAULT_OVS_DBPATH;
+    char *ovs_db_path = OFC_OVS_DBPATH;
 
     /* dynamic string from OVS, it will be probably needed, contains char * */
     struct ds output;

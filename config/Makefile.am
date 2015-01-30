@@ -16,7 +16,7 @@ sshd_config:
 
 install-data-hook:
 	echo "# NETCONF SSH Subsystem settings" >> sshd_config; \
-	echo "Subsystem netconf $(DESTDIR)/$(bindir)/netopeer-agent" >> $(ofconfig_confdir)/sshd_config;
+	echo "Subsystem netconf $(DESTDIR)/$(bindir)/ofc-agent" >> $(ofconfig_confdir)/sshd_config;
 
 uninstall-hook:
 	rm -f $(ofconfig_confdir)/sshd_config

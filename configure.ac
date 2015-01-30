@@ -13,6 +13,12 @@ AC_CONFIG_MACRO_DIR([m4])
 AC_PROG_CC
 AM_PROG_CC_C_O
 
+AC_PATH_PROGS(SSHD_PATH, [sshd], [])
+if test -z "$SSHD_PATH"; then
+     AC_MSG_ERROR([sshd was not found])
+fi
+AC_DEFINE_DIR([SSHD_EXEC], [SSHD_PATH], [Path to sshd])
+
 LT_INIT()
 m4_pattern_forbid([LT_INIT]) dnl Make autoconf fail if libtool is missing.
 

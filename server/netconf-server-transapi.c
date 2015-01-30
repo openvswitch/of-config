@@ -36,9 +36,6 @@
 #	define UNUSED(x) UNUSED_ ## x
 #endif
 
-/* TODO: move this into configure */
-#define SSHD_EXEC "/usr/sbin/sshd"
-
 /* Name of the environment variable where other modules of the server can get
  * PID of the SSH daemon
  */

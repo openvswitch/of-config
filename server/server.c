@@ -216,7 +216,7 @@ main(int argc, char **argv)
 
     /* prepare the of-config module */
     ds.ofc = ncds_new_transapi_static(NCDS_TYPE_CUSTOM,
-                                      OFC_DATADIR "/of-config/of-config.yin",
+                                      OFC_DATADIR "/of-config.yin",
                                       &ofc_transapi);
     if (ds.ofc == NULL) {
         retval = EXIT_FAILURE;

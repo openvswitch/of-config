@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include <config.h>
+
 #define _GNU_SOURCE
 #include <errno.h>
 #include <fcntl.h>
@@ -33,9 +35,6 @@
 #else
 #	define UNUSED(x) UNUSED_ ## x
 #endif
-
-/* TODO: move this into configure */
-#define CONFDIR "/etc/ofconfig/"
 
 /* TODO: move this into configure */
 #define SSHD_EXEC "/usr/sbin/sshd"
@@ -211,14 +210,14 @@ callback_srv_netconf_srv_ssh_srv_listen(void **UNUSED(data), XMLDIFF_OP op,
      */
 
     /* prepare sshd_config */
-    if ((cfgfile = open(CONFDIR "/sshd_config", O_RDONLY)) == -1) {
+    if ((cfgfile = open(OFC_CONFDIR "/sshd_config", O_RDONLY)) == -1) {
         nc_verb_error("Unable to open SSH server configuration template (%s)",
                       strerror(errno));
         goto err_return;
     }
 
     if ((running_cfgfile =
-         open(CONFDIR "/sshd_config.running", O_WRONLY | O_TRUNC | O_CREAT,
+         open(OFC_CONFDIR "/sshd_config.running", O_WRONLY | O_TRUNC | O_CREAT,
               S_IRUSR | S_IWUSR)) == -1) {
         nc_verb_error("Unable to prepare SSH server configuration (%s)",
                       strerror(errno));
@@ -263,7 +262,7 @@ callback_srv_netconf_srv_ssh_srv_listen(void **UNUSED(data), XMLDIFF_OP op,
         } else if (pid == 0) {
             /* child */
             execl(SSHD_EXEC, SSHD_EXEC, "-D", "-f",
-                  CONFDIR "/sshd_config.running", NULL);
+                  OFC_CONFDIR "/sshd_config.running", NULL);
 
             /* wtf ?!? */
             nc_verb_error("%s; starting \"%s\" failed (%s).", __func__,

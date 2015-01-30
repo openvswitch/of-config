@@ -46,6 +46,18 @@ AC_HELP_STRING([--with-ovs-ofdir=PATH],[Change default path to OpenFlow control 
 )
 AC_DEFINE_DIR([OFC_OVS_OFSOCKET_DIR], [OFC_OVS_OFSOCKET_DIR], [Change default path to OpenFlow control socket directory])
 
+
+AC_ARG_ENABLE([dbus],
+        AC_HELP_STRING([--disable-dbus], [Use UNIX sockets instead of DBus.]),
+        [if test "$enableval" = "no"; then
+                dbus="no"
+                CPPFLAGS="$CPPFLAGS -DDISABLE_DBUS"
+        else
+                dbus="yes"
+        fi], [# use DBus by default
+        dbus="yes"])
+AM_CONDITIONAL(dbus, test x"$dbus" = x"yes")
+
 # Checks for libraries.
 AC_SEARCH_LIBS([shm_open], [rt])
 
@@ -82,6 +94,67 @@ fi
 AC_SEARCH_LIBS([ovsrec_init], [openvswitch], [], [AC_MSG_ERROR([libopenvswitch.a was not found. Try --with-ovs-libpath])])
 
 AX_LIBXML2_CHECK()
+
+if test "x$dbus" = "xyes"; then
+	# - library
+	AC_ARG_WITH([libdbus],
+		AC_HELP_STRING([--with-libdbus=PATH],[Set explicit installation prefix to the libdbus library]),
+		[CPPFLAGS="-I$withval/include/ $CPPFLAGS"
+		LIBS="-L$withval/lib/ -Wl,-rpath,$withval/lib $LIBS"
+		CONFIGURE_PARAMS="$CONFIGURE_PARAMS --with-libdbus=$withval"
+		],[
+		# get info from pkg-config about installed package
+		PKG_CHECK_MODULES(LIBDBUS, [dbus-1 >= 1.0.0])
+		CPPFLAGS="$LIBDBUS_CFLAGS $CPPFLAGS"
+		LIBS="$LIBDBUS_LIBS $LIBS"]
+	)
+	AC_SEARCH_LIBS([dbus_bus_get], [dbus-1], [], AC_MSG_ERROR([libdbus not found.]))
+
+	# - configuration directory
+	AC_ARG_WITH([dbus-config-dir],
+		AC_HELP_STRING([--with-dbus-config-dir=DIR],[path to D-Bus config files (/etc/dbus-1/system.d/ by default)]),
+		DBUSCONF="$withval"
+		,
+		DBUSCONF="/etc/dbus-1/system.d/"
+	)
+	AC_MSG_CHECKING([for existence of D-Bus configuration directory $DBUSCONF])
+	if test ! -d "$DBUSCONF"; then
+		AC_MSG_RESULT([missing])
+		AC_MSG_ERROR([Wrong D-Bus configuration path, $DBUSCONF does not exist.])
+	else
+		AC_MSG_RESULT([ok])
+		DBUSCONFFILE="$DBUSCONF/org.liberouter.netopeer.conf"
+		AC_SUBST(DBUSCONF)
+		AC_SUBST(DBUSCONFFILE)
+	fi
+
+	# - services directory
+	AC_ARG_WITH([dbus-services],
+		AC_HELP_STRING([--with-dbus-services@<:@=DIR@:>@],
+			[path to D-Bus services directory (/usr/share/dbus-1/system-services/ by default), \
+			if this parameter is not used, service file for netopeer-server is not installed!]),
+			if test "$withval" = "yes"; then
+				DBUSSERVICES="/usr/share/dbus-1/system-services/"
+			else
+				DBUSSERVICES="$withval"
+			fi
+			AC_MSG_CHECKING([for existence of D-Bus services directory $DBUSSERVICES])
+			if test ! -d "$DBUSSERVICES"; then
+				AC_MSG_RESULT([missing])
+				AC_MSG_ERROR([Wrong D-Bus service path, $DBUSSERVICES does not exist.])
+			else
+				AC_MSG_RESULT([ok])
+				AC_SUBST(DBUSSERVICES)
+			fi
+			CONFIGURE_PARAMS="$CONFIGURE_PARAMS --with-dbus-services=$DBUSSERVICES"
+			DBUSSERVICESFILE="$DBUSSERVICES/org.liberouter.netopeer.server.service"
+			AC_SUBST(DBUSSERVICES)
+			AC_SUBST(DBUSSERVICESFILE)
+			,
+			# do not install DBus service file anywhere
+			DBUSSERVICES=""
+	)
+fi
 
 OFC_CONFDIR="${sysconfdir}/ofconfig"
 AC_SUBST([OFC_CONFDIR])

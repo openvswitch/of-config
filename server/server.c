@@ -29,16 +29,6 @@
 
 #include "common.h"
 
-#ifndef OFCONFIG_CONFDIR
-#define OFCONFIG_CONFDIR "/etc/ofconfig/"
-#warning "OFCONFIG_CONFDIR undefined by configure - this is unexpected"
-#endif
-
-#ifndef OFCONFIG_DATADIR
-#define OFCONFIG_DATADIR "/etc/ofconfig/"
-#warning "OFCONFIG_DATADIR undefined by configure - this is unexpected"
-#endif
-
 /* ietf-netconf-server transAPI structure from netconf-server-transapi.c */
 extern struct transapi server_transapi;
 
@@ -202,9 +192,9 @@ main(int argc, char **argv)
 #endif
 
     /* prepare the ietf-netconf-server module */
-    ncds_add_model(OFCONFIG_DATADIR "/ietf-netconf-server/ietf-x509-cert-to-name.yin");
+    ncds_add_model(OFC_DATADIR "/ietf-netconf-server/ietf-x509-cert-to-name.yin");
     ds.server = ncds_new_transapi_static(NCDS_TYPE_FILE,
-                                         OFCONFIG_DATADIR
+                                         OFC_DATADIR
                                          "/ietf-netconf-server/ietf-netconf-server.yin",
                                          &server_transapi);
     if (ds.server == NULL) {
@@ -213,7 +203,7 @@ main(int argc, char **argv)
         goto cleanup;
     }
     ncds_file_set_path(ds.server,
-                       OFCONFIG_DATADIR "/ietf-netconf-server/datastore.xml");
+                       OFC_DATADIR "/ietf-netconf-server/datastore.xml");
     ncds_feature_enable("ietf-netconf-server", "ssh");
     ncds_feature_enable("ietf-netconf-server", "inbound-ssh");
     if ((ds.server_id = ncds_init(ds.server)) < 0) {
@@ -226,7 +216,7 @@ main(int argc, char **argv)
 
     /* prepare the of-config module */
     ds.ofc = ncds_new_transapi_static(NCDS_TYPE_CUSTOM,
-                                      OFCONFIG_DATADIR "/of-config/of-config.yin",
+                                      OFC_DATADIR "/of-config/of-config.yin",
                                       &ofc_transapi);
     if (ds.ofc == NULL) {
         retval = EXIT_FAILURE;

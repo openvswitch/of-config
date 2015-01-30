@@ -1,8 +1,10 @@
 BUILT_SOURCES=sshd_config
 
-ofconfig_confdir="@OFCONFIG_CONFDIR@"
+ofc_confdir=${OFC_CONFDIR}
 
-ofconfig_conf_DATA=sshd_config
+ofc_conf_DATA=sshd_config
+
+SSHD_CONFIG_FILE=${ofc_confdir}/sshd_config
 
 sshd_config:
 	if test ! -f sshd_config; then \
@@ -16,10 +18,10 @@ sshd_config:
 
 install-data-hook:
 	echo "# NETCONF SSH Subsystem settings" >> sshd_config; \
-	echo "Subsystem netconf $(DESTDIR)/$(bindir)/ofc-agent" >> $(ofconfig_confdir)/sshd_config;
+	echo "Subsystem netconf $(DESTDIR)/$(bindir)/ofc-agent" >> $(ofc_confdir)/sshd_config;
 
 uninstall-hook:
-	rm -f $(ofconfig_confdir)/sshd_config
+	rm -f $(ofc_confdir)/sshd_config
 
 clean-local:
 	rm -f sshd_config

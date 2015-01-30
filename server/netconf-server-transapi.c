@@ -40,6 +40,7 @@
  * PID of the SSH daemon
  */
 #define SSHDPID_ENV "SSHD_PID"
+#define SSHDRUNNING "/sshd_config.running"
 
 /* transAPI version which must be compatible with libnetconf */
 /* int transapi_version = 5; */
@@ -214,7 +215,7 @@ callback_srv_netconf_srv_ssh_srv_listen(void **UNUSED(data), XMLDIFF_OP op,
     }
 
     if ((running_cfgfile =
-         open(OFC_CONFDIR "/sshd_config.running", O_WRONLY | O_TRUNC | O_CREAT,
+         open(OFC_CONFDIR SSHDRUNNING, O_WRONLY | O_TRUNC | O_CREAT,
               S_IRUSR | S_IWUSR)) == -1) {
         nc_verb_error("Unable to prepare SSH server configuration (%s)",
                       strerror(errno));
@@ -259,7 +260,7 @@ callback_srv_netconf_srv_ssh_srv_listen(void **UNUSED(data), XMLDIFF_OP op,
         } else if (pid == 0) {
             /* child */
             execl(SSHD_EXEC, SSHD_EXEC, "-D", "-f",
-                  OFC_CONFDIR "/sshd_config.running", NULL);
+                  OFC_CONFDIR SSHDRUNNING, NULL);
 
             /* wtf ?!? */
             nc_verb_error("%s; starting \"%s\" failed (%s).", __func__,

@@ -22,8 +22,9 @@
 #include <libnetconf_xml.h>
 
 #include "common.h"
+#include "comm.h"
 
-/* default poll timeout, ms */
+/* default timeout, ms */
 #define TIMEOUT 500
 
 /* Define libnetconf submodules necessary for the NETCONF agent */
@@ -77,15 +78,14 @@ signal_handler(int sig)
     }
 }
 
-#if 0
 static struct nc_cpblts *
-get_server_capabilities(conn_t * conn)
+get_server_capabilities(comm_t *c)
 {
     struct nc_cpblts *srv_cpblts;
     char **cpblts_list = NULL;
     int i;
 
-    if ((cpblts_list = comm_get_srv_cpblts(conn)) == NULL) {
+    if ((cpblts_list = comm_get_srv_cpblts(c)) == NULL) {
         nc_verb_error("Cannot get server capabilities!");
         return (NULL);
     }
@@ -102,14 +102,46 @@ get_server_capabilities(conn_t * conn)
     return srv_cpblts;
 }
 
-int
-process_message(struct nc_session *session, conn_t * conn, const nc_rpc * rpc)
+static int
+session_info(comm_t *c, struct nc_session *ncs)
 {
+    const char *username;
+    int ret;
+    struct nc_cpblts *cpblts;
+    const char *sid;
+
+    /* get session username */
+    if ((username = nc_session_get_user(ncs)) == NULL) {
+        clb_print(NC_VERB_ERROR, "nc_session_get_user failed.");
+        return EXIT_FAILURE;
+    }
+
+    /* get session id */
+    if ((sid = nc_session_get_id(ncs)) == NULL) {
+        clb_print(NC_VERB_ERROR, "nc_session_get_id failed.");
+        return EXIT_FAILURE;
+    }
+
+    /* get capabilities list */
+    if ((cpblts = nc_session_get_cpblts(ncs)) == NULL) {
+        clb_print(NC_VERB_ERROR, "nc_session_get_cpblts failed.");
+        return EXIT_FAILURE;
+    }
+    /* capabilities count */
+    ret = comm_session_info_send(c, username, sid, cpblts);
+
+    return (ret);
+}
+
+static int
+process_message(struct nc_session *session, comm_t *c, const nc_rpc *rpc)
+{
+#define NOTIFCAP_URI "urn:ietf:params:netconf:capability:notification:1.0"
     nc_reply *reply = NULL;
     struct nc_err *err;
     pthread_t thread;
     struct ntf_thread_config *ntf_config;
-    xmlNodePtr op;
+    xmlNodePtr opnode;
     char *sid;
 
     if (rpc == NULL) {
@@ -120,7 +152,7 @@ process_message(struct nc_session *session, conn_t * conn, const nc_rpc * rpc)
     /* close-session message */
     switch (nc_rpc_get_op(rpc)) {
     case NC_OP_CLOSESESSION:
-        if (comm_close(conn) != EXIT_SUCCESS) {
+        if (comm_close(c) != EXIT_SUCCESS) {
             err = nc_err_new(NC_ERR_OP_FAILED);
             reply = nc_reply_error(err);
         } else {
@@ -129,32 +161,31 @@ process_message(struct nc_session *session, conn_t * conn, const nc_rpc * rpc)
         mainloop = 1;
         break;
     case NC_OP_KILLSESSION:
-        if ((op = ncxml_rpc_get_op_content(rpc)) == NULL || op->name == NULL ||
-            xmlStrEqual(op->name, BAD_CAST "kill-session") == 0) {
+        opnode = ncxml_rpc_get_op_content(rpc);
+        if (opnode == NULL || opnode->name == NULL
+                || !xmlStrEqual(opnode->name, BAD_CAST"kill-session")) {
             nc_verb_error("Corrupted RPC message.");
             reply = nc_reply_error(nc_err_new(NC_ERR_OP_FAILED));
-            xmlFreeNodeList(op);
+            xmlFreeNodeList(opnode);
             goto send_reply;
         }
-        if (op->children == NULL
-            || xmlStrEqual(op->children->name, BAD_CAST "session-id") == 0) {
+        if (opnode->children == NULL
+                || !xmlStrEqual(opnode->children->name, BAD_CAST"session-id")) {
             nc_verb_error("No session id found.");
             err = nc_err_new(NC_ERR_MISSING_ELEM);
             nc_err_set(err, NC_ERR_PARAM_INFO_BADELEM, "session-id");
             reply = nc_reply_error(err);
-            xmlFreeNodeList(op);
+            xmlFreeNodeList(opnode);
             goto send_reply;
         }
-        sid = (char *) xmlNodeGetContent(op->children);
-        reply = comm_kill_session(conn, sid);
-        xmlFreeNodeList(op);
+        sid = (char *)xmlNodeGetContent(opnode->children);
+        reply = comm_kill_session(c, sid);
+        xmlFreeNodeList(opnode);
         free(sid);
         break;
     case NC_OP_CREATESUBSCRIPTION:
         /* create-subscription message */
-        if (nc_cpblts_enabled
-            (session,
-             "urn:ietf:params:netconf:capability:notification:1.0") == 0) {
+        if (!nc_cpblts_enabled(session, NOTIFCAP_URI)) {
             reply = nc_reply_error(nc_err_new(NC_ERR_OP_NOT_SUPPORTED));
             goto send_reply;
         }
@@ -175,7 +206,7 @@ process_message(struct nc_session *session, conn_t * conn, const nc_rpc * rpc)
             goto send_reply;
         }
 
-        if ((ntf_config = malloc(sizeof (struct ntf_thread_config))) == NULL) {
+        if ((ntf_config = malloc(sizeof *ntf_config)) == NULL) {
             nc_verb_error("Memory allocation failed.");
             err = nc_err_new(NC_ERR_OP_FAILED);
             nc_err_set(err, NC_ERR_PARAM_MSG, "Memory allocation failed.");
@@ -183,12 +214,11 @@ process_message(struct nc_session *session, conn_t * conn, const nc_rpc * rpc)
             err = NULL;
             goto send_reply;
         }
-        ntf_config->session = (struct nc_session *) session;
+        ntf_config->session = session;
         ntf_config->subscribe_rpc = nc_rpc_dup(rpc);
 
         /* perform notification sending */
-        if ((pthread_create(&thread, NULL, notification_thread, ntf_config)) !=
-            0) {
+        if (pthread_create(&thread, NULL, notification_thread, ntf_config)) {
             nc_reply_free(reply);
             err = nc_err_new(NC_ERR_OP_FAILED);
             nc_err_set(err, NC_ERR_PARAM_MSG,
@@ -201,7 +231,7 @@ process_message(struct nc_session *session, conn_t * conn, const nc_rpc * rpc)
         break;
     default:
         /* other messages */
-        reply = comm_operation(conn, rpc);
+        reply = comm_operation(c, rpc);
         break;
     }
 
@@ -210,9 +240,6 @@ send_reply:
     nc_reply_free(reply);
     return EXIT_SUCCESS;
 }
-
-#endif
-
 
 static void
 print_usage(char *progname)
@@ -226,7 +253,6 @@ main(int argc, char **argv)
 {
     int ret;
     NC_MSG_TYPE rpc_type;
-
     const char *optstring = "hv:";
     const struct option longopts[] = {
         {"help", no_argument, 0, 'h'},
@@ -236,12 +262,9 @@ main(int argc, char **argv)
     int longindex, next_option;
     int verbose = 0;
     char *aux_string = NULL;
-
     struct sigaction action;
     sigset_t block_mask;
-#if 0
-    conn_t *con;
-#endif
+    comm_t *c;
     struct nc_cpblts *capabilities = NULL;
     struct nc_session *ncs;
     nc_rpc *rpc = NULL;
@@ -296,25 +319,23 @@ main(int argc, char **argv)
 
     /* initiate libnetconf */
     if (nc_init(NC_INIT_NOTIF | NC_INIT_MONITORING
-                    | NC_INIT_WD | NC_INIT_SINGLELAYER) < 0) {
+                | NC_INIT_WD | NC_INIT_SINGLELAYER) < 0) {
         nc_verb_error("Library initialization failed");
         return EXIT_FAILURE;
     }
 
-#if 0
-    /* connect to server */
-    if ((con = comm_connect()) == NULL) {
-        nc_verb_error("Cannot connect to Netopeer server.");
-        return EXIT_FAILURE;
+    /* Initiate communication subsystem for communication with server */
+    if ((c = comm_init(0)) == NULL) {
+        nc_verb_error("Communication subsystem not initiated.");
+        return (EXIT_FAILURE);
     }
-    nc_verb_verbose("Connected with Netopeer server");
+    nc_verb_verbose("Connected with OFC server");
 
     /* get server capabilities */
-    if ((capabilities = get_server_capabilities(con)) == NULL) {
+    if ((capabilities = get_server_capabilities(c)) == NULL) {
         nc_verb_error("Cannot get server capabilities.");
         return EXIT_FAILURE;
     }
-#endif
 
     /* accept NETCONF session */
     ncs = nc_session_accept(capabilities);
@@ -327,13 +348,11 @@ main(int argc, char **argv)
     /* monitor this session and build statistics */
     nc_session_monitor(ncs);
 
-#if 0
     /* create the session */
-    if (comm_session_info(con, ncs)) {
+    if (session_info(c, ncs)) {
         nc_verb_error("Failed to comunicate with server.");
         return EXIT_FAILURE;
     }
-#endif
 
     nc_verb_verbose("Init finished, starting main loop");
 
@@ -342,18 +361,16 @@ main(int argc, char **argv)
         switch (nc_session_recv_rpc(ncs, TIMEOUT, &rpc)) {
         case NC_MSG_RPC:
             nc_verb_verbose("Processing client message");
-#if 0
-            if (process_message(ncs, con, rpc) != EXIT_SUCCESS) {
+            if (process_message(ncs, c, rpc) != EXIT_SUCCESS) {
                 nc_verb_warning("Message processing failed");
             }
-#endif
             nc_rpc_free(rpc);
             rpc = NULL;
 
             break;
         case NC_MSG_NONE:
-            /* the request was already processed by libnetconf or no
-             * message available, continue in main loop */
+            /* the request was already processed by libnetconf or no message
+             * available, continue in main loop */
             break;
         case NC_MSG_UNKNOWN:
             if (nc_session_get_status(ncs) != NC_SESSION_STATUS_WORKING) {

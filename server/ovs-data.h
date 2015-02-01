@@ -27,11 +27,15 @@ typedef struct ofconf {
     struct vconn *vconn;
 } ofconf_t;
 
-ofconf_t *ofconf_init(const char *ovs_db_path);
+extern ofconf_t *ofc_global_context;
 
-char *get_state_data(ofconf_t *ofc);
+void ofconf_init(const char *ovs_db_path);
 
-void ofconf_destroy(ofconf_t **ofconf);
+char *get_state_data(void);
+
+char *get_config_data();
+
+void ofconf_destroy(void);
 
 
 #endif /* ovs-data.h */

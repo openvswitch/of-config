@@ -22,13 +22,26 @@
 
 int main(int argc, char **argv)
 {
-    ofconf_t *ofc = ofconf_init(OFC_OVS_DBPATH);
+    char *data;
+    ofconf_init(OFC_OVS_DBPATH);
     
-    char *state_data = get_state_data(ofc);
-    puts(state_data);
-    free(state_data);
+    data = get_state_data();
+    if (data != NULL) {
+        puts(data);
+        free(data);
+    } else {
+        puts("No state data...");
+    }
 
-    ofconf_destroy(&ofc);
+    data = get_config_data();
+    if (data != NULL) {
+        puts(data);
+        free(data);
+    } else {
+        puts("No config data...");
+    }
+
+    ofconf_destroy();
     return 0;
 }
 

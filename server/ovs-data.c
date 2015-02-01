@@ -30,255 +30,584 @@
 
 VLOG_DEFINE_THIS_MODULE(ovsdata);
 
-static char *
-print_uuid(const struct uuid *uuid)
+ofconf_t *ofc_global_context = (ofconf_t *) NULL;
+
+static const char *
+print_uuid_ro(const struct uuid *uuid)
 {
-    char str[38];
+    static char str[38];
 
     snprintf(str, 37, UUID_FMT, UUID_ARGS(uuid));
     str[37] = 0;
-    return strdup(str);
+    return str;
+}
+static char *
+print_uuid(const struct uuid *uuid)
+{
+    return strdup(print_uuid_ro(uuid));
+}
+
+/*
+ * If key is in the string map s, append the it's value into string,
+ * otherwise don't append anything.
+ *
+ * s    string map with data
+ * key  value of key in string map to find
+ * elem name of element to append into XML
+ * string   dynamic string containing XML
+ */
+static void
+find_and_append_smap_val(const struct smap *s, const char *key,
+                         const char *elem, struct ds *string)
+{
+
+    const char *value = smap_get(s, key);
+    if (value != NULL) {
+        ds_put_format(string, "<%s>%s</%s>", elem, value, elem);
+    }
 }
 
 
-char *get_ovsdb_flow_tables_state(ofconf_t *ofconf)
+static char *
+get_flow_tables_state(void)
 {
     const struct ovsrec_flow_table *row, *next;
     struct ds string;
+
     ds_init(&string);
-    OVSREC_FLOW_TABLE_FOR_EACH_SAFE(row, next, ofconf->idl) {
+    OVSREC_FLOW_TABLE_FOR_EACH_SAFE(row, next, ofc_global_context->idl) {
         char *uuid = print_uuid(&row->header_.uuid);
-        ds_put_format(&string, "<flow-table><resource-id>%s</resource-id><max-entries>%d</max-entries></flow-table>",
-            uuid, (row->n_flow_limit > 0?row->flow_limit[0]:0));
+
+        ds_put_format(&string, "<flow-table><resource-id>%s</resource-id>"
+                      "<max-entries>%d</max-entries></flow-table>",
+                      uuid, (row->n_flow_limit > 0 ? row->flow_limit[0] : 0));
         free(uuid);
     }
     return ds_steal_cstr(&string);
 }
 
-char *get_ovsdb_queues_state(ofconf_t *ofconf)
+static char *
+get_flow_tables_config(void)
 {
+    /* TODO flow-table "<flow-table>"
+     * "<table-id>%s</table-id>"
+     "</flow-table>" */
+
+    const struct ovsrec_flow_table *row, *next;
+    struct ds string;
+
+    ds_init(&string);
+    OVSREC_FLOW_TABLE_FOR_EACH_SAFE(row, next, ofc_global_context->idl) {
+        ds_put_format(&string, "<flow-table><resource-id>%s</resource-id>",
+                      print_uuid_ro(&row->header_.uuid));
+        ds_put_format(&string, "<name>%s</name", row->name);
+        ds_put_format(&string, "</flow-table>");
+    }
+    return ds_steal_cstr(&string);
+}
+
+static char *
+get_queues_config(void)
+{
+    /* TODO
+       "<queue><id>%s</id>"
+       "<port>%s</port>"
+       "<properties>"
+       "<experimenter-id>%s</experimenter-id>"
+       "<experimenter-data>%s</experimenter-data>"
+       "</properties></queue>"
+       */
     const struct ovsrec_queue *row, *next;
     struct ds string;
-    ds_init(&string);
-    OVSREC_QUEUE_FOR_EACH_SAFE(row, next, ofconf->idl) {
-        char *uuid = print_uuid(&row->header_.uuid);
-        ds_put_format(&string, "<queue><resource-id>%s</resource-id><properties>", uuid);
-        const struct smap_node *oc, *oc_it;
 
-        SMAP_FOR_EACH_SAFE(oc, oc_it, &row->other_config) {
-            if (!strcmp(oc->key, "min-rate")) {
-                ds_put_format(&string, "<min-rate>%s</min-rate>", oc->value);
-            } else if (!strcmp(oc->key, "max-rate")) {
-                ds_put_format(&string, "<max-rate>%s</max-rate>", oc->value);
-            }
-        }
+    ds_init(&string);
+    OVSREC_QUEUE_FOR_EACH_SAFE(row, next, ofc_global_context->idl) {
+        char *uuid = print_uuid(&row->header_.uuid);
+
+        ds_put_format(&string,
+                      "<queue><resource-id>%s</resource-id><properties>",
+                      uuid);
+        find_and_append_smap_val(&row->other_config, "min-rate", "min-rate",
+                                 &string);
+        find_and_append_smap_val(&row->other_config, "max-rate", "max-rate",
+                                 &string);
         ds_put_format(&string, "</properties></queue>");
         free(uuid);
     }
     return ds_steal_cstr(&string);
 }
 
-char *get_ovsdb_port_state(ofconf_t *ofconf)
+static char *
+get_ports_config(void)
 {
     const struct ovsrec_interface *row, *next;
     struct ds string;
+    const char *found_val;
+
     ds_init(&string);
-    OVSREC_INTERFACE_FOR_EACH_SAFE(row, next, ofconf->idl) {
+    OVSREC_INTERFACE_FOR_EACH_SAFE(row, next, ofc_global_context->idl) {
         char *uuid = print_uuid(&row->header_.uuid);
+
         ds_put_format(&string, "<port>");
         ds_put_format(&string, "<resource-id>%s</resource-id>", uuid);
-        ds_put_format(&string, "<number>%"PRIu64"</number>", (row->n_ofport>0?row->ofport[0]:0));
-        ds_put_format(&string, "<name>%s</name>", row->name);
-        ds_put_format(&string, "<state>");
-        ds_put_format(&string, "<oper-state>%s</oper-state>", row->link_state);
+        ds_put_format(&string, "<requested-number>%" PRIu64 "</requested-number>",
+                      (row->n_ofport_request > 0 ? row->ofport_request[0] : 0));
+        ds_put_format(&string, "<configuration>");
+        /* TODO ioctl:
+           ds_put_format(&string, "<admin-state>%s</admin-state>", "XXX");
+           */
+        /* TODO openflow:
+           ds_put_format(&string, "<no-receive>%s</no-receive>", "XXX");
+           ds_put_format(&string, "<no-forward>%s</no-forward>", "XXX");
+           ds_put_format(&string, "<no-packet-in>%s</no-packet-in>", "XXX");
+           */
+        ds_put_format(&string, "</configuration>");
+        /* TODO ioctl:
+           "<features>" "<advertised>" "<rate>%s</rate>"
+           "<auto-negotiate>%s</auto-negotiate>" "<medium>%s</medium>"
+           "<pause>%s</pause>" "</advertised>" "</features>"
+           */
 
-        const struct smap_node *oc, *oc_it;
-
-        SMAP_FOR_EACH_SAFE(oc, oc_it, &row->other_config) {
-            if (!strcmp(oc->key, "stp_state")) {
-                ds_put_format(&string, "<blocked>%s</blocked>", oc->value);
+        if (!strcmp(row->type, "gre")) {
+            ds_put_format(&string, "<tunnel-type>");
+            ds_put_format(&string, "<ipgre-tunnel>");
+            ds_put_format(&string, "<endpoints><v4-endpoints>");
+            find_and_append_smap_val(&row->options, "local_ip",
+                                     "local-endpoint-ipv4-adress", &string);
+            find_and_append_smap_val(&row->options, "remote_ip",
+                                     "remote-endpoint-ipv4-adress", &string);
+            ds_put_format(&string, "</v4-endpoints></endpoints>");
+            find_and_append_smap_val(&row->options, "csum",
+                                     "checksum-present", &string);
+            found_val = smap_get(&row->options, "key");
+            if (found_val != NULL) {
+                ds_put_format(&string, "<key-present>true</key-present>");
+                ds_put_format(&string, "<key>%s</key>", found_val);
+            } else {
+                ds_put_format(&string, "<key-present>false</key-present>");
             }
+            ds_put_format(&string, "<ipgre-tunnel>");
+            ds_put_format(&string, "</tunnel-type>");
+        } else if (!strcmp(row->type, "vxlan")) {
+            ds_put_format(&string, "<tunnel-type>");
+            ds_put_format(&string, "<vxlan-tunnel>");
+            ds_put_format(&string, "<endpoints><v4-endpoints>");
+            find_and_append_smap_val(&row->options, "local_ip",
+                                     "local-endpoint-ipv4-adress", &string);
+            find_and_append_smap_val(&row->options, "remote_ip",
+                                     "remote-endpoint-ipv4-adress", &string);
+            ds_put_format(&string, "</v4-endpoints></endpoints>");
+
+            find_and_append_smap_val(&row->options, "key", "vni", &string);
+            ds_put_format(&string, "<vxlan-tunnel>");
+            ds_put_format(&string, "</tunnel-type>");
+        } else if ((!strcmp(row->type, "gre64"))
+                    || (!strcmp(row->type, "geneve"))
+                    || (!strcmp(row->type, "lisp"))) {
+            ds_put_format(&string, "<tunnel-type>");
+            ds_put_format(&string, "<tunnel>");
+            ds_put_format(&string, "<endpoints><v4-endpoints>");
+            find_and_append_smap_val(&row->options, "local_ip",
+                                     "local-endpoint-ipv4-adress", &string);
+            find_and_append_smap_val(&row->options, "remote_ip",
+                                     "remote-endpoint-ipv4-adress", &string);
+            ds_put_format(&string, "</v4-endpoints></endpoints>");
+            ds_put_format(&string, "<tunnel>");
+            ds_put_format(&string, "</tunnel-type>");
         }
-        ds_put_format(&string, "</state>");
         ds_put_format(&string, "</port>");
         free(uuid);
     }
     return ds_steal_cstr(&string);
 }
 
-char *get_ovsdb_bridges_state(ofconf_t *ofconf)
+static char *
+get_ports_state(void)
+{
+    const struct ovsrec_interface *row, *next;
+    struct ds string;
+
+    ds_init(&string);
+    OVSREC_INTERFACE_FOR_EACH_SAFE(row, next, ofc_global_context->idl) {
+        char *uuid = print_uuid(&row->header_.uuid);
+
+        ds_put_format(&string, "<port>");
+        ds_put_format(&string, "<resource-id>%s</resource-id>", uuid);
+        ds_put_format(&string, "<number>%" PRIu64 "</number>",
+                      (row->n_ofport > 0 ? row->ofport[0] : 0));
+        ds_put_format(&string, "<name>%s</name>", row->name);
+        /* TODO ioctl():
+           <current-rate>%s</current-rate>
+           <max-rate>%s</max-rate> */
+        ds_put_format(&string, "<state>");
+        ds_put_format(&string, "<oper-state>%s</oper-state>", row->link_state);
+
+        find_and_append_smap_val(&row->other_config, "stp_state", "blocked",
+                                 &string);
+        /* TODO openflow:
+            <live>%s</live> */
+        ds_put_format(&string, "</state>");
+
+        /* TODO ioctl()
+           "<features>" "<current>" "<rate>%s</rate>"
+           "<auto-negotiate>%s</auto-negotiate>" "<medium>%s</medium>"
+           "<pause>%s</pause>" "</current>" "<supported>" "<rate>%s</rate>"
+           "<auto-negotiate>%s</auto-negotiate>" "<medium>%s</medium>"
+           "<pause>%s</pause>" "</supported>" "<advertised-peer>"
+           "<rate>%s</rate>" "<auto-negotiate>%s</auto-negotiate>"
+           "<medium>%s</medium>" "<pause>%s</pause></advertised-peer>"
+           "</features>" */
+
+        ds_put_format(&string, "</port>");
+        free(uuid);
+    }
+    return ds_steal_cstr(&string);
+}
+
+static void
+get_controller_state(struct ds *string, const struct ovsrec_controller *row)
+{
+    size_t i;
+
+    ds_put_format(string, "<controller>");
+    /* TODO?
+       <id>%s</id>
+       */
+    ds_put_format(string, "<state>");
+    ds_put_format(string, "<connection-state>%s</connection-state>",
+                  (row->is_connected ? "up" : "down"));
+    /* XXX not mapped: ds_put_format(string,
+     * "<current-version>%s</current-version>", ); ds_put_format(string,
+     * "<supported-versions>%s</supported-versions>", ); */
+    if (!strcmp(row->connection_mode, "in-band")) {
+        /* XXX local-ip-address-in-use */
+        ds_put_format(string, "<local-ip-address-in-use>%s"
+                      "</local-ip-address-in-use>", "XXX");
+    }
+    /* XXX local-port-in-use */
+    ds_put_format(string, "<local-port-in-use>%s</local-port-in-use>", "XXX");
+    ds_put_format(string, "</state>");
+
+    ds_put_format(string, "</controller>");
+}
+
+/* parses target t: rewrites delimiters to \0 and sets output pointers */
+static void
+parse_target_to_addr(char *t, char **protocol, char **address, char **port)
+{
+    /* XXX write some test for this... */
+    char *is_ipv6 = NULL;
+    if (t == NULL) {
+        (*protocol) = NULL;
+        (*address) = NULL;
+        (*port) = NULL;
+    }
+
+    /* t begins with protocol */
+    (*protocol) = t;
+
+    /* address is after delimiter ':' */
+    (*address) = strchr(*protocol, ':');
+    is_ipv6 = strchr(*address, '[');
+    if (*address != NULL) {
+        *(*address) = 0;
+        (*address)++;
+        if (is_ipv6 != NULL) {
+            (*port) = strchr(*address, ']');
+            (*port)++;
+        } else {
+            (*port) = strchr(*address, ':');
+        }
+        if (*port != NULL) {
+            *(*port) = 0;
+            (*port)++;
+        }
+    } else {
+        (*port) = NULL;
+    }
+}
+
+static void
+get_controller_config(struct ds *string, const struct ovsrec_controller *row)
+{
+    char *protocol, *address, *port;
+    char *target = strdup(row->target);
+
+    parse_target_to_addr(target, &protocol, &address, &port);
+
+    ds_put_format(string, "<controller>");
+    ds_put_format(string, "<id>%s</id>", print_uuid_ro(&row->header_.uuid));
+    ds_put_format(string, "<ip-address>%s</ip-address>", address);
+    ds_put_format(string, "<port>%s</port>", port);
+    ds_put_format(string, "<protocol>%s</protocol>", protocol);
+
+    if (!strcmp(row->connection_mode, "in-band")) {
+        ds_put_format(string, "<local-ip-address>%s" "</local-ip-address>", "XXX");
+    }
+    ds_put_format(string, "</controller>");
+}
+
+static char *
+get_bridges_state(void)
 {
     const struct ovsrec_bridge *row, *next;
     struct ds string;
+    size_t i;
+
     ds_init(&string);
-    OVSREC_BRIDGE_FOR_EACH_SAFE(row, next, ofconf->idl) {
-        /* char *uuid = print_uuid(&row->header_.uuid);
-        ds_put_format(&string, "<resource-id>%s</resource-id>", uuid);
-        free(uuid); */
-        ds_put_format(&string, "<switch><capabilities>");
-        ds_put_format(&string, "<max-buffered-packets>%d</max-buffered-packets>", 256);
-        ds_put_format(&string, "<max-tables>%s</max-tables>");
+    OVSREC_BRIDGE_FOR_EACH_SAFE(row, next, ofc_global_context->idl) {
+        /* char *uuid = print_uuid(&row->header_.uuid); */
+        /* ds_put_format(&string, "<resource-id>%s</resource-id>", uuid);
+         * free(uuid); */
+        ds_put_format(&string, "<switch>");
+        ds_put_format(&string, "<id>%s</id>", row->name);
+        ds_put_format(&string, "<capabilities><max-buffered-packets>%d"
+                      "</max-buffered-packets>", 256);
+        /* XXX max-tables: "no explicit limit"? */
+        /* ds_put_format(&string, "<max-tables>%s</max-tables>"); */
         ds_put_format(&string, "<max-ports>%d</max-ports>", 255);
-        ds_put_format(&string, "<flow-statistics>%s</flow-statistics>", "true");
-        ds_put_format(&string, "<table-statistics>%s</table-statistics>", "true");
-        ds_put_format(&string, "<port-statistics>%s</port-statistics>", "true");
-        ds_put_format(&string, "<group-statistics>%s</group-statistics>", "true");
-        ds_put_format(&string, "<queue-statistics>%s</queue-statistics>", "true");
-        ds_put_format(&string, "<reassemble-ip-fragments>%s</reassemble-ip-fragments>", "true");
-        ds_put_format(&string, "<block-looping-ports>%s</block-looping-ports>", "true");
+        ds_put_format(&string, "<flow-statistics>%s</flow-statistics>",
+                      "true");
+        ds_put_format(&string, "<table-statistics>%s</table-statistics>",
+                      "true");
+        ds_put_format(&string, "<port-statistics>%s</port-statistics>",
+                      "true");
+        ds_put_format(&string, "<group-statistics>%s</group-statistics>",
+                      "true");
+        ds_put_format(&string, "<queue-statistics>%s</queue-statistics>",
+                      "true");
+        ds_put_format(&string,
+                      "<reassemble-ip-fragments>%s</reassemble-ip-fragments>",
+                      "true");
+        ds_put_format(&string, "<block-looping-ports>%s</block-looping-ports>",
+                      "true");
 
-        ds_put_format(&string, "<reserved-port-types><type>all</type><type>controller</type><type>table</type><type>inport</type><type>any</type><type>normal</type><type>flood</type></reserved-port-types>");
+        ds_put_format(&string, "<reserved-port-types><type>all</type>"
+                      "<type>controller</type><type>table</type>"
+                      "<type>inport</type><type>any</type><type>normal</type>"
+                      "<type>flood</type></reserved-port-types>");
 
-        ds_put_format(&string, "<group-types><type>all</type><type>select</type><type>indirect</type><type>fast-failover</type></group-types>");
+        ds_put_format(&string, "<group-types><type>all</type>"
+                      "<type>select</type><type>indirect</type>"
+                      "<type>fast-failover</type></group-types>");
 
-        ds_put_format(&string, "<group-capabilities><capability>select-weight</capability><capability>select-liveness</capability><capability>chaining-check</capability></group-capabilities>");
+        ds_put_format(&string, "<group-capabilities>"
+                      "<capability>select-weight</capability>"
+                      "<capability>select-liveness</capability>"
+                      "<capability>chaining-check</capability>"
+                      "</group-capabilities>");
 
         ds_put_format(&string, "<action-types>");
-        ds_put_format(&string, "<type>set-mpls-ttl</type><type>dec-mpls-ttl</type><type>push-vlan</type><type>pop-vlan</type><type>push-mpls</type>");
-        ds_put_format(&string, "<type>pop-mpls</type><type>set-queue</type><type>group</type><type>set-nw-ttl</type><type>dec-nw-ttl</type><type>set-field</type>");
+        ds_put_format(&string, "<type>set-mpls-ttl</type>"
+                      "<type>dec-mpls-ttl</type><type>push-vlan</type>"
+                      "<type>pop-vlan</type><type>push-mpls</type>");
+        ds_put_format(&string, "<type>pop-mpls</type><type>set-queue</type>"
+                      "<type>group</type><type>set-nw-ttl</type>"
+                      "<type>dec-nw-ttl</type><type>set-field</type>");
         ds_put_format(&string, "</action-types>");
 
         ds_put_format(&string, "<instruction-types>");
-        ds_put_format(&string, "<type>apply-actions</type><type>clear-actions</type><type>write-actions</type><type>write-metadata</type><type>goto-table</type>");
+        ds_put_format(&string, "<type>apply-actions</type>"
+                      "<type>clear-actions</type><type>write-actions</type>"
+                      "<type>write-metadata</type><type>goto-table</type>");
         ds_put_format(&string, "</instruction-types>");
-        ds_put_format(&string, "</capabilities></switch>");
-/* TODO
-        "<controllers>"
-        "<controller>"
-        "<state>"
-        "<connection-state>%s</connection-state>"
-        "<current-version>%s</current-version>"
-        "<supported-versions>%s</supported-versions>"
-        "<local-ip-address-in-use>%s</local-ip-address-in-use>"
-        "<local-port-in-use>%s</local-port-in-use>"
-        "</state>"
-        "</controller>"
-        "</controllers>"
-        "</switch>";
-*/
-
+        ds_put_format(&string, "</capabilities>");
+        if (row->n_controller > 0) {
+            ds_put_format(&string, "<controllers>");
+            for (i = 0; i < row->n_controller; ++i) {
+                get_controller_state(&string, row->controller[i]);
+            }
+            ds_put_format(&string, "</controllers>");
+        }
+        ds_put_format(&string, "</switch>");
     }
 
     return ds_steal_cstr(&string);
 }
 
-const char *state_data_resources_format = "<port>"
-        "<number>%s</number>"
-        "<name>%s</name>"
-        "<current-rate>%s</current-rate>"
-        "<max-rate>%s</max-rate>"
-        "<state>"
-        "<oper-state>%s</oper-state>"
-        "<blocked>%s</blocked>"
-        "<live>%s</live>"
-        "</state>"
-        "<features>"
-        "<current>"
-        "<rate>%s</rate>"
-        "<auto-negotiate>%s</auto-negotiate>"
-        "<medium>%s</medium>"
-        "<pause>%s</pause>"
-        "</current>"
-        "<supported>"
-        "<rate>%s</rate>"
-        "<auto-negotiate>%s</auto-negotiate>"
-        "<medium>%s</medium>"
-        "<pause>%s</pause>"
-        "</supported>"
-        "<advertised-peer>"
-        "<rate>%s</rate>"
-        "<auto-negotiate>%s</auto-negotiate>"
-        "<medium>%s</medium>"
-        "<pause>%s</pause>"
-        "</advertised-peer>"
-        "</features>"
-        "</port>%s";
-
-
-const char *state_data_logical_switches_format = "<switch>"
-        "<capabilities>"
-        "<max-buffered-packets>%s</max-buffered-packets>"
-        "<max-tables>%s</max-tables>"
-        "<max-ports>%s</max-ports>"
-        "<flow-statistics>%s</flow-statistics>"
-        "<table-statistics>%s</table-statistics>"
-        "<port-statistics>%s</port-statistics>"
-        "<group-statistics>%s</group-statistics>"
-        "<queue-statistics>%s</queue-statistics>"
-        "<reassemble-ip-fragments>%s</reassemble-ip-fragments>"
-        "<block-looping-ports>%s</block-looping-ports>"
-        "<reserved-port-types>"
-        "<type>%s</type>"
-        "</reserved-port-types>"
-        "<group-types>"
-        "<type>%s</type>"
-        "</group-types>"
-        "<group-capabilities>"
-        "<capability>%s</capability>"
-        "</group-capabilities>"
-        "<action-types>"
-        "<type>%s</type>"
-        "</action-types>"
-        "<instruction-types>"
-        "<type>%s</type>"
-        "</instruction-types>"
-        "</capabilities>"
-        "<controllers>"
-        "<controller>"
-        "<state>"
-        "<connection-state>%s</connection-state>"
-        "<current-version>%s</current-version>"
-        "<supported-versions>%s</supported-versions>"
-        "<local-ip-address-in-use>%s</local-ip-address-in-use>"
-        "<local-port-in-use>%s</local-port-in-use>"
-        "</state>"
-        "</controller>"
-        "</controllers>"
-        "</switch>";
-
-const char *state_data_format = "<?xml version=\"1.0\"?>"
-    "<capable-switch>"
-        "<config-version>%s</config-version>"
-        "<resources>%s</resources>"
-        "<logical-switches>%s</logical-switches>"
-    "</capable-switch>";
-
-char *get_state_data(ofconf_t *ofc)
+void
+append_resource_refs(struct ds *string, struct ovsdb_idl_row **h,
+                     size_t count, const char *elem)
 {
-    struct ds state_data, resources, logical_switches;
+    size_t i;
+    if (count > 0) {
+        for (i = 0; i < count; ++i) {
+            /* TODO translate UUID -> resource-id */
+            ds_put_format(string, "<%s>%s</%s>", elem,
+                          print_uuid_ro(&h[i]->uuid), elem);
+        }
+    }
+}
+static char *
+get_bridges_config(void)
+{
+    const struct ovsrec_bridge *row, *next;
+    struct ds string;
+    size_t i;
 
-    char *queues = get_ovsdb_queues_state(ofc);
-    char *ports = get_ovsdb_port_state(ofc);
-    char *flow_tables = get_ovsdb_flow_tables_state(ofc);
-    char *bridges = get_ovsdb_bridges_state(ofc);
+    ds_init(&string);
+    OVSREC_BRIDGE_FOR_EACH_SAFE(row, next, ofc_global_context->idl) {
+        /* char *uuid = print_uuid(&row->header_.uuid); */
+        /* ds_put_format(&string, "<resource-id>%s</resource-id>", uuid);
+         * free(uuid); */
+        ds_put_format(&string, "<switch>");
+        ds_put_format(&string, "<id>%s</id>", row->name);
+        /* TODO
+           "<enabled>%s</enabled>"
+           */
+        find_and_append_smap_val(&row->other_config, "datapath-id",
+                                 "datapath-id", &string);
+        if (row->fail_mode != NULL) {
+            ds_put_format(&string, "<lost-connection-behavior>%s"
+                    "</lost-connection-behavior>", row->fail_mode);
+        }
+        if (row->n_controller > 0) {
+            ds_put_format(&string, "<controllers>");
+            for (i = 0; i < row->n_controller; ++i) {
+                get_controller_config(&string, row->controller[i]);
+            }
+            ds_put_format(&string, "</controllers>");
+        }
+
+        ds_put_format(&string, "<resources>");
+        append_resource_refs(&string, (struct ovsdb_idl_row **) row->ports,
+                             row->n_ports, "port");
+        append_resource_refs(&string,
+                             (struct ovsdb_idl_row **) row->value_flow_tables,
+                             row->n_flow_tables, "flow-table");
+
+        if (row->n_ports > 0) {
+            for (i = 0; i < row->n_ports; ++i) {
+                if (row->ports[i]->qos != NULL) {
+                    /* XXX test with some QoS'ed interface */
+                    append_resource_refs(&string,
+                            (struct ovsdb_idl_row **) row->ports[i]->qos
+                            ->value_queues,
+                            row->ports[i]->qos->n_queues, "queue");
+                }
+            }
+        }
+        /* TODO:
+           "<certificate>%s</certificate>"
+           */
+        ds_put_format(&string, "</resources></switch>");
+    }
+
+    return ds_steal_cstr(&string);
+}
+
+char *
+get_owned_certificates_config()
+{
+    /* TODO owned certificate "<owned-certificate>"
+     * "<resource-id>%s</resource-id>" "<certificate>%s</certificate>"
+     * "<private-key>" "<key-type>" "<dsa>" "<DSAKeyValue>" "<P>%s</P>"
+     * "<Q>%s</Q>" "<J>%s</J>" "<G>%s</G>" "<Y>%s</Y>" "<Seed>%s</Seed>"
+     * "<PgenCounter>%s</PgenCounter>" "</DSAKeyValue>" "</dsa>" "<rsa>"
+     * "<RSAKeyValue>" "<Modulus>%s</Modulus>" "<Exponent>%s</Exponent>"
+     * "</RSAKeyValue>" "</rsa>" "</key-type>" "</private-key>"
+     * "</owned-certificate>" */
+    return NULL;
+}
+
+char *
+get_external_certificates_config()
+{
+    /* TODO external-certificate "<external-certificate>"
+     * "<resource-id>%s</resource-id>" "<certificate>%s</certificate>"
+     * "</external-certificate>" */
+    return NULL;
+}
+
+
+char *
+get_config_data()
+{
+    const char *config_data_format = "<?xml version=\"1.0\"?><capable-switch>"
+        "<id>%s</id><resources>" "%s"    /* port */
+        "%s"                    /* queue */
+        "%s"                    /* owned-certificate */
+        "%s"                    /* external-certificate */
+        "%s"                    /* flow-table */
+        "</resources>"
+        "<logical-switches>%s</logical-switches></capable-switch>";
+
+    struct ds state_data;
+
+#define FOREACH_STR(GEN) \
+    GEN(queues) GEN(ports) GEN(flow_tables) GEN(bridges) \
+    GEN(owned_certificates) GEN(external_certificates)
+#define DEFINITION(name) char *name;
+
+    FOREACH_STR(DEFINITION)
+#undef DEFINITION
+
+
+    if (ofc_global_context == NULL) {
+        return NULL;
+    }
+
+#define ASSIGMENT(name) name = get_ ## name ## _config();
+    FOREACH_STR(ASSIGMENT)
+#undef DEFINITION
 
     ds_init(&state_data);
-    ds_init(&resources);
-    ds_init(&logical_switches);
 
-    ds_put_format(&resources, "%s%s", ports, flow_tables);
-    ds_put_format(&logical_switches, "%s", bridges);
-    ds_put_format(&state_data, state_data_format, "1.2", ds_cstr_ro(&resources), ds_cstr_ro(&logical_switches));
+    ds_put_format(&state_data, config_data_format,"XXX" /* XXX */,
+    ports, queues, flow_tables, owned_certificates, external_certificates,
+                  bridges);
+
+#define FREE(name) free(name);
+    FOREACH_STR(FREE)
+#undef FREE
+#undef FOREACH_STR
+
+    return ds_steal_cstr(&state_data);
+}
+
+char *
+get_state_data()
+{
+    const char *state_data_format = "<?xml version=\"1.0\"?>"
+        "<capable-switch><config-version>%s</config-version>"
+        "<resources>%s%s</resources>"
+        "<logical-switches>%s</logical-switches></capable-switch>";
+
+    struct ds state_data;
+    char *ports, *flow_tables, *bridges;
+
+    if (ofc_global_context == NULL) {
+        return NULL;
+    }
+
+    ports = get_ports_state();
+    flow_tables = get_flow_tables_state();
+    bridges = get_bridges_state();
+
+    ds_init(&state_data);
+
+    ds_put_format(&state_data, state_data_format, "1.2", ports, flow_tables,
+                  bridges);
 
     free(ports);
     free(flow_tables);
     free(bridges);
 
-    ds_destroy(&resources);
-    ds_destroy(&logical_switches);
     return ds_steal_cstr(&state_data);
 }
 
-
-ofconf_t *ofconf_init(const char *ovs_db_path)
+void
+ofconf_init(const char *ovs_db_path)
 {
-    ofconf_t *p = (ofconf_t *) calloc(1, sizeof(ofconf_t));
+    ofconf_t *p = (ofconf_t *) calloc(1, sizeof (ofconf_t));
+
     if (p == NULL) {
         /* failed */
-        return NULL;
+        return;
     }
-    /* verbose level */
-    //vlog_set_levels(NULL, VLF_CONSOLE, VLL_DBG);
+    ofc_global_context = p;
+    /* verbose level of OVS API */
+    vlog_set_levels(NULL, VLF_CONSOLE, VLL_ERR);
 
     ovsrec_init();
     p->idl = ovsdb_idl_create(ovs_db_path, &ovsrec_idl_class, true, true);
@@ -303,19 +632,17 @@ ofconf_t *ofconf_init(const char *ovs_db_path)
             poll_block();
         }
     }
-    return p;
 }
 
-void ofconf_destroy(ofconf_t **ofconf)
+void
+ofconf_destroy()
 {
-    ofconf_t *p = NULL;
-    if ((ofconf != NULL) && (*ofconf != NULL)) {
-        p = (ofconf_t *) (*ofconf);
+    if (ofc_global_context != NULL) {
         /* close everything */
-        ovsdb_idl_destroy(p->idl);
+        ovsdb_idl_destroy(ofc_global_context->idl);
 
-        free(*ofconf);
-        (*ofconf) = NULL;
+        free(ofc_global_context);
+        ofc_global_context = NULL;
     }
 }
 

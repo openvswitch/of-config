@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include <config.h>
+
 #define _GNU_SOURCE
 #include <errno.h>
 #include <fcntl.h>
@@ -27,6 +29,8 @@
 #include <libxml/tree.h>
 #include <libnetconf_xml.h>
 #include <libnetconf_ssh.h>
+
+#include "ovs-data.h"
 
 #ifdef __GNUC__
 #	define UNUSED(x) UNUSED_ ## x __attribute__((__unused__))
@@ -66,6 +70,14 @@ xmlDocPtr
 ofc_get_state_data(xmlDocPtr UNUSED(model), xmlDocPtr UNUSED(running),
                    struct nc_err **UNUSED(err))
 {
+    char *state_data;
+    xmlDocPtr d;
+    state_data = get_state_data();
+    if (state_data != NULL) {
+        d = xmlReadMemory(state_data, strlen(state_data), NULL, NULL, 0);
+        free(state_data);
+        return d;
+    }
     return (NULL);
 }
 

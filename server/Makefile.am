@@ -1,5 +1,5 @@
 bin_PROGRAMS=ofc-server ofc-agent
-ofc_server_SOURCES=common.c common.h comm.h server_ops.h server_ops.c server.c netconf-server-transapi.c ofconfig-transapi.c ofconfig-datastore.c # ovs-data.c ovs-data.h
+ofc_server_SOURCES=common.c common.h comm.h server_ops.h server_ops.c server.c netconf-server-transapi.c ofconfig-transapi.c ofconfig-datastore.c ovs-data.c ovs-data.h
 ofc_agent_SOURCES=common.c common.h comm.h agent.c
 
 # list of all conditional sources (because of packaging)

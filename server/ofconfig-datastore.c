@@ -14,10 +14,13 @@
  * limitations under the License.
  */
 
+#include <config.h>
+
 #include <stdlib.h>
 #include <string.h>
 
 #include <libnetconf.h>
+#include "ovs-data.h"
 
 #ifdef __GNUC__
 #   define UNUSED(x) UNUSED_ ## x __attribute__((__unused__))
@@ -28,12 +31,17 @@
 int
 ofcds_init(void *UNUSED(data))
 {
+    /* TODO replace OFC_OVS_DBPATH with some parameter */
+    ofconf_init(OFC_OVS_DBPATH);
+
+    nc_verb_verbose("OF-CONFIG datastore initialized.");
     return EXIT_SUCCESS;
 }
 
 void
 ofcds_free(void *UNUSED(data))
 {
+    ofconf_destroy();
     return;
 }
 

@@ -28,6 +28,7 @@ comm_init(int __attribute__ ((unused)) crashed)
 {
     DBusError dbus_err;
     DBusConnection *ret = NULL;
+    DBusMessage *msg = NULL, *reply = NULL;
 
     /* initiate dbus errors */
     dbus_error_init(&dbus_err);
@@ -37,6 +38,20 @@ comm_init(int __attribute__ ((unused)) crashed)
     if (dbus_error_is_set(&dbus_err) || ret == NULL) {
         nc_verb_verbose("D-Bus connection error (%s)", dbus_err.message);
         dbus_error_free(&dbus_err);
+        return NULL;
+    }
+
+    /* try connection using Ping */
+    msg = dbus_message_new_method_call(OFC_DBUS_BUSNAME, OFC_DBUS_PATH,
+                                       "org.freedesktop.DBus.Peer", "Ping");
+    reply = dbus_connection_send_with_reply_and_block(ret, msg,
+                                                      OFC_DBUS_TIMEOUT,
+                                                      &dbus_err);
+    if (dbus_error_is_set(&dbus_err) || reply == NULL) {
+        nc_verb_verbose("Starting communication with server failed (%s)",
+                        dbus_err.message);
+        dbus_error_free(&dbus_err);
+        comm_destroy(ret);
         return NULL;
     }
 

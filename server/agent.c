@@ -389,6 +389,7 @@ main(int argc, char **argv)
 cleanup:
     nc_rpc_free(rpc);
     nc_session_free(ncs);
+    comm_destroy(c);
     nc_close();
 
     return (EXIT_SUCCESS);

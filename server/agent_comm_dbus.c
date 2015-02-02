@@ -393,3 +393,12 @@ fillerr:
 
     return nc_reply_error(err);
 }
+
+void
+comm_destroy(comm_t *c)
+{
+    if (c != NULL) {
+        dbus_connection_flush(c);
+        dbus_connection_unref(c);
+    }
+}

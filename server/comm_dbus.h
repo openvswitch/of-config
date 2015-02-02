@@ -31,22 +31,22 @@ typedef DBusConnection comm_t;
 /**
  * DBus bus name for the OF-CONFIG server
  */
-#define OFC_DBUS_BUSNAME "org.liberouter.netopeer.server"
+#define OFC_DBUS_BUSNAME "org.opennetworking.ofc.server"
 
 /**
  * DBus interface name for the OF-CONFIG server
  */
-#define OFC_DBUS_IF "org.liberouter.netopeer.server"
+#define OFC_DBUS_IF "org.opennetworking.ofc.server"
 
 /**
  * DBus path for basic methods of the OF-CONFIG server
  */
-#define OFC_DBUS_PATH "/org/liberouter/netopeer/server"
+#define OFC_DBUS_PATH "/org/opennetworking/ofc/server"
 
 /**
  * DBus path for methods of the NETCONF operations implemented by server
  */
-#define OFC_DBUS_PATH_OP "/org/liberouter/netopeer/server/operations"
+#define OFC_DBUS_PATH_OP "/org/opennetworking/ofc/server/operations"
 
 /**
  * DBus GetCapabilities method from the basic server DBus interface/path

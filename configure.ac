@@ -9,6 +9,13 @@ AM_INIT_AUTOMAKE
 
 AC_CONFIG_MACRO_DIR([m4])
 
+# Must be checked before AC_PROG_CC that sets default -g -O2:
+AC_ARG_ENABLE([debug],
+        AC_HELP_STRING([--enable-debug], [Enable build with debug symbols and without optimizations.]),
+        [if test "$enableval" = "yes"; then
+                CFLAGS="$CFLAGS -g -O0"
+        fi], [])
+
 # Checks for programs.
 AC_PROG_CC
 AM_PROG_CC_C_O

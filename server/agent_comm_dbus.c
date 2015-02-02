@@ -34,12 +34,10 @@ comm_init(int __attribute__ ((unused)) crashed)
 
     /* connect to the D-Bus */
     ret = dbus_bus_get(DBUS_BUS_SYSTEM, &dbus_err);
-    if (dbus_error_is_set(&dbus_err)) {
+    if (dbus_error_is_set(&dbus_err) || ret == NULL) {
         nc_verb_verbose("D-Bus connection error (%s)", dbus_err.message);
         dbus_error_free(&dbus_err);
-    }
-    if (ret == NULL) {
-        nc_verb_verbose("Unable to connect to DBus system bus");
+        return NULL;
     }
 
     return ret;

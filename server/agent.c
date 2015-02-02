@@ -86,7 +86,7 @@ get_server_capabilities(comm_t *c)
     int i;
 
     if ((cpblts_list = comm_get_srv_cpblts(c)) == NULL) {
-        nc_verb_error("Cannot get server capabilities!");
+        nc_verb_error("getting server capabilities failed");
         return (NULL);
     }
 
@@ -329,11 +329,10 @@ main(int argc, char **argv)
         nc_verb_error("Communication subsystem not initiated.");
         return (EXIT_FAILURE);
     }
-    nc_verb_verbose("Connected with OFC server");
+    nc_verb_verbose("Communication channel ready");
 
     /* get server capabilities */
     if ((capabilities = get_server_capabilities(c)) == NULL) {
-        nc_verb_error("Cannot get server capabilities.");
         return EXIT_FAILURE;
     }
 

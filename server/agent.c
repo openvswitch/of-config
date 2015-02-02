@@ -306,7 +306,7 @@ main(int argc, char **argv)
 
     /* set verbose message printer callback */
     nc_callback_print(clb_print);
-    openlog("netopeer-agent", LOG_PID, LOG_DAEMON);
+    openlog("ofc-agent", LOG_PID, LOG_DAEMON);
 
     /* normalize value if not from the enum */
     if (verbose < NC_VERB_ERROR) {

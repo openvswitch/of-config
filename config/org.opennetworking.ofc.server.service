@@ -1,0 +1,4 @@
+[D-BUS Service]
+Name=org.opennetworking.ofc.server
+Exec=/usr/local/bin/ofc-server
+User=root

@@ -170,9 +170,9 @@ main(int argc, char **argv)
             nc_verb_error("Going to background failed (%s)", strerror(errno));
             return (EXIT_FAILURE);
         }
-        openlog("netopeer-server", LOG_PID, LOG_DAEMON);
+        openlog("ofc-server", LOG_PID, LOG_DAEMON);
     } else {
-        openlog("netopeer-server", LOG_PID | LOG_PERROR, LOG_DAEMON);
+        openlog("ofc-server", LOG_PID | LOG_PERROR, LOG_DAEMON);
     }
 
     /* make sure we have sufficient rights to communicate with OVSDB */

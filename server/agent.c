@@ -86,7 +86,7 @@ get_server_capabilities(comm_t *c)
     int i;
 
     if ((cpblts_list = comm_get_srv_cpblts(c)) == NULL) {
-        nc_verb_error("Cannot get server capabilities!");
+        nc_verb_error("getting server capabilities failed");
         return (NULL);
     }
 
@@ -306,7 +306,7 @@ main(int argc, char **argv)
 
     /* set verbose message printer callback */
     nc_callback_print(clb_print);
-    openlog("netopeer-agent", LOG_PID, LOG_DAEMON);
+    openlog("ofc-agent", LOG_PID, LOG_DAEMON);
 
     /* normalize value if not from the enum */
     if (verbose < NC_VERB_ERROR) {
@@ -329,11 +329,10 @@ main(int argc, char **argv)
         nc_verb_error("Communication subsystem not initiated.");
         return (EXIT_FAILURE);
     }
-    nc_verb_verbose("Connected with OFC server");
+    nc_verb_verbose("Communication channel ready");
 
     /* get server capabilities */
     if ((capabilities = get_server_capabilities(c)) == NULL) {
-        nc_verb_error("Cannot get server capabilities.");
         return EXIT_FAILURE;
     }
 
@@ -390,6 +389,7 @@ main(int argc, char **argv)
 cleanup:
     nc_rpc_free(rpc);
     nc_session_free(ncs);
+    comm_destroy(c);
     nc_close();
 
     return (EXIT_SUCCESS);

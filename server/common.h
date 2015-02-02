@@ -14,13 +14,13 @@
  * limitations under the License.
  */
 
-#ifndef OFC_SERVER_COMMON_H_
-#define OFC_SERVER_COMMON_H_
+#ifndef OFC_COMMON_H_
+#define OFC_COMMON_H_
 
 /* Environment variable with settings for verbose level */
 #define ENVIRONMENT_VERBOSE "OFC_VERBOSE"
 
 /* verbose messages printer */
-void clb_print(NC_VERB_LEVEL level, const char* msg);
+void clb_print(NC_VERB_LEVEL level, const char *msg);
 
-#endif /* OFC_SERVER_COMMON_H_ */
+#endif /* OFC_COMMON_H_ */

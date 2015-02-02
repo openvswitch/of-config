@@ -28,6 +28,10 @@
 #include <libnetconf_xml.h>
 
 #include "common.h"
+#include "comm.h"
+
+/* default timeout, ms */
+#define TIMEOUT 500
 
 /* ietf-netconf-server transAPI structure from netconf-server-transapi.c */
 extern struct transapi server_transapi;
@@ -86,6 +90,7 @@ int
 main(int argc, char **argv)
 {
     const char *optstring = "fhv:";
+
     const struct option longopts[] = {
         {"foreground", no_argument, 0, 'f'},
         {"help", no_argument, 0, 'h'},
@@ -96,7 +101,6 @@ main(int argc, char **argv)
     int daemonize = 1, verbose = 0;
     int retval = EXIT_SUCCESS, r;
     char *aux_string;
-
     struct sigaction action;
     sigset_t block_mask;
 
@@ -105,12 +109,10 @@ main(int argc, char **argv)
         ncds_id server_id;
         struct ncds_ds *ofc;
         ncds_id ofc_id;
-    } ds = {
-    NULL, -1, NULL, -1};
+    } ds = {NULL, -1, NULL, -1};
 
-#if 0
-    conn_t *conn = NULL;
-#endif
+    /* connection channel to agents */
+    comm_t *c = NULL;
 
     /* initialize message system and set verbose and debug variables */
     if ((aux_string = getenv(ENVIRONMENT_VERBOSE)) == NULL) {
@@ -182,21 +184,20 @@ main(int argc, char **argv)
         return (EXIT_FAILURE);
     }
 
-#if 0
     /* Initiate communication subsystem for communication with agents */
-    conn = comm_init(r);
-    if (conn == NULL) {
+    if ((c = comm_init(r)) == NULL) {
         nc_verb_error("Communication subsystem not initiated.");
         return (EXIT_FAILURE);
     }
-#endif
 
     /* prepare the ietf-netconf-server module */
-    ncds_add_model(OFC_DATADIR "/ietf-netconf-server/ietf-x509-cert-to-name.yin");
-    ds.server = ncds_new_transapi_static(NCDS_TYPE_FILE,
-                                         OFC_DATADIR
-                                         "/ietf-netconf-server/ietf-netconf-server.yin",
-                                         &server_transapi);
+    ncds_add_model(OFC_DATADIR
+                   "/ietf-netconf-server/ietf-x509-cert-to-name.yin");
+    ds.server =
+        ncds_new_transapi_static(NCDS_TYPE_FILE,
+                                 OFC_DATADIR
+                                 "/ietf-netconf-server/ietf-netconf-server.yin",
+                                 &server_transapi);
     if (ds.server == NULL) {
         retval = EXIT_FAILURE;
         nc_verb_error("Creating ietf-netconf-server datastore failed.");
@@ -252,11 +253,7 @@ main(int argc, char **argv)
     nc_verb_verbose("OF-CONFIG server successfully initialized.");
 
     while (!mainloop) {
-#if 0
-        comm_loop(conn, 500);
-#else
-        sleep(1);
-#endif
+        comm_loop(c, 500);
     }
 
 cleanup:

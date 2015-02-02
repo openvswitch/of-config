@@ -23,15 +23,6 @@
 
 #include "comm.h"
 
-/*
- #include <stdio.h>
- #include <stdint.h>
- #include <pwd.h>
- #include <pthread.h>
-
- #include "netopeer_dbus.h"
- */
-
 comm_t *
 comm_init(int __attribute__ ((unused)) crashed)
 {

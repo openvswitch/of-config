@@ -65,7 +65,7 @@ char **
 comm_get_srv_cpblts(comm_t *c)
 {
     DBusError dbus_err;
-    DBusMessage *msg, *reply;
+    DBusMessage *msg = NULL, *reply = NULL;
     DBusMessageIter args;
     char **cpblts = NULL, *cpblt;
     uint16_t cpblts_count = 0;
@@ -126,8 +126,12 @@ comm_get_srv_cpblts(comm_t *c)
     }
 
 cleanup:
-    dbus_message_unref(msg);
-    dbus_message_unref(reply);
+    if (msg) {
+        dbus_message_unref(msg);
+    }
+    if (reply) {
+        dbus_message_unref(reply);
+    }
 
     return (cpblts);
 }
@@ -146,7 +150,7 @@ comm_session_info_send(comm_t *c, const char *username, const char *sid,
                        struct nc_cpblts *cpblts)
 {
     DBusError dbus_err;
-    DBusMessage *msg, *reply;
+    DBusMessage *msg = NULL, *reply = NULL;
     DBusMessageIter args;
     int i;
     int ret = EXIT_FAILURE;
@@ -216,8 +220,12 @@ comm_session_info_send(comm_t *c, const char *username, const char *sid,
     ret = EXIT_SUCCESS;
 
 cleanup:
-    dbus_message_unref(msg);
-    dbus_message_unref(reply);
+    if (msg) {
+        dbus_message_unref(msg);
+    }
+    if (reply) {
+        dbus_message_unref(reply);
+    }
 
     return ret;
 }
@@ -233,7 +241,7 @@ cleanup:
 nc_reply *
 comm_operation(comm_t *c, const nc_rpc *rpc)
 {
-    DBusMessage *msg, *reply;
+    DBusMessage *msg = NULL, *reply = NULL;
     DBusError dbus_err;
     DBusMessageIter args;
     char *dump = NULL;
@@ -290,8 +298,12 @@ comm_operation(comm_t *c, const nc_rpc *rpc)
     rpc_reply = nc_reply_build(dump);
 
     /* cleanup */
-    dbus_message_unref(reply);
-    dbus_message_unref(msg);
+    if (msg) {
+        dbus_message_unref(msg);
+    }
+    if (reply) {
+        dbus_message_unref(reply);
+    }
 
     return rpc_reply;
 
@@ -301,8 +313,12 @@ fillerr:
 
     /* cleanup */
     dbus_error_free(&dbus_err);
-    dbus_message_unref(msg);
-    dbus_message_unref(reply);
+    if (msg) {
+        dbus_message_unref(msg);
+    }
+    if (reply) {
+        dbus_message_unref(reply);
+    }
 
     return (nc_reply_error(err));
 }
@@ -310,7 +326,7 @@ fillerr:
 int
 comm_close(comm_t *c)
 {
-    DBusMessage *msg;
+    DBusMessage *msg = NULL;
     DBusError dbus_err;
     int ret = EXIT_SUCCESS;
 
@@ -329,7 +345,9 @@ comm_close(comm_t *c)
 
     /* cleanup */
     dbus_connection_flush(c);
-    dbus_message_unref(msg);
+    if (msg) {
+        dbus_message_unref(msg);
+    }
 
     return ret;
 }
@@ -337,7 +355,7 @@ comm_close(comm_t *c)
 nc_reply *
 comm_kill_session(comm_t *c, const char *sid)
 {
-    DBusMessage *msg, *reply;
+    DBusMessage *msg = NULL, *reply = NULL;
     DBusError dbus_err;
     DBusMessageIter args;
     struct nc_err *err;
@@ -368,7 +386,9 @@ comm_kill_session(comm_t *c, const char *sid)
     }
 
     /* cleanup */
-    dbus_message_unref(msg);
+    if (msg) {
+        dbus_message_unref(msg);
+    }
 
     return nc_reply_ok();
 
@@ -378,7 +398,9 @@ fillerr:
 
     /* cleanup */
     dbus_error_free(&dbus_err);
-    dbus_message_unref(msg);
+    if (msg) {
+        dbus_message_unref(msg);
+    }
 
     return nc_reply_error(err);
 }

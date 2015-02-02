@@ -89,7 +89,7 @@ static int
 _dbus_error_reply(DBusMessage *msg, DBusConnection *c,
                   const char *error_name, const char *error_message)
 {
-    DBusMessage *reply;
+    DBusMessage *reply = NULL;
     dbus_uint32_t serial = 0;
     int ret = EXIT_SUCCESS;
 
@@ -107,7 +107,9 @@ _dbus_error_reply(DBusMessage *msg, DBusConnection *c,
     dbus_connection_flush(c);
 
     /* free the reply */
-    dbus_message_unref(reply);
+    if (reply) {
+        dbus_message_unref(reply);
+    }
 
     return ret;
 }
@@ -124,7 +126,7 @@ _dbus_error_reply(DBusMessage *msg, DBusConnection *c,
 static int
 _dbus_positive_reply(DBusMessage *msg, DBusConnection *c)
 {
-    DBusMessage *reply;
+    DBusMessage *reply = NULL;
     DBusMessageIter args;
     dbus_uint32_t serial = 0;
     dbus_bool_t stat = true;
@@ -150,7 +152,9 @@ _dbus_positive_reply(DBusMessage *msg, DBusConnection *c)
 
 cleanup:
     /* free the reply */
-    dbus_message_unref(reply);
+    if (reply) {
+        dbus_message_unref(reply);
+    }
 
     return ret;
 }
@@ -173,16 +177,16 @@ _dbus_handlestdif(DBusMessage *msg, DBusConnection *c)
 #define DBUS_STDIF_INTR "org.freedesktop.DBus.Introspectable"
 #define DBUS_STDIF_PROP "org.freedesktop.DBus.Properties"
 
-    DBusMessage *reply;
+    DBusMessage *reply = NULL;
     DBusMessageIter args;
     dbus_uint32_t serial = 0;
-    char *machine_uuid;
+    char *machine_uuid = NULL;
     char *introspect;
     int ret = 0;
 
     /* check if message is a method-call for my interface */
     if (dbus_message_get_type(msg) != DBUS_MESSAGE_TYPE_METHOD_CALL) {
-        return (EXIT_SUCCESS);
+        return ret;
     }
 
     if (dbus_message_has_interface(msg, DBUS_STDIF_PEER)) {
@@ -203,19 +207,17 @@ _dbus_handlestdif(DBusMessage *msg, DBusConnection *c)
                                                 &machine_uuid)) {
                 nc_verb_verbose("Unable to set D-Bus reply message (%s)",
                                 "GetMachineId");
-                return -1;
+                ret = -1;
+                goto cleanup;
             }
 
             /* send the reply && flush the connection */
             if (!dbus_connection_send(c, reply, &serial)) {
                 nc_verb_verbose("Unable to send D-Bus reply message");
-                return -1;
+                ret = -1;
+                goto cleanup;
             }
             dbus_connection_flush(c);
-
-            /* free the reply */
-            dbus_free(machine_uuid);
-            dbus_message_unref(reply);
 
             ret = 1;
         } else {
@@ -224,6 +226,7 @@ _dbus_handlestdif(DBusMessage *msg, DBusConnection *c)
             _dbus_error_reply(msg, c, DBUS_ERROR_UNKNOWN_METHOD,
                               "Unknown method invoked");
             ret = -1;
+            goto cleanup;
         }
     } else if (dbus_message_has_interface(msg, DBUS_STDIF_INTR)) {
         /* perform requested operation */
@@ -242,19 +245,18 @@ _dbus_handlestdif(DBusMessage *msg, DBusConnection *c)
                                                 &introspect)) {
                 nc_verb_verbose("Unable to set D-Bus reply message (%s)",
                                 "Introspect");
-                return -1;
+                ret = -1;
+                goto cleanup;
             }
 
             /* send the reply && flush the connection */
             nc_verb_verbose("sending introspect information (%s)", introspect);
             if (!dbus_connection_send(c, reply, &serial)) {
                 nc_verb_verbose("Unable to send D-Bus reply message");
-                return -1;
+                ret = -1;
+                goto cleanup;
             }
             dbus_connection_flush(c);
-
-            /* free the reply */
-            dbus_message_unref(reply);
 
             ret = 1;
         } else {
@@ -263,6 +265,7 @@ _dbus_handlestdif(DBusMessage *msg, DBusConnection *c)
             _dbus_error_reply(msg, c, DBUS_ERROR_UNKNOWN_METHOD,
                               "Unknown method invoked");
             ret = -1;
+            goto cleanup;
         }
     } else if (dbus_message_has_interface(msg, DBUS_STDIF_PROP)) {
         nc_verb_verbose("Call for not used interface %s with method %s",
@@ -271,8 +274,14 @@ _dbus_handlestdif(DBusMessage *msg, DBusConnection *c)
         _dbus_error_reply(msg, c, DBUS_ERROR_UNKNOWN_METHOD,
                           "Not used interface " DBUS_STDIF_PROP);
         ret = -1;
+        goto cleanup;
     }
 
+cleanup:
+    dbus_free(machine_uuid);
+    if (reply) {
+        dbus_message_unref(reply);
+    }
     return ret;
 }
 
@@ -329,7 +338,9 @@ get_capabilities(DBusConnection *c, DBusMessage *msg)
 
 cleanup:
     /* free the reply */
-    dbus_message_unref(reply);
+    if (reply) {
+        dbus_message_unref(reply);
+    }
 }
 
 /* Process SetSessionParams request

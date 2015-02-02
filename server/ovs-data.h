@@ -33,7 +33,7 @@ void ofconf_init(const char *ovs_db_path);
 
 char *get_state_data(void);
 
-char *get_config_data();
+char *get_config_data(void);
 
 void ofconf_destroy(void);
 

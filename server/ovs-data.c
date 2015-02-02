@@ -630,7 +630,7 @@ ofconf_init(const char *ovs_db_path)
 }
 
 void
-ofconf_destroy()
+ofconf_destroy(void)
 {
     if (ofc_global_context != NULL) {
         /* close everything */

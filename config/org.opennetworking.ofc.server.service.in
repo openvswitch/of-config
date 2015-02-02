@@ -1,4 +1,4 @@
 [D-BUS Service]
 Name=org.opennetworking.ofc.server
-Exec=/usr/local/bin/ofc-server
+Exec=@CONF_BINDIR@/ofc-server
 User=root

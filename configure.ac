@@ -171,6 +171,9 @@ OFC_DATADIR="${localstatedir}/ofconfig"
 AC_SUBST([OFC_DATADIR])
 AC_DEFINE_DIR([OFC_DATADIR], [OFC_DATADIR], [Datastore&model files directory.])
 
+# for creation of config files (e.g. for DBUS) containing directories:
+AC_DEFINE_DIR([CONF_BINDIR], [bindir], [Configured path to bin/ directory.])
+
 # Checks for header files.
 AC_CHECK_HEADERS([stdint.h stdlib.h string.h dynamic-string.h ovsdb-idl-provider.h vlog.h vswitch-idl.h])
 
@@ -185,6 +188,7 @@ AC_CHECK_FUNCS([strdup])
 
 AC_CONFIG_FILES([Makefile
 		config/Makefile
+		config/org.opennetworking.ofc.server.service
 		model/Makefile
 		server/Makefile
 		examples/Makefile])

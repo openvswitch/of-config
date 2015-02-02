@@ -1,8 +1,14 @@
 BUILT_SOURCES=sshd_config
 
+dbus_servicedir=/usr/share/dbus-1/services/
+dbus_configdir=/etc/dbus-1/system.d/
+
 ofc_confdir=${OFC_CONFDIR}
 
 ofc_conf_DATA=sshd_config
+
+dbus_service_DATA=org.opennetworking.ofc.server.service
+dbus_config_DATA=org.opennetworking.ofc.conf
 
 SSHD_CONFIG_FILE=${ofc_confdir}/sshd_config
 
@@ -20,7 +26,10 @@ install-data-local:
 	echo "Subsystem netconf $(DESTDIR)/$(bindir)/ofc-agent";} > sshd_config;
 
 install-data-hook:
-	chmod 600 $(DESTDIR)/${ofc_confdir}/sshd_config
+	chmod 600 $(DESTDIR)/${ofc_confdir}/sshd_config \
+		${dbus_servicedir}/org.opennetworking.ofc.server.service \
+		${dbus_configdir}/org.opennetworking.ofc.conf
+
 
 clean-local:
 	rm -f sshd_config

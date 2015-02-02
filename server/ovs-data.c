@@ -18,7 +18,6 @@
 #include <stdint.h>
 #include <dynamic-string.h>
 #include <ovsdb-idl-provider.h>
-#include <vlog.h>
 #include <vswitch-idl.h>
 #include <dpif.h>
 #include <vconn.h>
@@ -27,8 +26,6 @@
 #include <ofp-msgs.h>
 
 #include "ovs-data.h"
-
-VLOG_DEFINE_THIS_MODULE(ovsdata);
 
 ofconf_t *ofc_global_context = (ofconf_t *) NULL;
 
@@ -606,8 +603,6 @@ ofconf_init(const char *ovs_db_path)
         return;
     }
     ofc_global_context = p;
-    /* verbose level of OVS API */
-    vlog_set_levels(NULL, VLF_CONSOLE, VLL_ERR);
 
     ovsrec_init();
     p->idl = ovsdb_idl_create(ovs_db_path, &ovsrec_idl_class, true, true);

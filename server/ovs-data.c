@@ -183,7 +183,7 @@ get_ports_config(void)
             } else {
                 ds_put_format(&string, "<key-present>false</key-present>");
             }
-            ds_put_format(&string, "<ipgre-tunnel>");
+            ds_put_format(&string, "</ipgre-tunnel>");
             ds_put_format(&string, "</tunnel-type>");
         } else if (!strcmp(row->type, "vxlan")) {
             ds_put_format(&string, "<tunnel-type>");
@@ -196,7 +196,7 @@ get_ports_config(void)
             ds_put_format(&string, "</v4-endpoints></endpoints>");
 
             find_and_append_smap_val(&row->options, "key", "vni", &string);
-            ds_put_format(&string, "<vxlan-tunnel>");
+            ds_put_format(&string, "</vxlan-tunnel>");
             ds_put_format(&string, "</tunnel-type>");
         } else if ((!strcmp(row->type, "gre64"))
                     || (!strcmp(row->type, "geneve"))
@@ -209,7 +209,7 @@ get_ports_config(void)
             find_and_append_smap_val(&row->options, "remote_ip",
                                      "remote-endpoint-ipv4-adress", &string);
             ds_put_format(&string, "</v4-endpoints></endpoints>");
-            ds_put_format(&string, "<tunnel>");
+            ds_put_format(&string, "</tunnel>");
             ds_put_format(&string, "</tunnel-type>");
         }
         ds_put_format(&string, "</port>");

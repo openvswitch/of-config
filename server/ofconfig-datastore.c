@@ -89,6 +89,11 @@ char *
 ofcds_getconfig(void *UNUSED(data), NC_DATASTORE UNUSED(target),
                 struct nc_err **UNUSED(error))
 {
+    char *config_data = get_config_data();
+    nc_verb_verbose("OF-CONFIG datastore <get-config>");
+    if (config_data != NULL) {
+        return config_data;
+    }
     return strdup("");
 }
 

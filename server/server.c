@@ -45,6 +45,9 @@ extern struct ncds_custom_funcs ofcds_funcs;
 /* main loop flag */
 volatile int mainloop = 0;
 
+/* daemonize flag for hack in ofconfig-datastore.c */
+volatile int daemonize = 1;
+
 /* Print usage help */
 static void
 print_usage(char *progname)
@@ -98,7 +101,7 @@ main(int argc, char **argv)
         {0, 0, 0, 0}
     };
     int longindex, next_option;
-    int daemonize = 1, verbose = 0;
+    int verbose = 0;
     int retval = EXIT_SUCCESS, r;
     char *aux_string;
     struct sigaction action;

@@ -18,6 +18,7 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <syslog.h>
 
 #include <libnetconf.h>
 #include "ovs-data.h"
@@ -28,11 +29,24 @@
 #   define UNUSED(x) UNUSED_ ## x
 #endif
 
+/* daemonize flag from server.c */
+extern int daemonize;
+
 int
 ofcds_init(void *UNUSED(data))
 {
     /* TODO replace OFC_OVS_DBPATH with some parameter */
     ofconf_init(OFC_OVS_DBPATH);
+
+    /* hack - OVS calls openlog() and rewrites the syslog settings of the
+     * ofc-server. So we have to rewrite syslog settings back by another
+     * openlog() call
+     */
+    if (daemonize) {
+        openlog("ofc-server", LOG_PID, LOG_DAEMON);
+    } else {
+        openlog("ofc-server", LOG_PID | LOG_PERROR, LOG_DAEMON);
+    }
 
     nc_verb_verbose("OF-CONFIG datastore initialized.");
     return EXIT_SUCCESS;

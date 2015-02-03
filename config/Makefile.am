@@ -26,10 +26,7 @@ install-data-local:
 	echo "Subsystem netconf $(DESTDIR)/$(bindir)/ofc-agent";} > sshd_config;
 
 install-data-hook:
-	chmod 600 $(DESTDIR)/${ofc_confdir}/sshd_config \
-		${dbus_servicedir}/org.opennetworking.ofc.server.service \
-		${dbus_configdir}/org.opennetworking.ofc.conf
-
+	chmod 600 $(DESTDIR)/${ofc_confdir}/sshd_config
 
 clean-local:
 	rm -f sshd_config

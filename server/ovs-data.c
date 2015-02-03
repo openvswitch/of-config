@@ -520,7 +520,7 @@ get_external_certificates_config()
 char *
 get_config_data()
 {
-    const char *config_data_format = "<?xml version=\"1.0\"?><capable-switch>"
+    const char *config_data_format = "<?xml version=\"1.0\"?><capable-switch xmlns=\"urn:onf:config:yang\">"
         "<id>%s</id><resources>" "%s"    /* port */
         "%s"                    /* queue */
         "%s"                    /* owned-certificate */
@@ -544,7 +544,10 @@ get_config_data()
         return NULL;
     }
 
-#define ASSIGMENT(name) name = get_ ## name ## _config();
+#define ASSIGMENT(name) name = get_ ## name ## _config(); \
+    if (name == NULL) { \
+        name = strdup(""); \
+    }
     FOREACH_STR(ASSIGMENT)
 #undef DEFINITION
 
@@ -566,29 +569,37 @@ char *
 get_state_data()
 {
     const char *state_data_format = "<?xml version=\"1.0\"?>"
-        "<capable-switch><config-version>%s</config-version>"
+        "<capable-switch xmlns=\"urn:onf:config:yang\"><config-version>%s</config-version>"
         "<resources>%s%s</resources>"
         "<logical-switches>%s</logical-switches></capable-switch>";
 
+#define FOREACH_STR(GEN) \
+    GEN(ports) GEN(flow_tables) GEN(bridges)
+#define DEFINITION(name) char *name;
+    FOREACH_STR(DEFINITION)
+#undef DEFINITION
     struct ds state_data;
-    char *ports, *flow_tables, *bridges;
 
     if (ofc_global_context == NULL) {
         return NULL;
     }
 
-    ports = get_ports_state();
-    flow_tables = get_flow_tables_state();
-    bridges = get_bridges_state();
+#define ASSIGMENT(name) name = get_ ## name ## _config(); \
+    if (name == NULL) { \
+        name = strdup(""); \
+    }
+    FOREACH_STR(ASSIGMENT)
+#undef DEFINITION
 
     ds_init(&state_data);
 
     ds_put_format(&state_data, state_data_format, "1.2", ports, flow_tables,
                   bridges);
 
-    free(ports);
-    free(flow_tables);
-    free(bridges);
+#define FREE(name) free(name);
+    FOREACH_STR(FREE)
+#undef FREE
+#undef FOREACH_STR
 
     return ds_steal_cstr(&state_data);
 }

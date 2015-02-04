@@ -66,8 +66,6 @@ AC_ARG_ENABLE([dbus],
 AM_CONDITIONAL(dbus, test x"$dbus" = x"yes")
 
 # Checks for libraries.
-AC_SEARCH_LIBS([shm_open], [rt])
-
 AX_PTHREAD([LIBS="$PTHREAD_LIBS $LIBS"
 		CFLAGS="$CFLAGS $PTHREAD_CFLAGS"
 		CC="$PTHREAD_CC"],
@@ -89,6 +87,10 @@ AC_ARG_WITH([libnetconf],
 AC_SEARCH_LIBS([nc_init], [netconf], [], AC_MSG_ERROR([libnetconf not found.]))
 AC_SEARCH_LIBS([ncntf_dispatch_receive], [netconf], [], AC_MSG_ERROR([libnetconf does not support notifications.]))
 
+LIBS_SAVED="$LIBS"
+LIBS=""
+AC_SEARCH_LIBS([shm_open], [rt])
+
 # openssl
 AX_CHECK_OPENSSL([HAVE_SSL="1"], [AC_MSG_ERROR([openssl not found])])
 
@@ -99,6 +101,9 @@ if test "$HAVE_SSL" == "1"; then
 	CC="$PTHREAD_CC"
 fi
 AC_SEARCH_LIBS([ovsrec_init], [openvswitch], [], [AC_MSG_ERROR([libopenvswitch.a was not found. Try --with-ovs-libpath])])
+OVS_LIBS="$LIBS"
+AC_SUBST(OVS_LIBS)
+LIBS="$LIBS_SAVED"
 
 AX_LIBXML2_CHECK()
 

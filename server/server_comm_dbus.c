@@ -518,7 +518,7 @@ kill_session(DBusConnection *c, DBusMessage *msg)
         if (strcmp(nc_session_get_id(sender->session), sid) == 0) {
             nc_verb_warning("Killing own session requested");
             _dbus_error_reply(msg, c, DBUS_ERROR_FAILED,
-                              "illing own session requested");
+                              "Killing own session requested");
             return;
         }
     }

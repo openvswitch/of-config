@@ -514,13 +514,19 @@ kill_session(DBusConnection *c, DBusMessage *msg)
 
     /* check if the request does not relate to the current session */
     sid = dbus_message_get_sender(msg);
-    if ((sender = srv_get_agent_by_agentid(sid)) == NULL) {
+    if ((sender = srv_get_agent_by_agentid(sid)) != NULL) {
         if (strcmp(nc_session_get_id(sender->session), sid) == 0) {
             nc_verb_warning("Killing own session requested");
             _dbus_error_reply(msg, c, DBUS_ERROR_FAILED,
                               "Killing own session requested");
             return;
         }
+    } else {
+        /* something is wrong, the sender's session does not exist */
+        nc_verb_error("Kill session requested by unknown agent (%s)", sid);
+        _dbus_error_reply(msg, c, DBUS_ERROR_FAILED,
+                          "You are unknown client");
+        return;
     }
 
     srv_agent_kill(session);

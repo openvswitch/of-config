@@ -252,8 +252,6 @@ print_usage(char *progname)
 int
 main(int argc, char **argv)
 {
-    int ret;
-    NC_MSG_TYPE rpc_type;
     const char *optstring = "hv:";
     const struct option longopts[] = {
         {"help", no_argument, 0, 'h'},

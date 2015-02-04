@@ -233,6 +233,9 @@ process_message(struct nc_session *session, comm_t *c, const nc_rpc *rpc)
     }
 
 send_reply:
+    if (!reply) {
+        reply = nc_reply_error(nc_err_new(NC_ERR_OP_FAILED));
+    }
     nc_session_send_reply(session, rpc, reply);
     nc_reply_free(reply);
     return EXIT_SUCCESS;

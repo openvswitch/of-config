@@ -324,7 +324,7 @@ fillerr:
     return (nc_reply_error(err));
 }
 
-int
+static int
 comm_close(comm_t *c)
 {
     DBusMessage *msg = NULL;
@@ -405,7 +405,10 @@ void
 comm_destroy(comm_t *c)
 {
     if (c != NULL) {
+        comm_close(c);
+
         dbus_connection_flush(c);
         dbus_connection_unref(c);
+        c = NULL;
     }
 }

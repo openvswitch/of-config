@@ -55,6 +55,7 @@ comm_init(int __attribute__ ((unused)) crashed)
         return NULL;
     }
 
+    nc_verb_verbose("Agent connected with server via DBus");
     return ret;
 }
 

@@ -258,12 +258,8 @@ get_controller_state(struct ds *string, const struct ovsrec_controller *row)
     /* XXX not mapped: ds_put_format(string,
      * "<current-version>%s</current-version>", ); ds_put_format(string,
      * "<supported-versions>%s</supported-versions>", ); */
-    if (!strcmp(row->connection_mode, "in-band")) {
-        /* XXX local-ip-address-in-use */
-        ds_put_format(string, "<local-ip-address-in-use>%s"
-                      "</local-ip-address-in-use>", "XXX");
-    }
-    /* XXX local-port-in-use */
+    /* XXX local-*-in-use  - TODO use netstat */
+    ds_put_format(string, "<local-ip-address-in-use>%s</local-ip-address-in-use>", "XXX");
     ds_put_format(string, "<local-port-in-use>%s</local-port-in-use>", "XXX");
     ds_put_format(string, "</state>");
 
@@ -321,7 +317,8 @@ get_controller_config(struct ds *string, const struct ovsrec_controller *row)
     ds_put_format(string, "<protocol>%s</protocol>", protocol);
 
     if (!strcmp(row->connection_mode, "in-band")) {
-        ds_put_format(string, "<local-ip-address>%s" "</local-ip-address>", "XXX");
+        ds_put_format(string, "<local-ip-address>%s</local-ip-address>",
+                      row->local_ip);
     }
     ds_put_format(string, "</controller>");
 }

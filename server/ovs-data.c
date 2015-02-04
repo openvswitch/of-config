@@ -566,7 +566,7 @@ get_config_data()
 
     ds_init(&state_data);
 
-    ds_put_format(&state_data, config_data_format,"XXX" /* XXX */,
+    ds_put_format(&state_data, config_data_format,"XXX" /* switch/id XXX */,
     ports, queues, flow_tables, owned_certificates, external_certificates,
                   bridges);
 

@@ -418,6 +418,7 @@ static char *
 get_bridges_config(void)
 {
     const struct ovsrec_bridge *row, *next;
+    struct ovsrec_port *port;
     struct ds string;
     size_t i;
 
@@ -446,8 +447,15 @@ get_bridges_config(void)
         }
 
         ds_put_format(&string, "<resources>");
-        append_resource_refs(&string, (struct ovsdb_idl_row **) row->ports,
-                             row->n_ports, "port");
+        for (i=0; i<row->n_ports; i++) {
+            port = row->ports[i];
+            if (port == NULL) {
+                continue;
+            }
+            append_resource_refs(&string,
+                                 (struct ovsdb_idl_row **) port->interfaces,
+                                 port->n_interfaces, "port");
+        }
         append_resource_refs(&string,
                              (struct ovsdb_idl_row **) row->value_flow_tables,
                              row->n_flow_tables, "flow-table");

@@ -15,6 +15,7 @@
  */
 
 #include <getopt.h>
+#include <pthread.h>
 #include <signal.h>
 #include <stdlib.h>
 #include <syslog.h>

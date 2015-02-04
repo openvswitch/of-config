@@ -36,7 +36,7 @@ comm_init(int __attribute__ ((unused)) crashed)
     /* connect to the D-Bus */
     ret = dbus_bus_get(DBUS_BUS_SYSTEM, &dbus_err);
     if (dbus_error_is_set(&dbus_err) || ret == NULL) {
-        nc_verb_verbose("D-Bus connection error (%s)", dbus_err.message);
+        nc_verb_error("D-Bus connection error (%s)", dbus_err.message);
         dbus_error_free(&dbus_err);
         return NULL;
     }
@@ -48,8 +48,8 @@ comm_init(int __attribute__ ((unused)) crashed)
                                                       OFC_DBUS_TIMEOUT,
                                                       &dbus_err);
     if (dbus_error_is_set(&dbus_err) || reply == NULL) {
-        nc_verb_verbose("Starting communication with server failed (%s)",
-                        dbus_err.message);
+        nc_verb_error("Starting communication with server failed (%s)",
+                      dbus_err.message);
         dbus_error_free(&dbus_err);
         comm_destroy(ret);
         return NULL;
@@ -84,8 +84,8 @@ comm_get_srv_cpblts(comm_t *c)
     reply = dbus_connection_send_with_reply_and_block(c, msg, OFC_DBUS_TIMEOUT,
                                                       &dbus_err);
     if (dbus_error_is_set(&dbus_err) || reply == NULL) {
-        nc_verb_verbose("%s failed (%s)", OFC_DBUS_GETCAPABILITIES,
-                        dbus_err.message);
+        nc_verb_error("%s failed (%s)", OFC_DBUS_GETCAPABILITIES,
+                      dbus_err.message);
         dbus_error_free(&dbus_err);
         goto cleanup;
     }
@@ -99,8 +99,8 @@ comm_get_srv_cpblts(comm_t *c)
 
     /* get number of capabilities that follow */
     if (dbus_message_iter_get_arg_type(&args) != DBUS_TYPE_UINT16) {
-        nc_verb_verbose("Invalid data in the message (%s:%s)",
-                        OFC_DBUS_GETCAPABILITIES, "CapabilitiesCount");
+        nc_verb_error("Invalid data in the message (%s:%s)",
+                      OFC_DBUS_GETCAPABILITIES, "CapabilitiesCount");
         goto cleanup;
     }
     dbus_message_iter_get_basic(&args, &cpblts_count);
@@ -116,8 +116,8 @@ comm_get_srv_cpblts(comm_t *c)
     cpblts[cpblts_count] = NULL;        /* list end NULL */
     for (i = 0; i < cpblts_count; i++) {
         if (dbus_message_iter_get_arg_type(&args) != DBUS_TYPE_STRING) {
-            nc_verb_verbose("Invalid data in the message (%s:%s)",
-                            OFC_DBUS_GETCAPABILITIES, "Capabilities");
+            nc_verb_error("Invalid data in the message (%s:%s)",
+                          OFC_DBUS_GETCAPABILITIES, "Capabilities");
             for (--i; i >= 0; i--) {
                 free(cpblts[i]);
             }
@@ -214,8 +214,7 @@ comm_session_info_send(comm_t *c, const char *username, const char *sid,
     reply = dbus_connection_send_with_reply_and_block(c, msg, OFC_DBUS_TIMEOUT,
                                                       &dbus_err);
     if (dbus_error_is_set(&dbus_err) || reply == NULL) {
-        nc_verb_verbose("%s failed (%s)", OFC_DBUS_SETSESSION,
-                        dbus_err.message);
+        nc_verb_error("%s failed (%s)", OFC_DBUS_SETSESSION, dbus_err.message);
         dbus_error_free(&dbus_err);
         goto cleanup;
     }
@@ -277,8 +276,7 @@ comm_operation(comm_t *c, const nc_rpc *rpc)
     reply = dbus_connection_send_with_reply_and_block(c, msg, OFC_DBUS_TIMEOUT,
                                                       &dbus_err);
     if (dbus_error_is_set(&dbus_err) || reply == NULL) {
-        nc_verb_verbose("%s failed (%s)", OFC_DBUS_PROCESSOP,
-                        dbus_err.message);
+        nc_verb_error("%s failed (%s)", OFC_DBUS_PROCESSOP, dbus_err.message);
         err_message = dbus_err.message;
         goto fillerr;
     }
@@ -291,8 +289,8 @@ comm_operation(comm_t *c, const nc_rpc *rpc)
 
     /* get number of capabilities that follow */
     if (dbus_message_iter_get_arg_type(&args) != DBUS_TYPE_STRING) {
-        nc_verb_verbose("Invalid data in the message (%s:%s)",
-                        OFC_DBUS_PROCESSOP, "Reply");
+        nc_verb_error("Invalid data in the message (%s:%s)",
+                      OFC_DBUS_PROCESSOP, "Reply");
         goto fillerr;
     }
     dbus_message_iter_get_basic(&args, &dump);
@@ -341,8 +339,7 @@ comm_close(comm_t *c)
                                        OFC_DBUS_IF, OFC_DBUS_CLOSESESSION);
 
     if (!dbus_connection_send(c, msg, NULL)) {
-        nc_verb_verbose("%s failed (%s)", OFC_DBUS_PROCESSOP,
-                        dbus_err.message);
+        nc_verb_error("%s failed (%s)", OFC_DBUS_PROCESSOP, dbus_err.message);
         dbus_error_free(&dbus_err);
         ret = EXIT_FAILURE;
     }
@@ -383,8 +380,7 @@ comm_kill_session(comm_t *c, const char *sid)
     reply = dbus_connection_send_with_reply_and_block(c, msg, OFC_DBUS_TIMEOUT,
                                                       &dbus_err);
     if (dbus_error_is_set(&dbus_err) || reply == NULL) {
-        nc_verb_verbose("%s failed (%s)", OFC_DBUS_PROCESSOP,
-                        dbus_err.message);
+        nc_verb_error("%s failed (%s)", OFC_DBUS_PROCESSOP, dbus_err.message);
         errmsg = dbus_err.message;
         goto fillerr;
     }

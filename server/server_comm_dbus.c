@@ -40,11 +40,11 @@ comm_init(int __attribute__ ((unused)) crashed)
     /* connect to the D-Bus */
     ret = dbus_bus_get_private(DBUS_BUS_SYSTEM, &dbus_err);
     if (dbus_error_is_set(&dbus_err)) {
-        nc_verb_verbose("D-Bus connection error (%s)", dbus_err.message);
+        nc_verb_error("D-Bus connection error (%s)", dbus_err.message);
         dbus_error_free(&dbus_err);
     }
     if (ret == NULL) {
-        nc_verb_verbose("Unable to connect to DBus system bus");
+        nc_verb_error("Unable to connect to DBus system bus");
         return ret;
     }
 
@@ -53,7 +53,7 @@ comm_init(int __attribute__ ((unused)) crashed)
     /* request a name on the bus */
     i = dbus_bus_request_name(ret, OFC_DBUS_BUSNAME, BUS_FLAGS, &dbus_err);
     if (dbus_error_is_set(&dbus_err)) {
-        nc_verb_verbose("D-Bus name error (%s)", dbus_err.message);
+        nc_verb_error("D-Bus name error (%s)", dbus_err.message);
         dbus_error_free(&dbus_err);
         if (ret != NULL) {
             dbus_connection_close(ret);
@@ -62,8 +62,8 @@ comm_init(int __attribute__ ((unused)) crashed)
         }
     }
     if (DBUS_REQUEST_NAME_REPLY_PRIMARY_OWNER != i) {
-        nc_verb_verbose("Unable to became primary owner of the \"%s\" bus.",
-                        OFC_DBUS_BUSNAME);
+        nc_verb_error("Unable to became primary owner of the \"%s\" bus.",
+                      OFC_DBUS_BUSNAME);
         if (ret != NULL) {
             dbus_connection_close(ret);
             dbus_connection_unref(ret);
@@ -101,7 +101,7 @@ _dbus_error_reply(DBusMessage *msg, DBusConnection *c,
 
     /* send the reply && flush the connection */
     if (!dbus_connection_send(c, reply, &serial)) {
-        nc_verb_verbose("Unable to send D-Bus reply message.");
+        nc_verb_error("Unable to send D-Bus reply message.");
         ret = EXIT_FAILURE;
     }
     dbus_connection_flush(c);
@@ -138,14 +138,14 @@ _dbus_positive_reply(DBusMessage *msg, DBusConnection *c)
     /* add the arguments to the reply */
     dbus_message_iter_init_append(reply, &args);
     if (!dbus_message_iter_append_basic(&args, DBUS_TYPE_BOOLEAN, &stat)) {
-        nc_verb_verbose("Unable to set D-Bus \"ok\" reply message");
+        nc_verb_error("Unable to set D-Bus \"ok\" reply message");
         ret = EXIT_FAILURE;
         goto cleanup;
     }
 
     /* send the reply && flush the connection */
     if (!dbus_connection_send(c, reply, &serial)) {
-        nc_verb_verbose("Unable to send D-Bus reply message");
+        nc_verb_error("Unable to send D-Bus reply message");
         ret = EXIT_FAILURE;
     }
     dbus_connection_flush(c);
@@ -205,15 +205,15 @@ _dbus_handlestdif(DBusMessage *msg, DBusConnection *c)
             dbus_message_iter_init_append(reply, &args);
             if (!dbus_message_iter_append_basic(&args, DBUS_TYPE_STRING,
                                                 &machine_uuid)) {
-                nc_verb_verbose("Unable to set D-Bus reply message (%s)",
-                                "GetMachineId");
+                nc_verb_error("Unable to set D-Bus reply message (%s)",
+                              "GetMachineId");
                 ret = -1;
                 goto cleanup;
             }
 
             /* send the reply && flush the connection */
             if (!dbus_connection_send(c, reply, &serial)) {
-                nc_verb_verbose("Unable to send D-Bus reply message");
+                nc_verb_error("Unable to send D-Bus reply message");
                 ret = -1;
                 goto cleanup;
             }
@@ -221,8 +221,8 @@ _dbus_handlestdif(DBusMessage *msg, DBusConnection *c)
 
             ret = 1;
         } else {
-            nc_verb_verbose("Call with unknown member (%s) of %s received",
-                            dbus_message_get_member(msg), DBUS_STDIF_PEER);
+            nc_verb_error("Call with unknown member (%s) of %s received",
+                          dbus_message_get_member(msg), DBUS_STDIF_PEER);
             _dbus_error_reply(msg, c, DBUS_ERROR_UNKNOWN_METHOD,
                               "Unknown method invoked");
             ret = -1;
@@ -243,8 +243,8 @@ _dbus_handlestdif(DBusMessage *msg, DBusConnection *c)
             dbus_message_iter_init_append(reply, &args);
             if (!dbus_message_iter_append_basic(&args, DBUS_TYPE_STRING,
                                                 &introspect)) {
-                nc_verb_verbose("Unable to set D-Bus reply message (%s)",
-                                "Introspect");
+                nc_verb_error("Unable to set D-Bus reply message (%s)",
+                              "Introspect");
                 ret = -1;
                 goto cleanup;
             }
@@ -252,7 +252,7 @@ _dbus_handlestdif(DBusMessage *msg, DBusConnection *c)
             /* send the reply && flush the connection */
             nc_verb_verbose("sending introspect information (%s)", introspect);
             if (!dbus_connection_send(c, reply, &serial)) {
-                nc_verb_verbose("Unable to send D-Bus reply message");
+                nc_verb_error("Unable to send D-Bus reply message");
                 ret = -1;
                 goto cleanup;
             }
@@ -260,17 +260,17 @@ _dbus_handlestdif(DBusMessage *msg, DBusConnection *c)
 
             ret = 1;
         } else {
-            nc_verb_verbose("Call with unknown member (%s) of %s received",
-                            dbus_message_get_member(msg), DBUS_STDIF_INTR);
+            nc_verb_error("Call with unknown member (%s) of %s received",
+                          dbus_message_get_member(msg), DBUS_STDIF_INTR);
             _dbus_error_reply(msg, c, DBUS_ERROR_UNKNOWN_METHOD,
                               "Unknown method invoked");
             ret = -1;
             goto cleanup;
         }
     } else if (dbus_message_has_interface(msg, DBUS_STDIF_PROP)) {
-        nc_verb_verbose("Call for not used interface %s with method %s",
-                        dbus_message_get_interface(msg),
-                        dbus_message_get_member(msg));
+        nc_verb_error("Call for not used interface %s with method %s",
+                      dbus_message_get_interface(msg),
+                      dbus_message_get_member(msg));
         _dbus_error_reply(msg, c, DBUS_ERROR_UNKNOWN_METHOD,
                           "Not used interface " DBUS_STDIF_PROP);
         ret = -1;
@@ -309,8 +309,8 @@ get_capabilities(DBusConnection *c, DBusMessage *msg)
     cpblts = nc_session_get_cpblts_default();
     cpblts_cnt = nc_cpblts_count(cpblts);
     if (!dbus_message_iter_append_basic(&args, DBUS_TYPE_UINT16, &cpblts_cnt)) {
-        nc_verb_verbose("Unable to set D-Bus reply message (%s:%s)",
-                        OFC_DBUS_GETCAPABILITIES, "CapabilitiesCount");
+        nc_verb_error("Unable to set D-Bus reply message (%s:%s)",
+                      OFC_DBUS_GETCAPABILITIES, "CapabilitiesCount");
         _dbus_error_reply(msg, c, DBUS_ERROR_FAILED,
                           "Unable to create reply message content");
         goto cleanup;
@@ -319,8 +319,8 @@ get_capabilities(DBusConnection *c, DBusMessage *msg)
     nc_cpblts_iter_start(cpblts);
     while ((cpblt = nc_cpblts_iter_next(cpblts)) != NULL) {
         if (!dbus_message_iter_append_basic(&args, DBUS_TYPE_STRING, &cpblt)) {
-            nc_verb_verbose("Unable to set D-Bus reply message (%s:%s)",
-                            OFC_DBUS_GETCAPABILITIES, "Capabilities");
+            nc_verb_error("Unable to set D-Bus reply message (%s:%s)",
+                          OFC_DBUS_GETCAPABILITIES, "Capabilities");
             _dbus_error_reply(msg, c, DBUS_ERROR_FAILED,
                               "Unable to create reply message content");
             goto cleanup;
@@ -332,7 +332,7 @@ get_capabilities(DBusConnection *c, DBusMessage *msg)
     nc_verb_verbose("Sending capabilities to agent.");
     /* send the reply && flush the connection */
     if (!dbus_connection_send(c, reply, NULL)) {
-        nc_verb_verbose("Unable to send D-Bus reply message");
+        nc_verb_error("Unable to send D-Bus reply message");
     }
     dbus_connection_flush(c);
 
@@ -433,14 +433,15 @@ set_session(DBusConnection *c, DBusMessage *msg)
     nc_cpblts_free(cpblts);
 
     /* positive result */
-    nc_verb_verbose("New agent ID set to %s.", dbus_id);
+    nc_verb_verbose("New agent ID set to %s (PID %d, NCSID %s)", dbus_id, pid,
+                    session_id);
     _dbus_positive_reply(msg, c);
     return;
 
 paramerr:
     /* negative result */
-    nc_verb_verbose("Invalid data in the message (%s:%s)", OFC_DBUS_SETSESSION,
-                    errattr);
+    nc_verb_error("Invalid data in the message (%s:%s)", OFC_DBUS_SETSESSION,
+                  errattr);
     _dbus_error_reply(msg, c, DBUS_ERROR_FAILED, errmsg);
 }
 
@@ -495,8 +496,8 @@ kill_session(DBusConnection *c, DBusMessage *msg)
     }
 
     if (dbus_message_iter_get_arg_type(&args) != DBUS_TYPE_STRING) {
-        nc_verb_verbose("Invalid data in the message (%s:%s)",
-                        OFC_DBUS_KILLSESSION, "SessionID");
+        nc_verb_error("Invalid data in the message (%s:%s)",
+                      OFC_DBUS_KILLSESSION, "SessionID");
         _dbus_error_reply(msg, c, DBUS_ERROR_FAILED,
                           "SessionID expected as a string value");
         return;
@@ -515,7 +516,7 @@ kill_session(DBusConnection *c, DBusMessage *msg)
     sid = dbus_message_get_sender(msg);
     if ((sender = srv_get_agent_by_agentid(sid)) == NULL) {
         if (strcmp(nc_session_get_id(sender->session), sid) == 0) {
-            nc_verb_verbose("Killing own session requested");
+            nc_verb_warning("Killing own session requested");
             _dbus_error_reply(msg, c, DBUS_ERROR_FAILED,
                               "illing own session requested");
             return;
@@ -565,8 +566,8 @@ process_operation(DBusConnection *c, DBusMessage *msg)
     }
 
     if (dbus_message_iter_get_arg_type(&args) != DBUS_TYPE_STRING) {
-        nc_verb_verbose("Invalid data in the message (%s:%s)",
-                        OFC_DBUS_PROCESSOP, "RPC");
+        nc_verb_error("Invalid data in the message (%s:%s)",
+                      OFC_DBUS_PROCESSOP, "RPC");
         _dbus_error_reply(msg, c, DBUS_ERROR_FAILED,
                           "RPC expected as a string value");
         return;
@@ -583,7 +584,7 @@ process_operation(DBusConnection *c, DBusMessage *msg)
     nc_rpc_free(rpc);
 
     if (replydump == NULL) {
-        nc_verb_verbose("Invalid rpc-reply to send via D-Bus");
+        nc_verb_error("Invalid rpc-reply to send via D-Bus");
         _dbus_error_reply(msg, c, DBUS_ERROR_FAILED,
                           "Invalid rpc-reply to send via D-Bus");
         return;
@@ -593,7 +594,7 @@ process_operation(DBusConnection *c, DBusMessage *msg)
 
     dbus_message_iter_init_append(dbus_reply, &args);
     if (!dbus_message_iter_append_basic(&args, DBUS_TYPE_STRING, &replydump)) {
-        nc_verb_verbose("Unable to set D-Bus rpc-reply message");
+        nc_verb_error("Unable to set D-Bus rpc-reply message");
         _dbus_error_reply(msg, c, DBUS_ERROR_FAILED,
                           "Unable to create reply message content");
         goto cleanup;

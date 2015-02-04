@@ -24,6 +24,7 @@
 #include <socket-util.h>
 #include <ofp-util.h>
 #include <ofp-msgs.h>
+#include <poll-loop.h>
 
 #include "ovs-data.h"
 
@@ -498,6 +499,32 @@ get_external_certificates_config()
     return NULL;
 }
 
+/* synchronize local copy of OVSDB */
+static void
+ofconf_update(ofconf_t *p)
+{
+    int retval, i;
+    for (i=0; i<4; i++) {
+        ovsdb_idl_run(p->idl);
+        if (!ovsdb_idl_is_alive(p->idl)) {
+            retval = ovsdb_idl_get_last_error(p->idl);
+            nc_verb_error("OVS database connection failed (%s)",
+                   ovs_retval_to_string(retval));
+        }
+
+        if (p->seqno != ovsdb_idl_get_seqno(p->idl)) {
+            p->seqno = ovsdb_idl_get_seqno(p->idl);
+            i--;
+        }
+
+        if (p->seqno == ovsdb_idl_get_seqno(p->idl)) {
+            ovsdb_idl_wait(p->idl);
+            poll_timer_wait(100); /* wait for 100ms (at most) */
+            poll_block();
+        }
+    }
+}
+
 
 char *
 get_config_data()
@@ -565,6 +592,7 @@ get_state_data()
     if (ofc_global_context == NULL) {
         return NULL;
     }
+    ofconf_update(ofc_global_context);
 
 #define ASSIGMENT(name) name = get_ ## name ## _config(); \
     if (name == NULL) { \
@@ -600,26 +628,7 @@ ofconf_init(const char *ovs_db_path)
     ovsrec_init();
     p->idl = ovsdb_idl_create(ovs_db_path, &ovsrec_idl_class, true, true);
     p->seqno = ovsdb_idl_get_seqno(p->idl);
-    for (;;) {
-        ovsdb_idl_run(p->idl);
-        if (!ovsdb_idl_is_alive(p->idl)) {
-            int retval = ovsdb_idl_get_last_error(p->idl);
-
-            printf("database connection failed (%s)",
-                   ovs_retval_to_string(retval));
-        }
-
-        if (p->seqno != ovsdb_idl_get_seqno(p->idl)) {
-            p->seqno = ovsdb_idl_get_seqno(p->idl);
-            /* go to exit after this output */
-            break;
-        }
-
-        if (p->seqno == ovsdb_idl_get_seqno(p->idl)) {
-            ovsdb_idl_wait(p->idl);
-            poll_block();
-        }
-    }
+    ofconf_update(p);
 }
 
 void

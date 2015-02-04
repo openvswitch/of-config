@@ -166,51 +166,33 @@ get_ports_config(void)
            */
 
         if (!strcmp(row->type, "gre")) {
-            ds_put_format(&string, "<tunnel-type>");
             ds_put_format(&string, "<ipgre-tunnel>");
-            ds_put_format(&string, "<endpoints><v4-endpoints>");
             find_and_append_smap_val(&row->options, "local_ip",
                                      "local-endpoint-ipv4-adress", &string);
             find_and_append_smap_val(&row->options, "remote_ip",
                                      "remote-endpoint-ipv4-adress", &string);
-            ds_put_format(&string, "</v4-endpoints></endpoints>");
             find_and_append_smap_val(&row->options, "csum",
                                      "checksum-present", &string);
-            found_val = smap_get(&row->options, "key");
-            if (found_val != NULL) {
-                ds_put_format(&string, "<key-present>true</key-present>");
-                ds_put_format(&string, "<key>%s</key>", found_val);
-            } else {
-                ds_put_format(&string, "<key-present>false</key-present>");
-            }
+            find_and_append_smap_val(&row->options, "key", "key", &string);
             ds_put_format(&string, "</ipgre-tunnel>");
-            ds_put_format(&string, "</tunnel-type>");
         } else if (!strcmp(row->type, "vxlan")) {
-            ds_put_format(&string, "<tunnel-type>");
             ds_put_format(&string, "<vxlan-tunnel>");
-            ds_put_format(&string, "<endpoints><v4-endpoints>");
             find_and_append_smap_val(&row->options, "local_ip",
                                      "local-endpoint-ipv4-adress", &string);
             find_and_append_smap_val(&row->options, "remote_ip",
                                      "remote-endpoint-ipv4-adress", &string);
-            ds_put_format(&string, "</v4-endpoints></endpoints>");
 
             find_and_append_smap_val(&row->options, "key", "vni", &string);
             ds_put_format(&string, "</vxlan-tunnel>");
-            ds_put_format(&string, "</tunnel-type>");
         } else if ((!strcmp(row->type, "gre64"))
                     || (!strcmp(row->type, "geneve"))
                     || (!strcmp(row->type, "lisp"))) {
-            ds_put_format(&string, "<tunnel-type>");
             ds_put_format(&string, "<tunnel>");
-            ds_put_format(&string, "<endpoints><v4-endpoints>");
             find_and_append_smap_val(&row->options, "local_ip",
                                      "local-endpoint-ipv4-adress", &string);
             find_and_append_smap_val(&row->options, "remote_ip",
                                      "remote-endpoint-ipv4-adress", &string);
-            ds_put_format(&string, "</v4-endpoints></endpoints>");
             ds_put_format(&string, "</tunnel>");
-            ds_put_format(&string, "</tunnel-type>");
         }
         ds_put_format(&string, "</port>");
         free(uuid);

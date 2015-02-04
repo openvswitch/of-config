@@ -13,8 +13,8 @@ AC_CONFIG_MACRO_DIR([m4])
 AC_ARG_ENABLE([debug],
         AC_HELP_STRING([--enable-debug], [Enable build with debug symbols and without optimizations.]),
         [if test "$enableval" = "yes"; then
-                CFLAGS="$CFLAGS -g -O0"
-        fi], [CFLAGS="$CFLAGS -O3"])
+                CFLAGS="$CFLAGS -Wall -g -O0"
+        fi], [CFLAGS="$CFLAGS -Wall -O3"])
 
 # Checks for programs.
 AC_PROG_CC

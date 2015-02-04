@@ -15,6 +15,7 @@
  */
 
 #include <getopt.h>
+#include <pthread.h>
 #include <signal.h>
 #include <stdlib.h>
 #include <syslog.h>
@@ -152,12 +153,8 @@ process_message(struct nc_session *session, comm_t *c, const nc_rpc *rpc)
     /* close-session message */
     switch (nc_rpc_get_op(rpc)) {
     case NC_OP_CLOSESESSION:
-        if (comm_close(c) != EXIT_SUCCESS) {
-            err = nc_err_new(NC_ERR_OP_FAILED);
-            reply = nc_reply_error(err);
-        } else {
-            reply = nc_reply_ok();
-        }
+        comm_destroy(c);
+        reply = nc_reply_ok();
         mainloop = 1;
         break;
     case NC_OP_KILLSESSION:
@@ -236,6 +233,9 @@ process_message(struct nc_session *session, comm_t *c, const nc_rpc *rpc)
     }
 
 send_reply:
+    if (!reply) {
+        reply = nc_reply_error(nc_err_new(NC_ERR_OP_FAILED));
+    }
     nc_session_send_reply(session, rpc, reply);
     nc_reply_free(reply);
     return EXIT_SUCCESS;
@@ -251,8 +251,6 @@ print_usage(char *progname)
 int
 main(int argc, char **argv)
 {
-    int ret;
-    NC_MSG_TYPE rpc_type;
     const char *optstring = "hv:";
     const struct option longopts[] = {
         {"help", no_argument, 0, 'h'},

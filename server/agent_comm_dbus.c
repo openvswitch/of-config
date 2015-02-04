@@ -249,7 +249,6 @@ comm_operation(comm_t *c, const nc_rpc *rpc)
     DBusMessageIter args;
     char *dump = NULL;
     const char *err_message;
-    int boolean;
     nc_reply *rpc_reply;
     struct nc_err *err;
 
@@ -361,9 +360,6 @@ comm_kill_session(comm_t *c, const char *sid)
     DBusMessageIter args;
     struct nc_err *err;
     const char *errmsg;
-    char *aux_string;
-    dbus_bool_t boolean;
-    nc_reply *rpc_reply;
 
     /* initiate dbus errors */
     dbus_error_init(&dbus_err);

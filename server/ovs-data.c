@@ -26,6 +26,8 @@
 #include <ofp-msgs.h>
 #include <poll-loop.h>
 
+#include <libnetconf/netconf.h>
+
 #include "ovs-data.h"
 
 ofconf_t *ofc_global_context = (ofconf_t *) NULL;
@@ -77,7 +79,7 @@ get_flow_tables_state(void)
         char *uuid = print_uuid(&row->header_.uuid);
 
         ds_put_format(&string, "<flow-table><resource-id>%s</resource-id>"
-                      "<max-entries>%d</max-entries></flow-table>",
+                      "<max-entries>%"PRId64"</max-entries></flow-table>",
                       uuid, (row->n_flow_limit > 0 ? row->flow_limit[0] : 0));
         free(uuid);
     }
@@ -140,7 +142,6 @@ get_ports_config(void)
 {
     const struct ovsrec_interface *row, *next;
     struct ds string;
-    const char *found_val;
 
     ds_init(&string);
     OVSREC_INTERFACE_FOR_EACH_SAFE(row, next, ofc_global_context->idl) {
@@ -247,8 +248,6 @@ get_ports_state(void)
 static void
 get_controller_state(struct ds *string, const struct ovsrec_controller *row)
 {
-    size_t i;
-
     ds_put_format(string, "<controller>");
     /* TODO?
        <id>%s</id>
@@ -558,7 +557,7 @@ get_config_data()
         name = strdup(""); \
     }
     FOREACH_STR(ASSIGMENT)
-#undef DEFINITION
+#undef ASSIGMENT
 
     ds_init(&state_data);
 
@@ -594,12 +593,12 @@ get_state_data()
     }
     ofconf_update(ofc_global_context);
 
-#define ASSIGMENT(name) name = get_ ## name ## _config(); \
+#define ASSIGMENT(name) name = get_ ## name ## _state(); \
     if (name == NULL) { \
         name = strdup(""); \
     }
     FOREACH_STR(ASSIGMENT)
-#undef DEFINITION
+#undef ASSIGMENT
 
     ds_init(&state_data);
 

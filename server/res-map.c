@@ -20,11 +20,6 @@
 
 #include "res-map.h"
 
-#ifdef TEST_RESOURCE_MAP
-/* convert uuid to string, for debug/test purposes only */
-static const char *print_uuid_ro(const struct uuid *uuid);
-#endif
-
 /*
  * Compare two elements from index array.
  * It is used for qsort() and bsearch() of index arrays index_r, index_u.
@@ -275,6 +270,35 @@ ofc_resmap_destroy(ofc_resmap_t **resmap)
     (*resmap) = NULL;
 }
 
+
+#ifdef TEST_RESOURCE_MAP
+
+/* convert uuid to string, for debug/test purposes only */
+static const char *
+print_uuid_ro(const struct uuid *uuid)
+{
+    static char str[38];
+
+    snprintf(str, 37, UUID_FMT, UUID_ARGS(uuid));
+    str[37] = 0;
+    return str;
+}
+
+/*
+ * Print content of the map sort by the uuid index.
+ * \param[in] rm    pointer to the resource map structure
+ */
+static void
+ofc_resmap_print_u(ofc_resmap_t *rm)
+{
+    size_t i;
+
+    for (i=0; i<rm->n_records; i++) {
+        printf("%s - %s\n", rm->index_u[i]->resource_id,
+               print_uuid_ro(&rm->index_u[i]->uuid));
+    }
+}
+
 /*
  * Print content of the map sort by the records array.
  * \param[in] rm    pointer to the resource map structure
@@ -294,7 +318,7 @@ ofc_resmap_print(ofc_resmap_t *rm)
  * Print content of the map sort by the resource_id index.
  * \param[in] rm    pointer to the resource map structure
  */
-void
+static void
 ofc_resmap_print_r(ofc_resmap_t *rm)
 {
     size_t i;
@@ -305,37 +329,11 @@ ofc_resmap_print_r(ofc_resmap_t *rm)
     }
 }
 
-/*
- * Print content of the map sort by the uuid index.
- * \param[in] rm    pointer to the resource map structure
- */
-void
-ofc_resmap_print_u(ofc_resmap_t *rm)
-{
-    size_t i;
-
-    for (i=0; i<rm->n_records; i++) {
-        printf("%s - %s\n", rm->index_u[i]->resource_id,
-               print_uuid_ro(&rm->index_u[i]->uuid));
-    }
-}
-
-#ifdef TEST_RESOURCE_MAP
+
 /* test of the data structure: inserts TEST_NUM_ELEMS records, removes half
  * of them from the beginning and half of them from the end, the rest is printed.
  */
-
 #define TEST_NUM_ELEMS  50
-
-static const char *
-print_uuid_ro(const struct uuid *uuid)
-{
-    static char str[38];
-
-    snprintf(str, 37, UUID_FMT, UUID_ARGS(uuid));
-    str[37] = 0;
-    return str;
-}
 
 int main(int argc, char **argv)
 {

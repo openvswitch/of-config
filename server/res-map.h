@@ -90,11 +90,5 @@ ofc_tuple_t *ofc_resmap_find_u(ofc_resmap_t *rm, const struct uuid *uuid);
  */
 void ofc_resmap_destroy(ofc_resmap_t **rm);
 
-/*
- * Print out content of the map for debug purposes.
- * \param[in] rm  pointer to the resource map structure
- */
-void ofc_resmap_print(ofc_resmap_t *rm);
-
 #endif
 

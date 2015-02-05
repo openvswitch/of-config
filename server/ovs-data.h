@@ -21,10 +21,13 @@
 #define OFC_VERBOSITY   0
 #endif
 
+#include "res-map.h"
+
 typedef struct ofconf {
     struct ovsdb_idl *idl;
     unsigned int seqno;
     struct vconn *vconn;
+    ofc_resmap_t *resource_map;
 } ofconf_t;
 
 extern ofconf_t *ofc_global_context;

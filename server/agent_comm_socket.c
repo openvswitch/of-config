@@ -282,11 +282,11 @@ fillerr:
 void
 comm_destroy(comm_t *c)
 {
-    comm_close(c);
-
-    if (*c == -1) {
+    if (c == NULL || *c == -1) {
         return;
     }
+
+    comm_close(c);
 
     /* close listen socket */
     close(*c);

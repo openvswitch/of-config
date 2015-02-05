@@ -34,7 +34,7 @@ comm_init(int __attribute__ ((unused)) crashed)
     dbus_error_init(&dbus_err);
 
     /* connect to the D-Bus */
-    ret = dbus_bus_get(DBUS_BUS_SYSTEM, &dbus_err);
+    ret = dbus_bus_get_private(DBUS_BUS_SYSTEM, &dbus_err);
     if (dbus_error_is_set(&dbus_err) || ret == NULL) {
         nc_verb_error("D-Bus connection error (%s)", dbus_err.message);
         dbus_error_free(&dbus_err);
@@ -405,11 +405,11 @@ fillerr:
 void
 comm_destroy(comm_t *c)
 {
-    if (c != NULL) {
+    if (c != NULL && dbus_connection_get_is_connected(c)) {
         comm_close(c);
 
         dbus_connection_flush(c);
+        dbus_connection_close(c);
         dbus_connection_unref(c);
-        c = NULL;
     }
 }

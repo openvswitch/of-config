@@ -587,25 +587,36 @@ get_config_data()
 
     struct ds state_data;
 
-#define FOREACH_STR(GEN) \
-    GEN(queues) GEN(ports) GEN(flow_tables) GEN(bridges) \
-    GEN(owned_certificates) GEN(external_certificates)
-#define DEFINITION(name) char *name;
-
-    FOREACH_STR(DEFINITION)
-#undef DEFINITION
-
+    char *queues;
+    char *ports;
+    char *flow_tables;
+    char *bridges;
+    char *owned_certificates;
+    char *external_certificates;
 
     if (ofc_global_context == NULL) {
         return NULL;
     }
 
-#define ASSIGMENT(name) name = get_ ## name ## _config(); \
-    if (name == NULL) { \
-        name = strdup(""); \
+    queues = get_queues_config();
+    if (queues == (NULL)) {
+        queues = strdup("");
+    } ports = get_ports_config();
+    if (ports == (NULL)) {
+        ports = strdup("");
+    } flow_tables = get_flow_tables_config();
+    if (flow_tables == (NULL)) {
+        flow_tables = strdup("");
+    } bridges = get_bridges_config();
+    if (bridges == (NULL)) {
+        bridges = strdup("");
+    } owned_certificates = get_owned_certificates_config();
+    if (owned_certificates == (NULL)) {
+        owned_certificates = strdup("");
+    } external_certificates = get_external_certificates_config();
+    if (external_certificates == (NULL)) {
+        external_certificates = strdup("");
     }
-    FOREACH_STR(ASSIGMENT)
-#undef ASSIGMENT
 
     ds_init(&state_data);
 
@@ -613,10 +624,12 @@ get_config_data()
     ports, queues, flow_tables, owned_certificates, external_certificates,
                   bridges);
 
-#define FREE(name) free(name);
-    FOREACH_STR(FREE)
-#undef FREE
-#undef FOREACH_STR
+    free(queues);
+    free(ports);
+    free(flow_tables);
+    free(bridges);
+    free(owned_certificates);
+    free(external_certificates);
 
     return ds_steal_cstr(&state_data);
 }
@@ -629,11 +642,10 @@ get_state_data()
         "<resources>%s%s</resources>"
         "<logical-switches>%s</logical-switches></capable-switch>";
 
-#define FOREACH_STR(GEN) \
-    GEN(ports) GEN(flow_tables) GEN(bridges)
-#define DEFINITION(name) char *name;
-    FOREACH_STR(DEFINITION)
-#undef DEFINITION
+    char *ports;
+    char *flow_tables;
+    char *bridges;
+
     struct ds state_data;
 
     if (ofc_global_context == NULL) {
@@ -641,22 +653,27 @@ get_state_data()
     }
     ofconf_update(ofc_global_context);
 
-#define ASSIGMENT(name) name = get_ ## name ## _state(); \
-    if (name == NULL) { \
-        name = strdup(""); \
+    ports = get_ports_state();
+    if (ports == (NULL)) {
+        ports = strdup("");
     }
-    FOREACH_STR(ASSIGMENT)
-#undef ASSIGMENT
+    flow_tables = get_flow_tables_state();
+    if (flow_tables == (NULL)) {
+        flow_tables = strdup("");
+    }
+    bridges = get_bridges_state();
+    if (bridges == (NULL)) {
+        bridges = strdup("");
+    }
 
     ds_init(&state_data);
 
     ds_put_format(&state_data, state_data_format, "1.2", ports, flow_tables,
                   bridges);
 
-#define FREE(name) free(name);
-    FOREACH_STR(FREE)
-#undef FREE
-#undef FOREACH_STR
+    free(ports);
+    free(flow_tables);
+    free(bridges);
 
     return ds_steal_cstr(&state_data);
 }

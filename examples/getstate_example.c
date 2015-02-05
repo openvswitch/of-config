@@ -25,7 +25,7 @@ int main(int argc, char **argv)
     char *data;
     ofconf_init(OFC_OVS_DBPATH);
     
-    data = get_state_data();
+    data = get_state_data(NULL);
     if (data != NULL) {
         puts(data);
         free(data);

@@ -67,12 +67,12 @@ NC_EDIT_ERROPT_TYPE ofc_erropt = NC_EDIT_ERROPT_NOTSET;
  *
  */
 xmlDocPtr
-ofc_get_state_data(xmlDocPtr UNUSED(model), xmlDocPtr UNUSED(running),
+ofc_get_state_data(xmlDocPtr UNUSED(model), xmlDocPtr running,
                    struct nc_err **UNUSED(err))
 {
     char *state_data;
     xmlDocPtr d;
-    state_data = get_state_data();
+    state_data = get_state_data(running);
     if (state_data != NULL) {
         d = xmlReadMemory(state_data, strlen(state_data), NULL, NULL, 0);
         free(state_data);

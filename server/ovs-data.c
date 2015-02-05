@@ -15,7 +15,18 @@
  */
 
 #include <config.h>
+
+#include <assert.h>
+#include <linux/ethtool.h>
+#include <linux/if.h>
+#include <linux/sockios.h>
 #include <stdint.h>
+#include <sys/ioctl.h>
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <unistd.h>
+
+/* libovs */
 #include <dynamic-string.h>
 #include <ovsdb-idl-provider.h>
 #include <vswitch-idl.h>
@@ -31,6 +42,12 @@
 #include "ovs-data.h"
 
 ofconf_t *ofc_global_context = (ofconf_t *) NULL;
+int ioctlfd = -1;
+
+struct u32_str_map{
+    uint32_t value;
+    const char *str;
+};
 
 static const char *
 print_uuid_ro(const struct uuid *uuid)
@@ -174,6 +191,64 @@ get_queues_config(void)
     return ds_steal_cstr(&string);
 }
 
+static void
+dump_port_features(struct ds *s, uint32_t mask)
+{
+    int i;
+    static const struct u32_str_map rates[] = {
+        { ADVERTISED_10baseT_Half,       "10Mb-HD" },
+        { ADVERTISED_10baseT_Full,       "10Mb-FD" },
+        { ADVERTISED_100baseT_Half,      "100Mb-HD" },
+        { ADVERTISED_100baseT_Full,      "100Mb-FD" },
+        { ADVERTISED_1000baseT_Half,     "1Gb-HD" },
+        { ADVERTISED_1000baseT_Full,     "1Gb-FD" },
+        { ADVERTISED_1000baseKX_Full,    "1Gb-FD" },
+//      { ADVERTISED_2500baseX_Full,     "2500baseX/Full" },
+        { ADVERTISED_10000baseT_Full,    "10Gb" },
+        { ADVERTISED_10000baseKX4_Full,  "10Gb" },
+        { ADVERTISED_10000baseKR_Full,   "10Gb" },
+//      { ADVERTISED_20000baseMLD2_Full, "20000baseMLD2/Full" },
+//      { ADVERTISED_20000baseKR2_Full,  "20000baseKR2/Full" },
+        { ADVERTISED_40000baseKR4_Full,  "40Gb" },
+        { ADVERTISED_40000baseCR4_Full,  "40Gb" },
+        { ADVERTISED_40000baseSR4_Full,  "40Gb" },
+        { ADVERTISED_40000baseLR4_Full,  "40Gb" },
+    };
+    static const struct u32_str_map medium[] = {
+        { ADVERTISED_TP,    "copper" },
+        { ADVERTISED_FIBRE, "fiber" },
+    };
+
+    assert(s);
+
+    /* dump rate elements */
+    for (i = 0; i < (sizeof rates) / (sizeof rates[0]); i++) {
+        if (rates[i].value & mask) {
+            ds_put_format(s, "<rate>%s</rate>", rates[i].str);
+        }
+    }
+
+    /* dump auto-negotiate element */
+    ds_put_format(s, "<auto-negotiate>%s</auto-negotiate>",
+                  ADVERTISED_Autoneg & mask ? "true" : "false");
+
+    /* dump medium elements */
+    for (i = 0; i < (sizeof medium) / (sizeof medium[0]); i++) {
+        if (medium[i].value & mask) {
+            ds_put_format(s, "<medium>%s</medium>", medium[i].str);
+        }
+    }
+
+    /* dump pause element */
+    if (ADVERTISED_Asym_Pause & mask) {
+        ds_put_format(s, "<pause>asymetric</pause>");
+    } else if (ADVERTISED_Pause & mask) {
+        ds_put_format(s, "<pause>symetric</pause>");
+    } else {
+        ds_put_format(s, "<pause>unsuported</pause>");
+    }
+}
+
 static char *
 get_ports_config(void)
 {
@@ -191,20 +266,30 @@ get_ports_config(void)
         ds_put_format(&string, "<requested-number>%" PRIu64 "</requested-number>",
                       (row->n_ofport_request > 0 ? row->ofport_request[0] : 0));
         ds_put_format(&string, "<configuration>");
-        /* TODO ioctl:
-           ds_put_format(&string, "<admin-state>%s</admin-state>", "XXX");
-           */
+
+        /* get interface status via ioctl() */
+        struct ifreq ethreq;
+        memset(&ethreq, 0, sizeof ethreq);
+        strncpy(ethreq.ifr_name, row->name, sizeof ethreq.ifr_name);
+        ioctl(ioctlfd, SIOCGIFFLAGS, &ethreq);
+        ds_put_format(&string, "<admin-state>%s</admin-state>",
+                      ethreq.ifr_flags & IFF_UP ? "up" : "down");
         /* TODO openflow:
            ds_put_format(&string, "<no-receive>%s</no-receive>", "XXX");
            ds_put_format(&string, "<no-forward>%s</no-forward>", "XXX");
            ds_put_format(&string, "<no-packet-in>%s</no-packet-in>", "XXX");
            */
         ds_put_format(&string, "</configuration>");
-        /* TODO ioctl:
-           "<features>" "<advertised>" "<rate>%s</rate>"
-           "<auto-negotiate>%s</auto-negotiate>" "<medium>%s</medium>"
-           "<pause>%s</pause>" "</advertised>" "</features>"
-           */
+
+        /* get interface features via ioctl() */
+        struct ethtool_cmd ecmd;
+        memset(&ecmd, 0, sizeof ecmd);
+        ecmd.cmd = ETHTOOL_GSET;
+        ethreq.ifr_data = &ecmd;
+        ioctl(ioctlfd, SIOCETHTOOL, &ethreq);
+        ds_put_format(&string, "<features><advertised>");
+        dump_port_features(&string, ecmd.advertising);
+        ds_put_format(&string, "</advertised></features>");
 
         if (!strcmp(row->type, "gre")) {
             ds_put_format(&string, "<ipgre-tunnel>");
@@ -252,14 +337,29 @@ get_ports_state(void)
         resource_id = find_resid_generate(ofc_global_context->resource_map,
                                           &row->header_.uuid);
 
+        /* get interface status via ioctl() */
+        struct ifreq ethreq;
+        struct ethtool_cmd ecmd;
+        memset(&ethreq, 0, sizeof ethreq);
+        memset(&ecmd, 0, sizeof ecmd);
+        strncpy(ethreq.ifr_name, row->name, sizeof ethreq.ifr_name);
+        ecmd.cmd = ETHTOOL_GSET;
+        ethreq.ifr_data = &ecmd;
+        ioctl(ioctlfd, SIOCETHTOOL, &ethreq);
+
         ds_put_format(&string, "<port>");
         ds_put_format(&string, "<resource-id>%s</resource-id>", resource_id);
         ds_put_format(&string, "<number>%" PRIu64 "</number>",
                       (row->n_ofport > 0 ? row->ofport[0] : 0));
         ds_put_format(&string, "<name>%s</name>", row->name);
-        /* TODO ioctl():
+        /* TODO openflow:
            <current-rate>%s</current-rate>
-           <max-rate>%s</max-rate> */
+           <max-rate>%s</max-rate>
+           originally via ioctl(), but of provides values as curr_speed and
+           max_speed in struct ofp_port when no standard speed is set, it also
+           can accumulate speeds in case of port aggregation, which I'm not
+           sure is possible to get via ioctl()
+         */
         ds_put_format(&string, "<state>");
         ds_put_format(&string, "<oper-state>%s</oper-state>",
                       (row->link_state != NULL ? row->link_state : "down"));
@@ -270,15 +370,71 @@ get_ports_state(void)
             <live>%s</live> */
         ds_put_format(&string, "</state>");
 
-        /* TODO ioctl()
-           "<features>" "<current>" "<rate>%s</rate>"
-           "<auto-negotiate>%s</auto-negotiate>" "<medium>%s</medium>"
-           "<pause>%s</pause>" "</current>" "<supported>" "<rate>%s</rate>"
-           "<auto-negotiate>%s</auto-negotiate>" "<medium>%s</medium>"
-           "<pause>%s</pause>" "</supported>" "<advertised-peer>"
-           "<rate>%s</rate>" "<auto-negotiate>%s</auto-negotiate>"
-           "<medium>%s</medium>" "<pause>%s</pause></advertised-peer>"
-           "</features>" */
+        ds_put_format(&string, "<features><current>");
+        /* rate
+         * - get speed and convert it with duplex value to OFPortRateType
+         */
+        switch ((ecmd.speed_hi << 16) | ecmd.speed) {
+        case 10:
+            ds_put_format(&string, "<rate>10Mb");
+            break;
+        case 100:
+            ds_put_format(&string, "<rate>100Mb");
+            break;
+        case 1000:
+            ds_put_format(&string, "<rate>1Gb");
+            break;
+        case 10000:
+            ds_put_format(&string, "<rate>10Gb");
+            ecmd.duplex = DUPLEX_FULL + 1; /* do not print duplex suffix */
+            break;
+        case 40000:
+            ds_put_format(&string, "<rate>40Gb");
+            ecmd.duplex = DUPLEX_FULL + 1; /* do not print duplex suffix */
+            break;
+        default:
+            ds_put_format(&string, "<rate>");
+            ecmd.duplex = DUPLEX_FULL + 1; /* do not print duplex suffix */
+        }
+        switch (ecmd.duplex) {
+        case DUPLEX_HALF:
+            ds_put_format(&string, "-HD</rate>");
+            break;
+        case DUPLEX_FULL:
+            ds_put_format(&string, "-FD</rate>");
+            break;
+        default:
+            ds_put_format(&string, "</rate>");
+            break;
+        }
+
+        /* auto-negotiation */
+        ds_put_format(&string, "<auto-negotiate>%s</auto-negotiate>",
+                      ecmd.autoneg ? "true" : "false");
+        /* medium */
+        switch(ecmd.port) {
+        case PORT_TP:
+            ds_put_format(&string, "<medium>copper</medium>");
+            break;
+        case PORT_FIBRE:
+            ds_put_format(&string, "<medium>fiber</medium>");
+            break;
+        }
+
+        /* pause is filled with the same value as in advertised */
+        if (ADVERTISED_Asym_Pause & ecmd.advertising) {
+            ds_put_format(&string, "<pause>asymetric</pause>");
+        } else if (ADVERTISED_Pause & ecmd.advertising) {
+            ds_put_format(&string, "<pause>symetric</pause>");
+        } else {
+            ds_put_format(&string, "<pause>unsuported</pause>");
+        }
+
+        ds_put_format(&string, "</current><supported>");
+        dump_port_features(&string, ecmd.supported);
+        ds_put_format(&string, "</supported><advertised-peer>");
+        dump_port_features(&string, ecmd.lp_advertising);
+        ds_put_format(&string, "</advertised-peer></features>");
 
         ds_put_format(&string, "</port>");
     }
@@ -635,10 +791,11 @@ get_config_data()
 }
 
 char *
-get_state_data()
+get_state_data(xmlDocPtr running)
 {
     const char *state_data_format = "<?xml version=\"1.0\"?>"
-        "<capable-switch xmlns=\"urn:onf:config:yang\"><config-version>%s</config-version>"
+        "<capable-switch xmlns=\"urn:onf:config:yang\">"
+        "<config-version>%s</config-version>"
         "<resources>%s%s</resources>"
         "<logical-switches>%s</logical-switches></capable-switch>";
 
@@ -699,6 +856,10 @@ ofconf_init(const char *ovs_db_path)
     p->idl = ovsdb_idl_create(ovs_db_path, &ovsrec_idl_class, true, true);
     p->seqno = ovsdb_idl_get_seqno(p->idl);
     ofconf_update(p);
+
+    /* prepare descriptor to perform ioctl() */
+    ioctlfd = socket(PF_INET, SOCK_DGRAM, IPPROTO_IP);
+
     return true;
 }
 
@@ -713,6 +874,11 @@ ofconf_destroy(void)
 
         free(ofc_global_context);
         ofc_global_context = NULL;
+    }
+
+    if (ioctlfd != -1) {
+        close(ioctlfd);
+        ioctlfd = -1;
     }
 }
 

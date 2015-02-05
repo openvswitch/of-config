@@ -17,6 +17,8 @@
 #ifndef OVS_DATA_H
 #define OVS_DATA_H 1
 
+#include <libxml/tree.h>
+
 #ifndef OFC_VERBOSITY
 #define OFC_VERBOSITY   0
 #endif
@@ -35,7 +37,7 @@ extern ofconf_t *ofc_global_context;
 
 bool ofconf_init(const char *ovs_db_path);
 
-char *get_state_data(void);
+char *get_state_data(xmlDocPtr running);
 
 char *get_config_data(void);
 

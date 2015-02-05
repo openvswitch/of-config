@@ -17,12 +17,12 @@
 #include <config.h>
 
 #include <assert.h>
+#include <sys/socket.h>
 #include <linux/ethtool.h>
 #include <linux/if.h>
 #include <linux/sockios.h>
 #include <stdint.h>
 #include <sys/ioctl.h>
-#include <sys/socket.h>
 #include <sys/types.h>
 #include <unistd.h>
 

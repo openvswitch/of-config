@@ -21,9 +21,15 @@
 #include "res-map.h"
 
 #ifdef TEST_RESOURCE_MAP
+/* convert uuid to string, for debug/test purposes only */
 static const char *print_uuid_ro(const struct uuid *uuid);
 #endif
 
+/*
+ * Compare two elements from index array.
+ * It is used for qsort() and bsearch() of index arrays index_r, index_u.
+ * \return standard values like strcmp() (-1: <, 0: ==, 1 >)
+ */
 static int
 cmp_resourceid_index(const void *p1, const void *p2)
 {
@@ -33,6 +39,11 @@ cmp_resourceid_index(const void *p1, const void *p2)
     return strcmp(r1->resource_id, r2->resource_id);
 }
 
+/*
+ * Compare two elements from index array.
+ * It is used for qsort() and bsearch() of index arrays index_r, index_u.
+ * \return standard values like strcmp() (-1: <, 0: ==, 1 >)
+ */
 static int
 cmp_uuid_index(const void *p1, const void *p2)
 {
@@ -95,7 +106,11 @@ ofc_resmap_init(size_t init_size)
     return t;
 }
 
-void
+/*
+ * Run sort on index arrays.
+ * \param[in,out] rm    pointer to the resource map structure
+ */
+static void
 ofc_reindex(ofc_resmap_t *rm)
 {
     if (rm->n_records > 1) {
@@ -126,11 +141,14 @@ ofc_resmap_insert(ofc_resmap_t *rm, const char *resource_id,
         /* successfuly enlarged or exited */
         rm->records_length = new_size;
     }
+    /* append new record */
     rm->records[rm->n_records].resource_id = strdup(resource_id);
     rm->records[rm->n_records].uuid = *uuid;
     rm->index_r[rm->n_records] = &rm->records[rm->n_records];
     rm->index_u[rm->n_records] = &rm->records[rm->n_records];
     rm->n_records++;
+
+    /* update index arrays */
     ofc_reindex(rm);
 
     return true;
@@ -145,10 +163,15 @@ ofc_resmap_remove(ofc_resmap_t *rm, ofc_tuple_t *del)
     ofc_tuple_t key, *key_p = &key;
     size_t i;
 
-    for (i=0, tuple=rm->records; i<rm->n_records; i++, tuple++) {
-        if (del == tuple) {
+    for (i=0; i<rm->n_records; i++) {
+        tuple = &rm->records[i];
+        if (uuid_equals(&del->uuid, &tuple->uuid)) {
             break;
         }
+    }
+    if (!uuid_equals(&del->uuid, &tuple->uuid)) {
+        /* record was not found in records */
+        return false;
     }
     key.resource_id = tuple->resource_id;
     key.uuid = tuple->uuid;
@@ -158,6 +181,9 @@ ofc_resmap_remove(ofc_resmap_t *rm, ofc_tuple_t *del)
                      sizeof(ofc_tuple_t **), cmp_uuid_index);
     free(tuple->resource_id);
     (*tuple) = rm->records[rm->n_records-1];
+    tuple->resource_id = rm->records[rm->n_records-1].resource_id;
+    (*index_r_p) = rm->index_r[rm->n_records-1];
+    (*index_u_p) = rm->index_u[rm->n_records-1];
     rm->n_records--;
     ofc_reindex(rm);
 
@@ -176,6 +202,7 @@ ofc_resmap_remove_r(ofc_resmap_t *rm, const char *resource_id)
 
     tuple = ofc_resmap_find_r(rm, resource_id);
     if (tuple == NULL) {
+        /* not found in the index array */
         return false;
     }
     return ofc_resmap_remove(rm, tuple);
@@ -192,6 +219,7 @@ bool ofc_resmap_remove_u(ofc_resmap_t *rm, const struct uuid *uuid)
 
     tuple = ofc_resmap_find_u(rm, uuid);
     if (tuple == NULL) {
+        /* not found in the index array */
         return false;
     }
     return ofc_resmap_remove(rm, tuple);
@@ -219,7 +247,7 @@ ofc_resmap_find_u(ofc_resmap_t *rm, const struct uuid *uuid)
     ofc_tuple_t key, *key_p = &key;
     key.uuid = *uuid;
     result = bsearch(&key_p, rm->index_u, rm->n_records,
-                     sizeof (ofc_tuple_t **), cmp_uuid_index);
+                     sizeof(ofc_tuple_t **), cmp_uuid_index);
     if (result == NULL) {
         /* not found */
         return NULL;
@@ -237,6 +265,7 @@ ofc_resmap_destroy(ofc_resmap_t **resmap)
     }
     t = *resmap;
     for (i=0; i<t->n_records; i++) {
+        /* clean up stored copies of resource_id strings */
         free(t->records[i].resource_id);
     }
     free(t->records);
@@ -246,6 +275,10 @@ ofc_resmap_destroy(ofc_resmap_t **resmap)
     (*resmap) = NULL;
 }
 
+/*
+ * Print content of the map sort by the records array.
+ * \param[in] rm    pointer to the resource map structure
+ */
 void
 ofc_resmap_print(ofc_resmap_t *rm)
 {
@@ -255,10 +288,45 @@ ofc_resmap_print(ofc_resmap_t *rm)
         printf("%s - %s\n", rm->records[i].resource_id,
                print_uuid_ro(&rm->records[i].uuid));
     }
+}
 
+/*
+ * Print content of the map sort by the resource_id index.
+ * \param[in] rm    pointer to the resource map structure
+ */
+void
+ofc_resmap_print_r(ofc_resmap_t *rm)
+{
+    size_t i;
+
+    for (i=0; i<rm->n_records; i++) {
+        printf("%s - %s\n", rm->index_r[i]->resource_id,
+               print_uuid_ro(&rm->index_r[i]->uuid));
+    }
+}
+
+/*
+ * Print content of the map sort by the uuid index.
+ * \param[in] rm    pointer to the resource map structure
+ */
+void
+ofc_resmap_print_u(ofc_resmap_t *rm)
+{
+    size_t i;
+
+    for (i=0; i<rm->n_records; i++) {
+        printf("%s - %s\n", rm->index_u[i]->resource_id,
+               print_uuid_ro(&rm->index_u[i]->uuid));
+    }
 }
 
 #ifdef TEST_RESOURCE_MAP
+/* test of the data structure: inserts TEST_NUM_ELEMS records, removes half
+ * of them from the beginning and half of them from the end, the rest is printed.
+ */
+
+#define TEST_NUM_ELEMS  50
+
 static const char *
 print_uuid_ro(const struct uuid *uuid)
 {
@@ -274,17 +342,21 @@ int main(int argc, char **argv)
     struct uuid u;
     char *r;
     ofc_tuple_t *found;
-    size_t i;
+    size_t i, bi;
     uint64_t errors = 0;
     ofc_resmap_t *rm = ofc_resmap_init(0);
     puts("insert");
-    for (i=0; i<50; ++i) {
+    for (i=0; i<=TEST_NUM_ELEMS; ++i) {
         uuid_generate(&u);
         ofc_resmap_insert(rm, print_uuid_ro(&u), &u);
     }
-    /* ofc_resmap_print(rm); */
+    puts("sorted by resource-id");
+    ofc_resmap_print_r(rm);
+    puts("sorted by uuid");
+    ofc_resmap_print_u(rm);
+
     puts("find resource-id");
-    for (i=0; i<50; ++i) {
+    for (i=0; i<rm->n_records; ++i) {
         r = rm->records[i].resource_id;
         found = ofc_resmap_find_r(rm, r);
         if (found == NULL) {
@@ -304,7 +376,7 @@ int main(int argc, char **argv)
         errors = 0;
     }
     puts("find uuid");
-    for (i=0; i<50; ++i) {
+    for (i=0; i<rm->n_records; ++i) {
         u = rm->records[i].uuid;
         found = ofc_resmap_find_u(rm, &u);
         if (found == NULL) {
@@ -324,8 +396,39 @@ int main(int argc, char **argv)
         printf("%"PRIu64"\n", errors);
         errors = 0;
     }
+    puts("remove resource-id backwards");
+    bi = rm->n_records/2;
+    if (bi > 0) {
+        for (i=bi; i>=0; i--) {
+            r = strdup(rm->records[0].resource_id);
+            if (!ofc_resmap_remove_r(rm, r)) {
+                printf("not removed %s\n", r);
+                printf("%s\n", rm->records[0].resource_id);
+                errors++;
+            }
+            found = ofc_resmap_find_r(rm, r);
+            if (found != NULL) {
+                printf("not removed, still found %s\n", r);
+                errors++;
+            } else {
+                puts("removed");
+            }
+            free(r);
+            if (i == 0) {
+                break;
+            }
+        }
+    }
+    if (errors == 0) {
+        puts("ok");
+        printf("%"PRIu64"\n", bi);
+    } else {
+        printf("%"PRIu64"\n", errors);
+        errors = 0;
+    }
     puts("remove resource-id");
-    for (i=0; i<rm->n_records; i++) {
+    bi = rm->n_records;
+    for (i=0; i<bi; i++) {
         r = strdup(rm->records[0].resource_id);
         if (!ofc_resmap_remove_r(rm, r)) {
             printf("not removed %s\n", r);
@@ -336,15 +439,21 @@ int main(int argc, char **argv)
         if (found != NULL) {
             printf("not removed, still found %s\n", r);
             errors++;
+        } else {
+            puts("removed");
         }
         free(r);
     }
     if (errors == 0) {
         puts("ok");
+        printf("%"PRIu64"\n", bi);
     } else {
         printf("%"PRIu64"\n", errors);
         errors = 0;
     }
+    puts("records left in map");
+    printf("%"PRIu64"\n", rm->n_records);
+    ofc_resmap_print(rm);
 
     ofc_resmap_destroy(&rm);
     return 0;

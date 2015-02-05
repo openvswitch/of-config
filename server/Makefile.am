@@ -1,7 +1,10 @@
-bin_PROGRAMS=ofc-server ofc-agent
+bin_PROGRAMS=ofc-server ofc-agent resmap-test
 ofc_server_SOURCES=common.c common.h comm.h server_ops.h server_ops.c server.c netconf-server-transapi.c ofconfig-transapi.c ofconfig-datastore.c ovs-data.c ovs-data.h
 ofc_server_LDADD=@OVS_LIBS@
 ofc_agent_SOURCES=common.c common.h comm.h agent.c
+resmap_test_SOURCES=res-map.c res-map.h
+resmap_test_LDADD=@OVS_LIBS@
+resmap_test_CPPFLAGS=-DTEST_RESOURCE_MAP
 
 # list of all conditional sources (because of packaging)
 EXTRA_DIST=comm_dbus.h server_comm_dbus.c agent_comm_dbus.c comm_socket.h comm_socket.c server_comm_socket.c agent_comm_socket.c

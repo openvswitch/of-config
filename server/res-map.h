@@ -18,6 +18,7 @@
 #define RES_MAP_H
 
 #include <uuid.h>
+#include <stdbool.h>
 
 /**
  * tuple of resource-id string and UUID
@@ -40,29 +41,59 @@ typedef struct ofc_resmap {
 
 /*
  * Initialize resource map structure.
- * \param[in] init_size  initial number of records, will be enlarged when needed
+ * \param[in] init_size  initial number of records, will be dynamically enlarged when needed
  */
 ofc_resmap_t *ofc_resmap_init(size_t init_size);
 
 /*
  * Inserts record into resource map.
- * \param[in] init_size  initial number of records, will be enlarged when needed
+ * \param[in,out] init_size  initial number of records, will be enlarged when needed
  * \return true on success
  */
 bool ofc_resmap_insert(ofc_resmap_t *rm, const char *resource_id, const struct uuid *uuid);
 
+/*
+ * Removes record by resource_id from the rm map.
+ * \param[in,out] rm    pointer to the resource map structure
+ * \param[in] resource_id   look up by resource_id and remove
+ * \return          true when record was removed
+ */
 bool ofc_resmap_remove_r(ofc_resmap_t *rm, const char *resource_id);
+
+/*
+ * Removes record by uuid from the rm map.
+ * \param[in,out] rm    pointer to the resource map structure
+ * \param[in] uuid  look up by uuid and remove
+ * \return          true when record was removed
+ */
 bool ofc_resmap_remove_u(ofc_resmap_t *rm, const struct uuid *uuid);
 
+/*
+ * Find record by resource_id in the rm map.
+ * \param[in,out] rm    pointer to the resource map structure
+ * \param[in] resource_id  look up by resource_id and remove
+ * \return          pointer to found record or NULL on missing
+ */
 ofc_tuple_t *ofc_resmap_find_r(ofc_resmap_t *rm, const char *resource_id);
+
+/*
+ * Find record by uuid in the rm map.
+ * \param[in,out] rm    pointer to the resource map structure
+ * \param[in] uuid  look up by uuid and remove
+ * \return          pointer to found record or NULL on missing
+ */
 ofc_tuple_t *ofc_resmap_find_u(ofc_resmap_t *rm, const struct uuid *uuid);
 
 /*
  * Free allocated memory, sets poiter to NULL.
- * \param[in,out] rm  pointer to resource map structure
+ * \param[in,out] rm  pointer to the resource map structure
  */
 void ofc_resmap_destroy(ofc_resmap_t **rm);
 
+/*
+ * Print out content of the map for debug purposes.
+ * \param[in] rm  pointer to the resource map structure
+ */
 void ofc_resmap_print(ofc_resmap_t *rm);
 
 #endif

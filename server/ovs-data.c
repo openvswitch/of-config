@@ -261,7 +261,8 @@ get_ports_state(void)
            <current-rate>%s</current-rate>
            <max-rate>%s</max-rate> */
         ds_put_format(&string, "<state>");
-        ds_put_format(&string, "<oper-state>%s</oper-state>", row->link_state);
+        ds_put_format(&string, "<oper-state>%s</oper-state>",
+                      (row->link_state != NULL ? row->link_state : "down"));
 
         find_and_append_smap_val(&row->other_config, "stp_state", "blocked",
                                  &string);

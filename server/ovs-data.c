@@ -382,8 +382,7 @@ get_bridges_state(void)
         ds_put_format(&string, "<id>%s</id>", row->name);
         ds_put_format(&string, "<capabilities><max-buffered-packets>%d"
                       "</max-buffered-packets>", 256);
-        /* XXX max-tables: "no explicit limit"? */
-        /* ds_put_format(&string, "<max-tables>%s</max-tables>"); */
+        ds_put_format(&string, "<max-tables>%d</max-tables>", 255);
         ds_put_format(&string, "<max-ports>%d</max-ports>", 255);
         ds_put_format(&string, "<flow-statistics>%s</flow-statistics>",
                       "true");

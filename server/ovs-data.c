@@ -678,21 +678,20 @@ get_state_data()
     return ds_steal_cstr(&state_data);
 }
 
-void
+bool
 ofconf_init(const char *ovs_db_path)
 {
-    /* TODO return success/error code */
     ofconf_t *p = (ofconf_t *) calloc(1, sizeof (ofconf_t));
 
     if (p == NULL) {
         /* failed */
-        return;
+        return false;
     }
     /* create new resource-id map of 1024 elements, it will grow when needed */
     p->resource_map = ofc_resmap_init(1024);
     if (p->resource_map == NULL) {
         free(p);
-        return;
+        return false;
     }
     ofc_global_context = p;
 
@@ -700,6 +699,7 @@ ofconf_init(const char *ovs_db_path)
     p->idl = ovsdb_idl_create(ovs_db_path, &ovsrec_idl_class, true, true);
     p->seqno = ovsdb_idl_get_seqno(p->idl);
     ofconf_update(p);
+    return true;
 }
 
 void

@@ -21,6 +21,7 @@
 #define OFC_VERBOSITY   0
 #endif
 
+#include <stdbool.h>
 #include "res-map.h"
 
 typedef struct ofconf {
@@ -32,7 +33,7 @@ typedef struct ofconf {
 
 extern ofconf_t *ofc_global_context;
 
-void ofconf_init(const char *ovs_db_path);
+bool ofconf_init(const char *ovs_db_path);
 
 char *get_state_data(void);
 

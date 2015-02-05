@@ -36,7 +36,9 @@ int
 ofcds_init(void *UNUSED(data))
 {
     /* TODO replace OFC_OVS_DBPATH with some parameter */
-    ofconf_init(OFC_OVS_DBPATH);
+    if (ofconf_init(OFC_OVS_DBPATH) == false) {
+        return EXIT_FAILURE;
+    }
 
     /* hack - OVS calls openlog() and rewrites the syslog settings of the
      * ofc-server. So we have to rewrite syslog settings back by another

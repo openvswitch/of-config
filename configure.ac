@@ -53,6 +53,15 @@ AC_HELP_STRING([--with-ovs-ofdir=PATH],[Change default path to OpenFlow control 
 )
 AC_DEFINE_DIR([OFC_OVS_OFSOCKET_DIR], [OFC_OVS_OFSOCKET_DIR], [Change default path to OpenFlow control socket directory])
 
+AC_ARG_ENABLE([buildexamples],
+	AC_HELP_STRING([--enable-buildexamples], [Enable build with debug symbols and without optimizations.]),
+	[if test "$enableval" = "yes"; then
+		buildexamples="yes"
+	else
+		buildexamples="no"
+	fi], [buildexamples="no"])
+AM_CONDITIONAL(buildexamples, test x"$buildexamples" = x"yes")
+
 
 AC_ARG_ENABLE([dbus],
         AC_HELP_STRING([--disable-dbus], [Use UNIX sockets instead of DBus.]),

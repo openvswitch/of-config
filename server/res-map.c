@@ -378,7 +378,7 @@ int main(int argc, char **argv)
         u = rm->records[i].uuid;
         found = ofc_resmap_find_u(rm, &u);
         if (found == NULL) {
-            printf("Not found %s\n", r);
+            printf("Not found %s\n", print_uuid_ro(&u));
             errors++;
         } else {
             if (!uuid_equals(&u, &found->uuid)) {

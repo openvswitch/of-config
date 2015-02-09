@@ -32,6 +32,16 @@
 /* daemonize flag from server.c */
 extern int daemonize;
 
+/* local locks info */
+struct {
+    int running;
+    char *running_sid;
+    int startup;
+    char *startup_sid;
+    int cand;
+    char *cand_sid;
+} locks = {0, NULL, 0, NULL, 0, NULL};
+
 int
 ofcds_init(void *UNUSED(data))
 {
@@ -74,16 +84,94 @@ ofcds_rollback(void *UNUSED(data))
 }
 
 int
-ofcds_lock(void *UNUSED(data), NC_DATASTORE UNUSED(target),
-           const char *UNUSED(session_id), struct nc_err **UNUSED(error))
+ofcds_lock(void *UNUSED(data), NC_DATASTORE target, const char *session_id,
+           struct nc_err **error)
 {
+    int *locked;
+    char **sid;
+
+    switch (target) {
+    case NC_DATASTORE_RUNNING:
+        locked = &(locks.running);
+        sid = &(locks.running_sid);
+        break;
+    case NC_DATASTORE_STARTUP:
+        locked = &(locks.startup);
+        sid = &(locks.startup_sid);
+        break;
+    case NC_DATASTORE_CANDIDATE:
+        locked = &(locks.cand);
+        sid = &(locks.cand_sid);
+        break;
+    default:
+        /* handled by libnetconf */
+        break;
+    }
+
+    if (*locked) {
+        /* datastore is already locked */
+        *error = nc_err_new(NC_ERR_LOCK_DENIED);
+        nc_err_set(*error, NC_ERR_PARAM_INFO_SID, *sid);
+        return EXIT_FAILURE;
+    } else {
+        /* remember the lock */
+        *locked = 1;
+        *sid = strdup(session_id);
+        nc_verb_verbose("OFC datastore %d locked by %s.", target,
+                        session_id);
+    }
+
     return EXIT_SUCCESS;
 }
 
 int
-ofcds_unlock(void *UNUSED(data), NC_DATASTORE UNUSED(target),
-             const char *UNUSED(session_id), struct nc_err **UNUSED(error))
+ofcds_unlock(void *UNUSED(data), NC_DATASTORE target, const char *session_id,
+             struct nc_err **error)
 {
+    int *locked;
+    char **sid;
+
+    switch (target) {
+    case NC_DATASTORE_RUNNING:
+        locked = &(locks.running);
+        sid = &(locks.running_sid);
+        break;
+    case NC_DATASTORE_STARTUP:
+        locked = &(locks.startup);
+        sid = &(locks.startup_sid);
+        break;
+    case NC_DATASTORE_CANDIDATE:
+        locked = &(locks.cand);
+        sid = &(locks.cand_sid);
+        break;
+    default:
+        /* handled by libnetconf */
+        break;
+    }
+
+    if (*locked) {
+        if (strcmp(*sid, session_id) == 0) {
+            /* correct request, unlock */
+            *locked = 0;
+            free(*sid);
+            *sid = NULL;
+            nc_verb_verbose("OFC datastore %d unlocked by %s.", target,
+                            session_id);
+        } else {
+            /* locked by another session */
+            *error = nc_err_new(NC_ERR_LOCK_DENIED);
+            nc_err_set(*error, NC_ERR_PARAM_INFO_SID, *sid);
+            nc_err_set(*error, NC_ERR_PARAM_MSG,
+                       "Target datastore is locked by another session.");
+            return EXIT_FAILURE;
+        }
+    } else {
+        /* not locked */
+        *error = nc_err_new(NC_ERR_OP_FAILED);
+        nc_err_set(*error, NC_ERR_PARAM_MSG, "Target datastore is not locked.");
+        return EXIT_FAILURE;
+    }
+
     return EXIT_SUCCESS;
 }
 

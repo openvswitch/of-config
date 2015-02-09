@@ -105,7 +105,7 @@ ofcds_lock(void *UNUSED(data), NC_DATASTORE target, const char *session_id,
         break;
     default:
         /* handled by libnetconf */
-        break;
+        return EXIT_FAILURE;
     }
 
     if (*locked) {
@@ -146,7 +146,7 @@ ofcds_unlock(void *UNUSED(data), NC_DATASTORE target, const char *session_id,
         break;
     default:
         /* handled by libnetconf */
-        break;
+        return EXIT_FAILURE;
     }
 
     if (*locked) {

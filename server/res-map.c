@@ -154,7 +154,7 @@ ofc_resmap_remove(ofc_resmap_t *rm, ofc_tuple_t *del)
 {
     ofc_tuple_t **index_r_p;
     ofc_tuple_t **index_u_p;
-    ofc_tuple_t *tuple;
+    ofc_tuple_t *tuple = NULL;
     ofc_tuple_t key, *key_p = &key;
     size_t i;
 
@@ -164,7 +164,7 @@ ofc_resmap_remove(ofc_resmap_t *rm, ofc_tuple_t *del)
             break;
         }
     }
-    if (!uuid_equals(&del->uuid, &tuple->uuid)) {
+    if (!tuple || !uuid_equals(&del->uuid, &tuple->uuid)) {
         /* record was not found in records */
         return false;
     }

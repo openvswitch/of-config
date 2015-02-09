@@ -190,7 +190,7 @@ AC_DEFINE_DIR([CONF_BINDIR], [bindir], [Configured path to bin/ directory.])
 
 # Checks for header files.
 AC_CHECK_HEADERS([stdint.h stdlib.h string.h dynamic-string.h ovsdb-idl-provider.h vlog.h vswitch-idl.h])
-
+AC_CHECK_HEADERS([linux/if_ether.h linux/types.h])
 
 # Checks for typedefs, structures, and compiler characteristics.
 AC_TYPE_INT64_T

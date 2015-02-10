@@ -33,6 +33,10 @@ typedef struct ofconf {
     ofc_resmap_t *resource_map;
 } ofconf_t;
 
+/*
+ * ovs-data.c
+ */
+
 extern ofconf_t *ofc_global_context;
 
 bool ofconf_init(const char *ovs_db_path);
@@ -43,5 +47,14 @@ char *get_config_data(void);
 
 void ofconf_destroy(void);
 
+/*
+ * local-data.c
+ */
+
+/* store /capable-switch/id value */
+int ofc_set_switchid(xmlNodePtr id);
+
+/* get stored /capable=switch/id value */
+const xmlChar *ofc_get_switchid(void);
 
 #endif /* data.h */

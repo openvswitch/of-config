@@ -51,8 +51,10 @@ void ofconf_destroy(void);
  * local-data.c
  */
 
-/* store /capable-switch/id value */
-int ofc_set_switchid(xmlNodePtr id);
+/* store /capable-switch/id value
+ * node - /capable-switch/id element node. If NULL, the function deletes id
+ */
+int ofc_set_switchid(xmlNodePtr node);
 
 /* get stored /capable=switch/id value */
 const xmlChar *ofc_get_switchid(void);

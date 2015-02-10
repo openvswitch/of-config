@@ -27,20 +27,30 @@
 static xmlChar* cs_id = NULL; /* /capable-switch/id */
 
 int
-ofc_set_switchid(xmlNodePtr id)
+ofc_set_switchid(xmlNodePtr node)
 {
-    assert(id);
+    xmlChar *id;
 
-    if (!id->children || id->children->type != XML_TEXT_NODE) {
+    if (!node) {
+        /* delete id */
+        xmlFree(cs_id);
+        cs_id = NULL;
+        return EXIT_SUCCESS;
+    }
+
+    if (!node->children || node->children->type != XML_TEXT_NODE) {
         nc_verb_error("%s: invalid id element", __func__);
         return EXIT_FAILURE;
     }
 
-    cs_id = xmlStrdup(id->children->content);
-    if (!cs_id) {
+    id = xmlStrdup(node->children->content);
+    if (!id) {
         nc_verb_error("%s: invalid id element content", __func__);
         return EXIT_FAILURE;
     }
+
+    xmlFree(cs_id);
+    cs_id = id;
 
     return EXIT_SUCCESS;
 }

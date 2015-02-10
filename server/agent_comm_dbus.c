@@ -249,7 +249,7 @@ comm_operation(comm_t *c, const nc_rpc *rpc)
     DBusError dbus_err;
     DBusMessageIter args;
     char *dump = NULL;
-    const char *err_message;
+    const char *err_message = NULL;
     nc_reply *rpc_reply;
     struct nc_err *err;
 
@@ -311,7 +311,9 @@ comm_operation(comm_t *c, const nc_rpc *rpc)
 
 fillerr:
     err = nc_err_new(NC_ERR_OP_FAILED);
-    nc_err_set(err, NC_ERR_PARAM_MSG, err_message);
+    if (err_message) {
+        nc_err_set(err, NC_ERR_PARAM_MSG, err_message);
+    }
 
     /* cleanup */
     dbus_error_free(&dbus_err);
@@ -360,7 +362,7 @@ comm_kill_session(comm_t *c, const char *sid)
     DBusError dbus_err;
     DBusMessageIter args;
     struct nc_err *err;
-    const char *errmsg;
+    const char *errmsg = NULL;
 
     /* initiate dbus errors */
     dbus_error_init(&dbus_err);
@@ -391,7 +393,9 @@ comm_kill_session(comm_t *c, const char *sid)
 
 fillerr:
     err = nc_err_new(NC_ERR_OP_FAILED);
-    nc_err_set(err, NC_ERR_PARAM_MSG, errmsg);
+    if (errmsg) {
+        nc_err_set(err, NC_ERR_PARAM_MSG, errmsg);
+    }
 
     /* cleanup */
     dbus_error_free(&dbus_err);

@@ -14,6 +14,10 @@
  * limitations under the License.
  */
 
+/* TODO:
+ * - NACM
+ */
+
 #include <config.h>
 
 #include <stdlib.h>
@@ -48,6 +52,36 @@ struct {
 /* localy maintained datastores */
 xmlDocPtr gds_startup = NULL;
 xmlDocPtr gds_cand = NULL;
+
+int ofcds_deleteconfig(void *UNUSED(data), NC_DATASTORE UNUSED(target),
+                       struct nc_err **UNUSED(error));
+
+static int
+ofc_apply(xmlDocPtr doc, struct nc_err **e)
+{
+    xmlNodePtr root, node;
+
+    if (!doc || !(root = xmlDocGetRootElement(doc))) {
+        /* no data -> delete-config */
+        return ofcds_deleteconfig(NULL, NC_DATASTORE_RUNNING, e);
+    }
+
+    /* TODO: apply to OVSDB */
+    for (node = root->children; node; node = node->next) {
+        if (node->type != XML_ELEMENT_NODE) {
+            continue;
+        }
+
+        if (xmlStrEqual(node->name, BAD_CAST "id")) {
+            /* TODO: check that there is id, since it is mandatory */
+            ofc_set_switchid(node);
+        }
+
+        /* TODO: handle the rest of nodes */
+    }
+
+    return EXIT_SUCCESS;
+}
 
 int
 ofcds_init(void *UNUSED(data))
@@ -236,11 +270,107 @@ ofcds_getconfig(void *UNUSED(data), NC_DATASTORE target, struct nc_err **error)
 }
 
 int
-ofcds_copyconfig(void *UNUSED(data), NC_DATASTORE UNUSED(target),
-                 NC_DATASTORE UNUSED(source), char *UNUSED(config),
-                 struct nc_err **UNUSED(error))
+ofcds_copyconfig(void *UNUSED(data), NC_DATASTORE target,
+                 NC_DATASTORE source, char *config,
+                 struct nc_err **error)
 {
-    return EXIT_SUCCESS;
+    int ret = EXIT_FAILURE;
+    char *s;
+    xmlDocPtr src_doc = NULL;
+    xmlDocPtr dst_doc = NULL;
+
+    nc_verb_verbose("OFC COPY-CONFIG (from %d to %d)", source, target);
+
+    switch(source) {
+    case NC_DATASTORE_RUNNING:
+        s = ofcds_getconfig(NULL, NC_DATASTORE_RUNNING, error);
+        if (!s) {
+            nc_verb_error("copy-config: unable to get running source repository");
+            return EXIT_FAILURE;
+        }
+        src_doc = xmlReadMemory(s, strlen(s), NULL, NULL, XML_READ_OPT);
+        free(s);
+        if (!src_doc) {
+            nc_verb_error("copy-config: invalid running source data");
+            *error = nc_err_new(NC_ERR_OP_FAILED);
+            nc_err_set(*error, NC_ERR_PARAM_INFO_BADELEM,
+                       "invalid running source data");
+            return EXIT_FAILURE;
+        }
+        break;
+    case NC_DATASTORE_STARTUP:
+        src_doc = gds_startup;
+        break;
+    case NC_DATASTORE_CANDIDATE:
+        src_doc = gds_cand;
+        break;
+    case NC_DATASTORE_CONFIG:
+        if (config && strlen(config) > 0) {
+            src_doc = xmlReadMemory(config, strlen(config), NULL, NULL,
+                                    XML_READ_OPT);
+        }
+        if (!config || (strlen(config) > 0 && !src_doc)) {
+            nc_verb_error("Invalid source configuration data.");
+            *error = nc_err_new(NC_ERR_BAD_ELEM);
+            nc_err_set(*error, NC_ERR_PARAM_INFO_BADELEM, "config");
+            return EXIT_FAILURE;
+        }
+
+        break;
+    default:
+        nc_verb_error("Invalid <get-config> source.");
+        *error = nc_err_new(NC_ERR_BAD_ELEM);
+        nc_err_set(*error, NC_ERR_PARAM_INFO_BADELEM, "source");
+        return EXIT_FAILURE;
+    }
+
+    switch(target) {
+    case NC_DATASTORE_RUNNING:
+        /* apply source to OVSDB */
+        if (ofc_apply(src_doc, error) != 0) {
+            goto cleanup;
+        }
+        break;
+    case NC_DATASTORE_STARTUP:
+    case NC_DATASTORE_CANDIDATE:
+        /* create copy */
+        if (src_doc) {
+            dst_doc = xmlCopyDoc(src_doc, 1);
+            if (!dst_doc) {
+                nc_verb_error("copy-config: making source copy failed");
+                *error = nc_err_new(NC_ERR_OP_FAILED);
+                nc_err_set(*error, NC_ERR_PARAM_MSG,
+                           "making source copy failed");
+                goto cleanup;
+            }
+        }
+
+        /* store the copy */
+        if (target == NC_DATASTORE_STARTUP) {
+            xmlFreeDoc(gds_startup);
+            gds_startup = dst_doc;
+        } else { /* NC_DATASTORE_CANDIDATE */
+            xmlFreeDoc(gds_cand);
+            gds_cand = dst_doc;
+        }
+
+        break;
+    default:
+        nc_verb_error("Invalid <get-config> source.");
+        *error = nc_err_new(NC_ERR_BAD_ELEM);
+        nc_err_set(*error, NC_ERR_PARAM_INFO_BADELEM, "source");
+        goto cleanup;
+    }
+
+    ret = EXIT_SUCCESS;
+
+cleanup:
+    if (source == NC_DATASTORE_RUNNING ||
+            source == NC_DATASTORE_CONFIG) {
+        xmlFreeDoc(src_doc);
+    }
+
+    return ret;
 }
 
 int

@@ -134,6 +134,10 @@ ofcds_free(void *UNUSED(data))
 int
 ofcds_changed(void *UNUSED(data))
 {
+    /* always false
+     * the function is not needed now, we can implement it later for internal
+     * purposes, but for now the datastore content is synced continuously
+     */
     return (0);
 }
 

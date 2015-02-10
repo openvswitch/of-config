@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef OVS_DATA_H
-#define OVS_DATA_H 1
+#ifndef DATA_H
+#define DATA_H 1
 
 #include <libxml/tree.h>
 
@@ -44,4 +44,4 @@ char *get_config_data(void);
 void ofconf_destroy(void);
 
 
-#endif /* ovs-data.h */
+#endif /* data.h */

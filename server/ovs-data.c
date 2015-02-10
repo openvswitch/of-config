@@ -39,7 +39,7 @@
 
 #include <libnetconf/netconf.h>
 
-#include "ovs-data.h"
+#include "data.h"
 
 ofconf_t *ofc_global_context = (ofconf_t *) NULL;
 int ioctlfd = -1;

@@ -1,5 +1,5 @@
 bin_PROGRAMS=ofc-server ofc-agent resmap-test
-ofc_server_SOURCES=common.c common.h comm.h server_ops.h server_ops.c server.c netconf-server-transapi.c ofconfig-transapi.c ofconfig-datastore.c ovs-data.c ovs-data.h res-map.c res-map.h
+ofc_server_SOURCES=common.c common.h comm.h server_ops.h server_ops.c server.c netconf-server-transapi.c ofconfig-transapi.c ofconfig-datastore.c ovs-data.c data.h res-map.c res-map.h
 ofc_server_LDADD=@OVS_LIBS@
 ofc_agent_SOURCES=common.c common.h comm.h agent.c
 resmap_test_SOURCES=res-map.c res-map.h

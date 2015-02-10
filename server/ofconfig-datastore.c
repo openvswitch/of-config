@@ -21,7 +21,8 @@
 #include <syslog.h>
 
 #include <libnetconf.h>
-#include "ovs-data.h"
+
+#include "data.h"
 
 #ifdef __GNUC__
 #   define UNUSED(x) UNUSED_ ## x __attribute__((__unused__))

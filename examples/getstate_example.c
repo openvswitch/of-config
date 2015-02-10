@@ -18,7 +18,7 @@
 #include <stdlib.h>
 
 
-#include "../server/ovs-data.h"
+#include "../server/data.h"
 
 int main(int argc, char **argv)
 {

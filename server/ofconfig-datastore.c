@@ -30,6 +30,8 @@
 #   define UNUSED(x) UNUSED_ ## x
 #endif
 
+#define XML_READ_OPT XML_PARSE_NOBLANKS|XML_PARSE_NSCLEAN
+
 /* daemonize flag from server.c */
 extern int daemonize;
 
@@ -42,6 +44,10 @@ struct {
     int cand;
     char *cand_sid;
 } locks = {0, NULL, 0, NULL, 0, NULL};
+
+/* localy maintained datastores */
+xmlDocPtr gds_startup = NULL;
+xmlDocPtr gds_cand = NULL;
 
 int
 ofcds_init(void *UNUSED(data))
@@ -61,6 +67,14 @@ ofcds_init(void *UNUSED(data))
         openlog("ofc-server", LOG_PID | LOG_PERROR, LOG_DAEMON);
     }
 
+    /* get startup data */
+    gds_startup = xmlReadFile(OFC_DATADIR"/startup.xml", NULL, XML_READ_OPT);
+    /* check that there are some data, if not, continue with empty startup */
+    if (!xmlDocGetRootElement(gds_startup)) {
+        xmlFreeDoc(gds_startup);
+        gds_startup = NULL;
+    }
+
     nc_verb_verbose("OF-CONFIG datastore initialized.");
     return EXIT_SUCCESS;
 }
@@ -69,6 +83,17 @@ void
 ofcds_free(void *UNUSED(data))
 {
     ofconf_destroy();
+
+    /* dump startup to persistent storage */
+    if (gds_startup) {
+        xmlSaveFormatFile(OFC_DATADIR"/startup.xml", gds_startup, 1);
+    }
+
+    /* cleanup locks */
+    free(locks.running_sid);
+    free(locks.startup_sid);
+    free(locks.cand_sid);
+
     return;
 }
 

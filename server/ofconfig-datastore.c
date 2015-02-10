@@ -202,15 +202,37 @@ ofcds_unlock(void *UNUSED(data), NC_DATASTORE target, const char *session_id,
 }
 
 char *
-ofcds_getconfig(void *UNUSED(data), NC_DATASTORE UNUSED(target),
-                struct nc_err **UNUSED(error))
+ofcds_getconfig(void *UNUSED(data), NC_DATASTORE target, struct nc_err **error)
 {
-    char *config_data = get_config_data();
-    nc_verb_verbose("OF-CONFIG datastore <get-config>");
-    if (config_data != NULL) {
-        return config_data;
+    xmlChar *config_data = NULL;
+
+    switch(target) {
+    case NC_DATASTORE_RUNNING:
+        /* If there is no id of the capable-switch (no configuration data were
+         * provided), continue as there is no OVSDB
+         */
+        return get_config_data();
+    case NC_DATASTORE_STARTUP:
+        if (!gds_startup) {
+            config_data = xmlStrdup(BAD_CAST "");
+        } else {
+            xmlDocDumpMemory(gds_startup, &config_data, NULL);
+        }
+        break;
+    case NC_DATASTORE_CANDIDATE:
+        if (!gds_cand) {
+            config_data = xmlStrdup(BAD_CAST "");
+        } else {
+            xmlDocDumpMemory(gds_cand, &config_data, NULL);
+        }
+        break;
+    default:
+        nc_verb_error("Invalid <get-config> source.");
+        *error = nc_err_new(NC_ERR_BAD_ELEM);
+        nc_err_set(*error, NC_ERR_PARAM_INFO_BADELEM, "source");
     }
-    return strdup("");
+
+    return (char*) config_data;
 }
 
 int

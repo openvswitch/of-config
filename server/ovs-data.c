@@ -743,6 +743,7 @@ get_config_data()
 
     struct ds state_data;
 
+    const char *id;
     char *queues;
     char *ports;
     char *flow_tables;
@@ -752,6 +753,12 @@ get_config_data()
 
     if (ofc_global_context == NULL) {
         return NULL;
+    }
+
+    id = (const char*)ofc_get_switchid();
+    if (!id) {
+        /* no id -> no data */
+        return strdup("");
     }
 
     queues = get_queues_config();
@@ -776,8 +783,8 @@ get_config_data()
 
     ds_init(&state_data);
 
-    ds_put_format(&state_data, config_data_format,"XXX" /* switch/id XXX */,
-    ports, queues, flow_tables, owned_certificates, external_certificates,
+    ds_put_format(&state_data, config_data_format, id, ports, queues,
+                  flow_tables, owned_certificates, external_certificates,
                   bridges);
 
     free(queues);

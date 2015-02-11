@@ -26,18 +26,9 @@
 #include <stdbool.h>
 #include "res-map.h"
 
-typedef struct ofconf {
-    struct ovsdb_idl *idl;
-    unsigned int seqno;
-    struct vconn *vconn;
-    ofc_resmap_t *resource_map;
-} ofconf_t;
-
 /*
  * ovs-data.c
  */
-
-extern ofconf_t *ofc_global_context;
 
 bool ofconf_init(const char *ovs_db_path);
 

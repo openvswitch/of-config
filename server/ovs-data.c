@@ -41,7 +41,14 @@
 
 #include "data.h"
 
-ofconf_t *ofc_global_context = (ofconf_t *) NULL;
+typedef struct {
+    struct ovsdb_idl *idl;
+    unsigned int seqno;
+    struct vconn *vconn;
+    ofc_resmap_t *resource_map;
+} ovsdb_t;
+ovsdb_t *ovsdb_handler = NULL;
+
 int ioctlfd = -1;
 
 struct u32_str_map{
@@ -125,8 +132,8 @@ get_flow_tables_state(void)
     const char *resource_id;
 
     ds_init(&string);
-    OVSREC_FLOW_TABLE_FOR_EACH_SAFE(row, next, ofc_global_context->idl) {
-        resource_id = find_resid_generate(ofc_global_context->resource_map,
+    OVSREC_FLOW_TABLE_FOR_EACH_SAFE(row, next, ovsdb_handler->idl) {
+        resource_id = find_resid_generate(ovsdb_handler->resource_map,
                                           &row->header_.uuid);
         ds_put_format(&string, "<flow-table><resource-id>%s</resource-id>"
                       "<max-entries>%"PRId64"</max-entries></flow-table>",
@@ -148,8 +155,8 @@ get_flow_tables_config(void)
     struct ds string;
 
     ds_init(&string);
-    OVSREC_FLOW_TABLE_FOR_EACH_SAFE(row, next, ofc_global_context->idl) {
-        resource_id = find_resid_generate(ofc_global_context->resource_map,
+    OVSREC_FLOW_TABLE_FOR_EACH_SAFE(row, next, ovsdb_handler->idl) {
+        resource_id = find_resid_generate(ovsdb_handler->resource_map,
                                           &row->header_.uuid);
         ds_put_format(&string, "<flow-table><resource-id>%s</resource-id>",
                       resource_id);
@@ -175,8 +182,8 @@ get_queues_config(void)
     const char *resource_id;
 
     ds_init(&string);
-    OVSREC_QUEUE_FOR_EACH_SAFE(row, next, ofc_global_context->idl) {
-        resource_id = find_resid_generate(ofc_global_context->resource_map,
+    OVSREC_QUEUE_FOR_EACH_SAFE(row, next, ovsdb_handler->idl) {
+        resource_id = find_resid_generate(ovsdb_handler->resource_map,
                                           &row->header_.uuid);
 
         ds_put_format(&string,
@@ -256,7 +263,7 @@ get_ports_config(void)
     struct ds string;
 
     ds_init(&string);
-    OVSREC_INTERFACE_FOR_EACH_SAFE(row, next, ofc_global_context->idl) {
+    OVSREC_INTERFACE_FOR_EACH_SAFE(row, next, ovsdb_handler->idl) {
 
         ds_put_format(&string, "<port>");
         ds_put_format(&string, "<name>%s</name>", row->name);
@@ -329,7 +336,7 @@ get_ports_state(void)
     struct ds string;
 
     ds_init(&string);
-    OVSREC_INTERFACE_FOR_EACH_SAFE(row, next, ofc_global_context->idl) {
+    OVSREC_INTERFACE_FOR_EACH_SAFE(row, next, ovsdb_handler->idl) {
 
         /* get interface status via ioctl() */
         struct ifreq ethreq;
@@ -499,7 +506,7 @@ get_controller_config(struct ds *string, const struct ovsrec_controller *row)
     const char *resource_id;
 
     parse_target_to_addr(target, &protocol, &address, &port);
-    resource_id = find_resid_generate(ofc_global_context->resource_map,
+    resource_id = find_resid_generate(ovsdb_handler->resource_map,
                                       &row->header_.uuid);
 
     ds_put_format(string, "<controller>");
@@ -523,7 +530,7 @@ get_bridges_state(void)
     size_t i;
 
     ds_init(&string);
-    OVSREC_BRIDGE_FOR_EACH_SAFE(row, next, ofc_global_context->idl) {
+    OVSREC_BRIDGE_FOR_EACH_SAFE(row, next, ovsdb_handler->idl) {
         /* char *uuid = print_uuid(&row->header_.uuid); */
         /* ds_put_format(&string, "<resource-id>%s</resource-id>", uuid);
          * free(uuid); */
@@ -600,7 +607,7 @@ append_resource_refs(struct ds *string, struct ovsdb_idl_row **h,
     const char *resource_id;
     if (count > 0) {
         for (i = 0; i < count; ++i) {
-            resource_id = find_resid_generate(ofc_global_context->resource_map,
+            resource_id = find_resid_generate(ovsdb_handler->resource_map,
                                               &h[i]->uuid);
             ds_put_format(string, "<%s>%s</%s>", elem, resource_id, elem);
         }
@@ -615,7 +622,7 @@ get_bridges_config(void)
     size_t i;
 
     ds_init(&string);
-    OVSREC_BRIDGE_FOR_EACH_SAFE(row, next, ofc_global_context->idl) {
+    OVSREC_BRIDGE_FOR_EACH_SAFE(row, next, ovsdb_handler->idl) {
         /* char *uuid = print_uuid(&row->header_.uuid); */
         /* ds_put_format(&string, "<resource-id>%s</resource-id>", uuid);
          * free(uuid); */
@@ -695,7 +702,7 @@ get_external_certificates_config()
 
 /* synchronize local copy of OVSDB */
 static void
-ofconf_update(ofconf_t *p)
+ofconf_update(ovsdb_t *p)
 {
     int retval, i;
     for (i=0; i<4; i++) {
@@ -742,7 +749,7 @@ get_config_data()
     char *owned_certificates;
     char *external_certificates;
 
-    if (ofc_global_context == NULL) {
+    if (ovsdb_handler == NULL) {
         return NULL;
     }
 
@@ -803,10 +810,10 @@ get_state_data(xmlDocPtr running)
 
     struct ds state_data;
 
-    if (ofc_global_context == NULL) {
+    if (ovsdb_handler == NULL) {
         return NULL;
     }
-    ofconf_update(ofc_global_context);
+    ofconf_update(ovsdb_handler);
 
     ports = get_ports_state();
     if (ports == (NULL)) {
@@ -836,7 +843,7 @@ get_state_data(xmlDocPtr running)
 bool
 ofconf_init(const char *ovs_db_path)
 {
-    ofconf_t *p = (ofconf_t *) calloc(1, sizeof (ofconf_t));
+    ovsdb_t *p = calloc(1, sizeof *p);
 
     if (p == NULL) {
         /* failed */
@@ -848,12 +855,12 @@ ofconf_init(const char *ovs_db_path)
         free(p);
         return false;
     }
-    ofc_global_context = p;
 
     ovsrec_init();
     p->idl = ovsdb_idl_create(ovs_db_path, &ovsrec_idl_class, true, true);
     p->seqno = ovsdb_idl_get_seqno(p->idl);
     ofconf_update(p);
+    ovsdb_handler = p;
 
     /* prepare descriptor to perform ioctl() */
     ioctlfd = socket(PF_INET, SOCK_DGRAM, IPPROTO_IP);
@@ -864,14 +871,14 @@ ofconf_init(const char *ovs_db_path)
 void
 ofconf_destroy(void)
 {
-    if (ofc_global_context != NULL) {
+    if (ovsdb_handler != NULL) {
         /* close everything */
-        ovsdb_idl_destroy(ofc_global_context->idl);
+        ovsdb_idl_destroy(ovsdb_handler->idl);
 
-        ofc_resmap_destroy(&ofc_global_context->resource_map);
+        ofc_resmap_destroy(&ovsdb_handler->resource_map);
 
-        free(ofc_global_context);
-        ofc_global_context = NULL;
+        free(ovsdb_handler);
+        ovsdb_handler = NULL;
     }
 
     if (ioctlfd != -1) {

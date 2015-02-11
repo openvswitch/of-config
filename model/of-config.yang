@@ -14,6 +14,11 @@ module of-config {
      configuring OpenFlow datapaths. It is part of the OF-CONFIG
      specification.";
 
+  revision 2015-02-11 {
+    description
+       "Working version between 1.2 and 1.3.";
+  }
+
   revision 2013-10-05 {
     description
        "This version of this YANG Module is part of the OF-CONFIG
@@ -216,63 +221,6 @@ module of-config {
  * Groupings
  *****************************************************************/
 
-  grouping OFConfigurationPointType {
-    description
-      "Representation of an OpenFlow Configuration Point.
-       Instances of the Configuration Point class SHOULD be stored 
-       persistently across reboots of the OpenFlow Capable Switch.
-    
-       When a connection is established between an OpenFlow Capable 
-       Switch and a Configuration Point the switch  MUST store the 
-       connection information in an instance of the Configuration 
-       Point class. If such an instance does not exist, the OpenFlow
-       Capable Switch MUST create an instance where it then stores 
-       the connection information.
-    
-       An OpenFlow Capable Switch that cannot initiate a connection 
-       to a configuration point does not have to implement the 
-       Configuration Point class. It SHOULD block attempts to write
-       to instances of the Configuration Point class with NETCONF 
-       <edit-config> operations.";
-
-    leaf id {
-      type OFConfigId;
-      mandatory true;
-      description
-	"A unique but locally arbitrary identifier that
-         identifies a Configuration Point within the context of an 
-         OpenFlow Capable Switch.";
-    }
-
-    leaf uri {
-      type inet:uri;
-      mandatory true;
-      description
-	"A locator of the Configuration Point.  It 
-         identifies the location of the Configuration Point as a 
-         service resource and MUST include all information necessary
-         for the OpenFlow Capable Switch to connect to the 
-         Configuration Point or re-connect to it should it become 
-         disconnected.  Such information MAY include, for example, 
-         protocol, fully qualified domain name, IP address, port 
-         number, etc.";
-    }
-
-    leaf protocol {
-      type OFConfigurationPointProtocolType;
-      default "ssh";
-      description
-	"The transport protocol that the Configuration
-         Point uses when communicating via NETCONF with the OpenFlow
-         Capable Switch.";
-
-      reference
-	"The mappings of NETCONF to different transport
-         protocols are defined in RFC 6242 for SSH, RFC 4743 for
-         SOAP, RFC 4744 for BEEP, and RFC 5539 for TLS";
-    }
-  }
-
   grouping OFLogicalSwitchType {
     description
       "This grouping specifies all properties of an OpenFlow
@@ -318,37 +266,37 @@ module of-config {
       description
 	"This element indicates the administrative state
          of the OpenFlow Logical Switch.  A value of 'false' means
-         the OpenFlow Logical Switch MUST NOT communicate with any 
-         OpenFlow Controllers, MUST NOT conduct any OpenFlow 
-         processing, and SHOULD NOT be utilizing computational or 
+         the OpenFlow Logical Switch MUST NOT communicate with any
+         OpenFlow Controllers, MUST NOT conduct any OpenFlow
+         processing, and SHOULD NOT be utilizing computational or
          network resources of the underlying platform.";
      }
- 
+
    leaf check-controller-certificate {
       type boolean;
       default false;
       description
-	"This element indicates the behavior of the 
+	"This element indicates the behavior of the
          OpenFlow Logical Switch when connecting to an OpenFlow
-         Controller.  
-      
+         Controller.
+
          If set to value 'false', the logical switch will connect to
-         a controller without checking any controller certificate.  
-      
+         a controller without checking any controller certificate.
+
          If set to value 'true', then the logical switch will
          connect to a controller with element <protocol> set to
          'TLS', only if the controller provides a certificate that
          can be verified with one of the certificates stored in the
          list called external-certificates in the OpenFlow Capable
-         Switch.  
-      
-         If a certificate cannot be validated, the OpenFlow Logical 
+         Switch.
+
+         If a certificate cannot be validated, the OpenFlow Logical
          Switch MUST terminate communication with the corresponding
          OpenFlow Controller, MUST NOT conduct any OpenFlow
-         processing on requests of this OpenFlow controller, and 
-         SHOULD NOT further utilize any computational or network 
+         processing on requests of this OpenFlow controller, and
+         SHOULD NOT further utilize any computational or network
          resources of for dealing with this connection.
-      
+
          If set to value 'true', the OpenFlow Logical Switch MUST
          NOT connect to any OpenFlow Controller that does not
          provide a certificate. This implies that it cannot connect
@@ -364,8 +312,8 @@ module of-config {
       }
       default failSecureMode;
       description
-	"This element indicates the the behavior of the 
-         OpenFlow Logical Switch in case it loses contact with all 
+	"This element indicates the the behavior of the
+         OpenFlow Logical Switch in case it loses contact with all
          OpenFlow Controllers.  There are two alternative modes in
          such a case: fails secure mode and fail standalone mode as
          defined by the OpenFlow protocol specification version 1.2,
@@ -380,7 +328,7 @@ module of-config {
       list controller {
         key "id";
         description
-	  "The list of OpenFlow Controllers that are 
+	  "The list of OpenFlow Controllers that are
            assigned to the OpenFlow Logical Switch.  The switch MUST
            NOT connect to any OpenFlow Controller that is not
            contained in this list.";
@@ -393,12 +341,12 @@ module of-config {
       description
 	"The list of identifiers of all resources of the
          OpenFlow Capable Switch that the OpenFlow Logical Switch
-         has exclusive or non-exclusive access to.  A resource is 
+         has exclusive or non-exclusive access to.  A resource is
          identified by the value of its resource-identifier element.
          For each resource identifier value in this list, there MUST
-         be an element with a matching resource identifier value in 
+         be an element with a matching resource identifier value in
          the resources list of the OpenFlow Capable Switch.
-      
+
          Identifiers of this list are contained in elements
          indicating the type of resource: 'port', 'queue',
          'certificate', or 'flow-table'.  Depending on the type,
@@ -407,7 +355,7 @@ module of-config {
 
       leaf-list port {
         type leafref {
-          path "/capable-switch/resources/port/resource-id";
+          path "/capable-switch/resources/port/name";
         }
         description
 	  "A resource identifier of a port of the OpenFlow Capable
@@ -438,14 +386,14 @@ module of-config {
           Switch that the OpenFlow Logical Switch uses to identify
           itself.  This element MUST NOT occur more than once in an
           OpenFlow Logical Switch's resource list.
-        
+
           If no such element is in an OpenFlow Logical Switch's resource
           list, then the OpenFlow Logical Switch does not authenticate
           itself towards an OpenFloe Controller with a certificate.  If
           this element is present, then the OpenFlow Logical Switch MUST
           provide this certificate for authentication to an OpenFlow
           Controller when setting up a TLS connection.
-        
+
           For TCP connections this element is irrelevant.";
       }
 
@@ -462,7 +410,7 @@ module of-config {
       }
     }
   }
-  
+
   grouping OFLogicalSwitchCapabilitiesType {
     description
       "This grouping specifies all properties of an OpenFlow logical switch's
@@ -678,7 +626,7 @@ module of-config {
         this OpenFlow Controller.  It is the source IP address of
         packets sent to this OpenFlow Controller.  If present, this
         element overrides any default IP address.
-        
+
         This element is optional. Attempts to set this element to an IP
         address that cannot be used by the OpenFlow Logical Switch MUST
         result in an 'bad-element' error with type 'application'. The
@@ -694,7 +642,7 @@ module of-config {
          of packets sent to this OpenFlow Controller.  If this element is
          not present, then the port number is chosen arbitrarily by the
          OpenFlow Logical Switch.
-      
+
          This element is optional. Attempts to set this element to a
          port number that cannot be used by the OpenFlow Logical
          Switch MUST result in an 'bad-element' error with type
@@ -804,7 +752,7 @@ module of-config {
        configuration.
 
       Only elements from one choice must exist at a time.";
- 
+
     choice endpoints {
       mandatory true;
 
@@ -945,7 +893,7 @@ module of-config {
          set";
     }
   }
- 
+
   grouping OFPortNVGRETunnelType {
     description
       "Properties of an NVGRE tunnel.";
@@ -977,7 +925,17 @@ module of-config {
        endpoint as described in the OpenFlow protocol specification
        versions 1.3 - 1.3.1.";
 
-    uses OFResourceType;
+    leaf name {
+      type string;
+      description
+        "The name of the interface.
+
+         A device MAY restrict the allowed values for this leaf,
+         possibly depending on the type of the interface.
+         For system-controlled interfaces, this leaf is the
+         device-specific name of the interface.";
+    }
+
     leaf number {
       type uint64;
       config false;
@@ -988,13 +946,13 @@ module of-config {
          Port is associated with an OpenFlow Logical Switch, this element
          MUST be unique within the context of the OpenFlow Logical
          Switch.
-      
+
          OpenFlow Capable Switch implementations may choose to
          assign values to OpenFlow Ports that are unique within the
          context of the OpenFlow Logical Switch.  These numbers can
          be used independent of assignments to OpenFlow Logical
-         Switches. 
-      
+         Switches.
+
          Other implementations may assign values to this element
          only if the OpenFlow Port is assigned to an OpenFlow
          Logical Switch.";
@@ -1006,28 +964,9 @@ module of-config {
       }
       description
 	"This is the requested OpenFlow Port number for this interface. The switch
-         is expected to try and use the value of this lead as the port number for 
+         is expected to try and use the value of this lead as the port number for
          the interface. If the switch is unable to use the requested value or if
          this leaf is not present, it will choose a free port to use.";
-    }
-
-    leaf name {
-      type string {
-	length "1..16";
-      }
-      config false;
-      description
-	"This element assists OpenFlow Controllers in identifying OpenFlow Ports.
-      
-         This element is not to be set by the OP-CONFIG protocol,
-         but it is set by the switch implementation.  It may be set
-         at start-up time of an OpenFlow Capable Switch or when the 
-         OpenFlow Port is assigned to an OpenFlow Logical Switch.
-         It MAY also be not set at all.  If this element is set to a
-         value other than the empty string when being assigned to an
-         OpenFlow Logical Switch, then the value of this element
-         MUST be unique within the context of the OpenFlow Logical
-         Switch.";
     }
 
     leaf current-rate {
@@ -1082,7 +1021,7 @@ module of-config {
         description
 	  "If true, packets received at this OpenFlow port SHOULD be dropped.";
       }
-  
+
       leaf no-forward {
         type boolean;
         default false;
@@ -1206,13 +1145,13 @@ module of-config {
          Queue is associated with an OpenFlow Logical Switch, this
          element MUST be unique within the context of the OpenFlow
          Logical Switch.
-      
+
          OpenFlow Capable Switch implementations may choose to
          assign values to OpenFlow Queues that are unique within the
          context of the OpenFlow Logical Switch.  These id can be
          used independent of assignments to OpenFlow Logical
-         Switches. 
-      
+         Switches.
+
          Other implementations may assign values to this element
          only if the OpenFlow Queue is assigned to an OpenFlow
          Logical Switch.";
@@ -1220,11 +1159,11 @@ module of-config {
 
     leaf port {
       type leafref {
-        path "/capable-switch/resources/port/resource-id";
+        path "/capable-switch/resources/port/name";
       }
       description
 	"Reference to port resources in the Capable Switch.
-      
+
         This element associates an OpenFlow Queue with an OpenFlow
         Port. If the OpenFlow Queue is associated with an OpenFlow
         Logical Switch S and this element is present, then it MUST be
@@ -1261,7 +1200,7 @@ module of-config {
 	description
 	  "Experimenter ID of a currently configured experimenter.";
       }
-      
+
       leaf experimenter-data {
 	type hex-binary;
 	description
@@ -1284,7 +1223,7 @@ module of-config {
       description
 	"The transmission rate that is currently used.  The value MUST indicate a
          valid forwarding rate.
-       
+
          The current Port Feature set MUST contain this element exactly
          once.  The other Port Feature sets MAY contain this element more
          than once.  If this element appears more than once in a Port
@@ -1292,7 +1231,7 @@ module of-config {
          Feature set.";
     }
 
-    leaf auto-negotiate { 
+    leaf auto-negotiate {
       type boolean;
       description
 	"Specifies the administrative state of the forwarding rate
@@ -1307,7 +1246,7 @@ module of-config {
       description
 	"This element MUST indicate a valid physical medium used by the OpenFlow
          Port.
-      
+
          The current Port Feature set MUST contain this element
          exactly once. The other Port Feature sets MAY contain this
          element more than once. If this element appears more than
@@ -1339,7 +1278,7 @@ module of-config {
          transmissions rates are allowed.";
     }
 
-    leaf auto-negotiate { 
+    leaf auto-negotiate {
       type boolean;
       default true;
       description
@@ -1369,7 +1308,7 @@ module of-config {
          it is asymmetric or symmetric.";
     }
   }
-  
+
   grouping OFExternalCertificateType {
     description
       "This grouping specifies a certificate that can be used by an OpenFlow
@@ -1384,7 +1323,7 @@ module of-config {
 	"An X.509 certificate in DER format base64 encoded.";
     }
   }
-  
+
   grouping OFOwnedCertificateType {
     description
       "This grouping specifies a certificate and a private key. It can be used
@@ -1396,151 +1335,43 @@ module of-config {
       type string;
       mandatory true;
       description
-	"An X.509 certificate in DER format base64 encoded.";
+        "An X.509 certificate in DER format base64 encoded.";
     }
 
     container private-key {
-      uses KeyValueType;
+      uses KeyValue;
       description
-	"This element contains the private key corresponding to the
-        certificate. The private key is encoded as specified in
-        XML-Signature Syntax and Processing
-        (http://www.w3.org/TR/2001/PR-xmldsig-core-20010820/).
-        Currently the specification only support DSA and RSA keys.";
+        "This element contains the private key corresponding to the
+        certificate.";
     }
   }
-  
-  grouping KeyValueType {
-    description
-      "The KeyValue element contains a single public key that may be useful in
-       validating the signature.";
 
-    choice key-type {
-      mandatory true;
-      case dsa {
-        container DSAKeyValue {
-          uses DSAKeyValueType;
+  grouping KeyValue {
+    description
+      "The KeyValue element contains a single private key.";
+
+    leaf key-type {
+      type enumeration {
+        enum "DSA" {
+          value 1;
+        }
+        enum "RSA" {
+          value 2;
         }
       }
-      case rsa {
-        container RSAKeyValue {
-          uses RSAKeyValueType;
-        }
-      }
+      mandatory true;
+      description
+        "The algorithm used for generating the private key.";
+    }
+
+    leaf key-data {
+      type string;
+      mandatory true;
+      description
+        "A private key in DER format base64 encoded.";
     }
   }
-  
-  grouping DSAKeyValueType {
-    description
-      "DSA keys and the DSA signature algorithm are specified in 'FIPS PUB
-    186-2, Digital Signature Standard (DSS), U.S. Department of
-    Commerce/National Institute of Standards and Technology,
-    http://csrc.nist.gov/publications/fips/fips186-2/fips186-2.pdf'.
-    DSA public key values can have the following fields:
 
-    P
-        a prime modulus meeting the requirements of the standard
-        above
-    Q
-        an integer in the range 2**159 < Q < 2**160 which is a
-        prime divisor of P-1
-    G
-        an integer with certain properties with respect to P and Q
-    J
-        (P - 1) / Q
-    Y
-        G**X mod P (where X is part of the private key and not made
-        public)
-    seed
-        a DSA prime generation seed
-    pgenCounter
-        a DSA prime generation counter
-
-    Parameter J is avilable for inclusion solely for efficiency as
-    it is calculatable from P and Q. Parameters seed and
-    pgenCounter are used in the DSA prime number generation
-    algorithm specified in the above standard. As such, they are
-    optional but MUST either both be present or both be absent.
-    This prime generation algorithm is designed to provide
-    assurance that a weak prime is not being used and it yields a P
-    and Q value. Parameters P, Q, and G can be public and common to
-    a group of users. They might be known from application context.
-    As such, they are optional but P and Q MUST either both appear
-    or both be absent. If all of P, Q, seed, and pgenCounter are
-    present, implementations are not required to check if they are
-    consistent and are free to use either P and Q or seed and
-    pgenCounter. All parameters are encoded as base64 values.";
-
-    leaf P {
-      when "count(../Q) != 0";
-      type binary;
-      mandatory true;
-      description
-	"A prime modulus meeting the requirements of the standard
-         above";
-    }
-
-    leaf Q {
-      when "count(../P) != 0";
-      type binary;
-      mandatory true;
-      description
-	"An integer in the range 2**159 < Q < 2**160 which is a
-         prime divisor of P-1";
-    }
-
-    leaf J {
-      type binary;
-      description
-	"(P - 1) / Q";
-    }
-
-    leaf G {
-      type binary;
-      description
-	"An integer with certain properties with respect to P and Q";
-    }
-
-    leaf Y {
-      type binary;
-      mandatory true;
-      description
-	"G**X mod P (where X is part of the private key and not made
-         public)";      
-    }
-
-    leaf Seed {
-      when "count(../PgenCounter) != 0";
-      type binary;
-      mandatory true;
-      description
-	"A DSA prime generation seed";
-
-    }
-    leaf PgenCounter {
-      when "count(../Seed) != 0";
-      type binary;
-      mandatory true;
-      description
-	"A DSA prime generation counter";
-    }
-  }
-   
-  grouping RSAKeyValueType {
-    description
-      "RSA key values have two fields: Modulus and Exponent.";
-
-    leaf Modulus {
-      type binary;
-      mandatory true;
-    }
-
-    leaf Exponent {
-      type binary;
-      mandatory true;
-    }
-  }
-  
   grouping OFFlowTableType {
     description
       "Representation of an OpenFlow Flow Table Resource.";
@@ -1576,7 +1407,7 @@ module of-config {
       type hex-binary {
 	length 16;
       }
-	
+
       description
 	"This element indicates the bits of the metadata field on which flow
          table can write using the 'write-metadata' instruction.  It is
@@ -1798,24 +1629,13 @@ module of-config {
          of the OF-CONFIG protocol this MUST always be 1.2.
 
          This object can be used to identify the OF-CONFIG version
-         a capable switch supports beginning with version 1.1.1 of 
+         a capable switch supports beginning with version 1.1.1 of
          OF-CONFIG. In addtion the supported version can be
          determined by the namespace the OpenFlow Capable Switch
-         returns to configuration request of an element (like 
+         returns to configuration request of an element (like
          capable-switch) that is present in all OF-CONFIG versions
          specified so far. This is the only possiblity to identify
          OF-CONFIG versions prior to OF-CONFIG 1.1.1.";
-    }
-
-    container configuration-points {
-      list configuration-point {
-        key "id";
-        description
-	  "The list of all Configuration Points known to the OpenFlow Capable
-           Switch that may manage it using OF-CONFIG.";
-
-        uses OFConfigurationPointType;
-      }
     }
 
     container resources {
@@ -1839,12 +1659,11 @@ module of-config {
              both leafs must be set to values greater than zero.";
         }
 
-        key "resource-id";
+        key "name";
         description
 	  "The list contains all port resources of the OpenFlow Capable Switch.
 
-          The element 'resource-id' of OFPortType MUST be unique within
-          this list.";
+          The name maps to the system interface name.";
         uses OFPortType;
       }
 
@@ -1893,5 +1712,5 @@ module of-config {
         uses OFLogicalSwitchType;
       }
     }
-  }  
+  }
 }

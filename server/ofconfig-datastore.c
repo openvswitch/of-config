@@ -66,7 +66,7 @@ ofc_apply(xmlDocPtr doc, struct nc_err **e)
         return ofcds_deleteconfig(NULL, NC_DATASTORE_RUNNING, e);
     }
 
-    ofconf_txn_init();
+    txn_init();
 
     /* TODO: apply to OVSDB */
     for (l1 = root->children; l1; l1 = l1->next) {
@@ -84,7 +84,7 @@ ofc_apply(xmlDocPtr doc, struct nc_err **e)
                 }
 
                 if (xmlStrEqual(l2->name, BAD_CAST "port")) {
-                    ofconf_txn_addport(l2, e);
+                    txn_set_port(l2, e);
                 }
                 /* TODO:
                  * queue
@@ -100,7 +100,7 @@ ofc_apply(xmlDocPtr doc, struct nc_err **e)
                 }
 
                 if (xmlStrEqual(l2->name, BAD_CAST "switch")) {
-                    ofconf_txn_addbridge(l2, e);
+                    txn_set_bridge(l2, e);
                 }
             }
         }
@@ -108,14 +108,14 @@ ofc_apply(xmlDocPtr doc, struct nc_err **e)
         /* TODO: handle the rest of nodes */
     }
 
-    return ofconf_txn_commit(e);
+    return txn_commit(e);
 }
 
 int
 ofcds_init(void *UNUSED(data))
 {
     /* TODO replace OFC_OVS_DBPATH with some parameter */
-    if (ofconf_init(OFC_OVS_DBPATH) == false) {
+    if (ofc_init(OFC_OVS_DBPATH) == false) {
         return EXIT_FAILURE;
     }
 
@@ -144,7 +144,7 @@ ofcds_init(void *UNUSED(data))
 void
 ofcds_free(void *UNUSED(data))
 {
-    ofconf_destroy();
+    ofc_destroy();
 
     /* dump startup to persistent storage */
     if (gds_startup) {
@@ -277,7 +277,7 @@ ofcds_getconfig(void *UNUSED(data), NC_DATASTORE target, struct nc_err **error)
         /* If there is no id of the capable-switch (no configuration data were
          * provided), continue as there is no OVSDB
          */
-        return get_config_data();
+        return ofc_get_config_data();
     case NC_DATASTORE_STARTUP:
         if (!gds_startup) {
             config_data = xmlStrdup(BAD_CAST "");

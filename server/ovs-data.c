@@ -603,7 +603,7 @@ get_bridges_state(void)
     return ds_steal_cstr(&string);
 }
 
-void
+static void
 append_resource_refs(struct ds *string, struct ovsdb_idl_row **h,
                      size_t count, const char *elem)
 {
@@ -681,7 +681,7 @@ get_bridges_config(void)
     return ds_steal_cstr(&string);
 }
 
-char *
+static char *
 get_owned_certificates_config()
 {
     /* TODO owned certificate "<owned-certificate>"
@@ -695,7 +695,7 @@ get_owned_certificates_config()
     return NULL;
 }
 
-char *
+static char *
 get_external_certificates_config()
 {
     /* TODO external-certificate "<external-certificate>"
@@ -732,7 +732,7 @@ ofconf_update(ovsdb_t *p)
 
 
 char *
-get_config_data()
+ofc_get_config_data(void)
 {
     const char *config_data_format = "<?xml version=\"1.0\"?><capable-switch xmlns=\"urn:onf:config:yang\">"
         "<id>%s</id><resources>" "%s"    /* port */
@@ -800,7 +800,7 @@ get_config_data()
 }
 
 char *
-get_state_data(xmlDocPtr running)
+ofc_get_state_data(void)
 {
     const char *state_data_format = "<?xml version=\"1.0\"?>"
         "<capable-switch xmlns=\"urn:onf:config:yang\">"
@@ -845,7 +845,7 @@ get_state_data(xmlDocPtr running)
 }
 
 bool
-ofconf_init(const char *ovs_db_path)
+ofc_init(const char *ovs_db_path)
 {
     ovsdb_t *p = calloc(1, sizeof *p);
 
@@ -879,14 +879,14 @@ ofconf_init(const char *ovs_db_path)
  * active transaction at a time.
  */
 void
-ofconf_txn_init(void)
+txn_init(void)
 {
     ovsdb_handler->txn = ovsdb_idl_txn_create(ovsdb_handler->idl);
     ovsdb_handler->symtab = ovsdb_symbol_table_create();
 }
 
 struct ovsrec_interface *
-ofconf_get_if(const char* name)
+ofc_get_iface(const char* name)
 {
     const struct ovsrec_interface *iface;
 
@@ -904,7 +904,7 @@ ofconf_get_if(const char* name)
 }
 
 struct ovsrec_port *
-ofconf_get_port(const char* name)
+ofc_get_port(const char* name)
 {
     const struct ovsrec_port *port;
 
@@ -923,7 +923,7 @@ ofconf_get_port(const char* name)
 
 /* /capable-switch/resources/port/requested-number */
 void
-ofconf_txn_mod_if_rn(const struct ovsrec_interface *iface, const char* value)
+txn_mod_iface_reqnumber(const struct ovsrec_interface *iface, const char* value)
 {
     int64_t rn;
 
@@ -936,7 +936,7 @@ ofconf_txn_mod_if_rn(const struct ovsrec_interface *iface, const char* value)
  * Set port parameters
  */
 int
-ofconf_txn_addport(xmlNodePtr p, struct nc_err **e)
+txn_set_port(xmlNodePtr p, struct nc_err **e)
 {
     char *xmlval;
     xmlNodePtr node;
@@ -966,7 +966,7 @@ ofconf_txn_addport(xmlNodePtr p, struct nc_err **e)
             ovsrec_port_set_interfaces(port, &iface, 1);
         } else if(xmlStrEqual(node->name, BAD_CAST "requested-number")) {
             xmlval = (char*)xmlNodeGetContent(node);
-            ofconf_txn_mod_if_rn(iface, xmlval);
+            txn_mod_iface_reqnumber(iface, xmlval);
             free(xmlval);
         }
         /* TODO:
@@ -981,7 +981,7 @@ ofconf_txn_addport(xmlNodePtr p, struct nc_err **e)
 
 /* /capable-switch/logical-switches/switch/datapath-id */
 void
-ofconf_txn_mod_br_dp(const struct ovsrec_bridge *br, const char* value)
+txn_mod_bridge_datapath(const struct ovsrec_bridge *br, const char* value)
 {
     int i, j;
     static char dp[17];
@@ -1006,9 +1006,10 @@ ofconf_txn_mod_br_dp(const struct ovsrec_bridge *br, const char* value)
     smap_destroy(&othcfg);
 }
 
+/* Insert bridge reference into the Open_vSwitch table */
 static void
-ofconf_txn_ovs_insert_br(const struct ovsrec_open_vswitch *ovs,
-                         struct ovsrec_bridge *bridge)
+txn_ovs_insert_bridge(const struct ovsrec_open_vswitch *ovs,
+                      struct ovsrec_bridge *bridge)
 {
     struct ovsrec_bridge **bridges;
     size_t i;
@@ -1022,9 +1023,10 @@ ofconf_txn_ovs_insert_br(const struct ovsrec_open_vswitch *ovs,
     free(bridges);
 }
 
+/* Insert port reference into the Bridge table */
 static void
-ofconf_txn_br_insert_port(struct ovsrec_bridge *bridge,
-                          struct ovsrec_port *port)
+txn_bridge_insert_port(struct ovsrec_bridge *bridge,
+                       struct ovsrec_port *port)
 {
     struct ovsrec_port **ports;
     size_t i;
@@ -1042,7 +1044,7 @@ ofconf_txn_br_insert_port(struct ovsrec_bridge *bridge,
  * Set bridge parameters
  */
 int
-ofconf_txn_addbridge(xmlNodePtr p, struct nc_err **e)
+txn_set_bridge(xmlNodePtr p, struct nc_err **e)
 {
     xmlNodePtr node, res;
     char *xmlval;
@@ -1064,7 +1066,7 @@ ofconf_txn_addbridge(xmlNodePtr p, struct nc_err **e)
             free(xmlval);
         } else if (xmlStrEqual(node->name, BAD_CAST "datapath-id")) {
             xmlval = (char*)xmlNodeGetContent(node);
-            ofconf_txn_mod_br_dp(bridge, xmlval);
+            txn_mod_bridge_datapath(bridge, xmlval);
             free(xmlval);
         } else if (xmlStrEqual(node->name, BAD_CAST "resources")) {
             for (res = node->children; res; res = res->next) {
@@ -1074,7 +1076,7 @@ ofconf_txn_addbridge(xmlNodePtr p, struct nc_err **e)
 
                 if (xmlStrEqual(res->name, BAD_CAST "port")) {
                     xmlval = (char*)xmlNodeGetContent(res);
-                    ofconf_txn_br_insert_port(bridge, ofconf_get_port(xmlval));
+                    txn_bridge_insert_port(bridge, ofc_get_port(xmlval));
                     free(xmlval);
                 }
                 /* TODO:
@@ -1091,7 +1093,7 @@ ofconf_txn_addbridge(xmlNodePtr p, struct nc_err **e)
          */
     }
 
-    ofconf_txn_ovs_insert_br(ovsrec_open_vswitch_first(ovsdb_handler->idl),
+    txn_ovs_insert_bridge(ovsrec_open_vswitch_first(ovsdb_handler->idl),
                              bridge);
 
     return EXIT_SUCCESS;
@@ -1102,7 +1104,7 @@ ofconf_txn_addbridge(xmlNodePtr p, struct nc_err **e)
  * Abort the transaction being prepared.
  */
 void
-ofconf_txn_abort(void)
+txn_abort(void)
 {
     /* cleanup */
     ovsdb_symbol_table_destroy(ovsdb_handler->symtab);
@@ -1115,7 +1117,7 @@ ofconf_txn_abort(void)
  * Finish the current transaction on 'ovsdb_handler'.
  */
 int
-ofconf_txn_commit(struct nc_err **e)
+txn_commit(struct nc_err **e)
 {
     const char *errmsg;
     int ret = EXIT_SUCCESS;
@@ -1164,13 +1166,13 @@ ofconf_txn_commit(struct nc_err **e)
     }
 
     /* cleanup */
-    ofconf_txn_abort();
+    txn_abort();
 
     return ret;
 }
 
 void
-ofconf_destroy(void)
+ofc_destroy(void)
 {
     if (ovsdb_handler != NULL) {
         /* close everything */

@@ -23,9 +23,9 @@
 int main(int argc, char **argv)
 {
     char *data;
-    ofconf_init(OFC_OVS_DBPATH);
+    ofc_init(OFC_OVS_DBPATH);
     
-    data = get_state_data(NULL);
+    data = ofc_get_state_data(NULL);
     if (data != NULL) {
         puts(data);
         free(data);
@@ -33,7 +33,7 @@ int main(int argc, char **argv)
         puts("No state data...");
     }
 
-    data = get_config_data();
+    data = ofc_get_config_data();
     if (data != NULL) {
         puts(data);
         free(data);
@@ -41,7 +41,7 @@ int main(int argc, char **argv)
         puts("No config data...");
     }
 
-    ofconf_destroy();
+    ofc_destroy();
     return 0;
 }
 

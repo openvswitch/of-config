@@ -67,12 +67,12 @@ NC_EDIT_ERROPT_TYPE ofc_erropt = NC_EDIT_ERROPT_NOTSET;
  *
  */
 xmlDocPtr
-ofc_get_state_data(xmlDocPtr UNUSED(model), xmlDocPtr running,
-                   struct nc_err **UNUSED(err))
+ofc_status_clb(xmlDocPtr UNUSED(model), xmlDocPtr UNUSED(running),
+              struct nc_err **UNUSED(err))
 {
     char *state_data;
     xmlDocPtr d;
-    state_data = get_state_data(running);
+    state_data = ofc_get_state_data();
     if (state_data != NULL) {
         d = xmlReadMemory(state_data, strlen(state_data), NULL, NULL, 0);
         free(state_data);
@@ -150,7 +150,7 @@ struct transapi_rpc_callbacks ofc_rpc_clbks = {
 struct transapi ofc_transapi = {
     .init = ofc_transapi_init,
     .close = ofc_transapi_close,
-    .get_state = ofc_get_state_data,
+    .get_state = ofc_status_clb,
     .clbks_order = TRANSAPI_CLBCKS_ORDER_DEFAULT,
     .data_clbks = &ofc_clbks,
     .rpc_clbks = &ofc_rpc_clbks,

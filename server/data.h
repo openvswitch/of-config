@@ -30,39 +30,39 @@
  * ovs-data.c
  */
 
-bool ofconf_init(const char *ovs_db_path);
+bool ofc_init(const char *ovs_db_path);
 
-char *get_state_data(xmlDocPtr running);
+char *ofc_get_state_data(void);
 
-char *get_config_data(void);
+char *ofc_get_config_data(void);
 
-void ofconf_destroy(void);
+void ofc_destroy(void);
 
 /*
  * Start a new transaction. There can be only a single active transaction at
  * a time.
  */
-void ofconf_txn_init(void);
+void txn_init(void);
 
 /*
  * Set port parameters
  */
-int ofconf_txn_addport(xmlNodePtr p, struct nc_err **e);
+int txn_set_port(xmlNodePtr p, struct nc_err **e);
 
 /*
  * Set bridge parameters
  */
-int ofconf_txn_addbridge(xmlNodePtr p, struct nc_err **e);
+int txn_set_bridge(xmlNodePtr p, struct nc_err **e);
 
 /*
  * Abort the transaction being prepared.
  */
-void ofconf_txn_abort(void);
+void txn_abort(void);
 
 /*
  * Finish the current transaction.
  */
-int ofconf_txn_commit(struct nc_err **e);
+int txn_commit(struct nc_err **e);
 
 /*
  * local-data.c

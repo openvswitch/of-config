@@ -3,7 +3,7 @@
   <id>openvswitch</id>
   <resources>
     <port>
-      <name>ofc-bridge-internal-port</name>
+      <name>ofc-bridge</name>
       <requested-number>666</requested-number>
     </port>
   </resources>
@@ -12,7 +12,7 @@
       <id>ofc-bridge</id>
       <datapath-id>00:01:02:03:04:05:06:07</datapath-id>
       <resources>
-        <port>ofc-bridge-internal-port</port>
+        <port>ofc-bridge</port>
       </resources>
     </switch>
   </logical-switches>

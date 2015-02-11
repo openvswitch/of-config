@@ -1011,6 +1011,9 @@ static void
 txn_ovs_insert_bridge(const struct ovsrec_open_vswitch *ovs,
                       struct ovsrec_bridge *bridge)
 {
+    assert(ovs);
+    assert(bridge);
+
     struct ovsrec_bridge **bridges;
     size_t i;
 
@@ -1049,6 +1052,7 @@ txn_set_bridge(xmlNodePtr p, struct nc_err **e)
     xmlNodePtr node, res;
     char *xmlval;
     struct ovsrec_bridge *bridge;
+    const struct ovsrec_open_vswitch *ovs;
 
     assert(p);
     assert(e);
@@ -1093,8 +1097,11 @@ txn_set_bridge(xmlNodePtr p, struct nc_err **e)
          */
     }
 
-    txn_ovs_insert_bridge(ovsrec_open_vswitch_first(ovsdb_handler->idl),
-                             bridge);
+    ovs = ovsrec_open_vswitch_first(ovsdb_handler->idl);
+    if (!ovs) {
+        ovs = ovsrec_open_vswitch_insert(ovsdb_handler->txn);
+    }
+    txn_ovs_insert_bridge(ovs , bridge);
 
     return EXIT_SUCCESS;
 }

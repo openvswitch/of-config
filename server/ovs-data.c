@@ -254,15 +254,12 @@ get_ports_config(void)
 {
     const struct ovsrec_interface *row, *next;
     struct ds string;
-    const char *resource_id;
 
     ds_init(&string);
     OVSREC_INTERFACE_FOR_EACH_SAFE(row, next, ofc_global_context->idl) {
 
         ds_put_format(&string, "<port>");
-        resource_id = find_resid_generate(ofc_global_context->resource_map,
-                                          &row->header_.uuid);
-        ds_put_format(&string, "<resource-id>%s</resource-id>", resource_id);
+        ds_put_format(&string, "<name>%s</name>", row->name);
         ds_put_format(&string, "<requested-number>%" PRIu64 "</requested-number>",
                       (row->n_ofport_request > 0 ? row->ofport_request[0] : 0));
         ds_put_format(&string, "<configuration>");
@@ -330,12 +327,9 @@ get_ports_state(void)
 {
     const struct ovsrec_interface *row, *next;
     struct ds string;
-    const char *resource_id;
 
     ds_init(&string);
     OVSREC_INTERFACE_FOR_EACH_SAFE(row, next, ofc_global_context->idl) {
-        resource_id = find_resid_generate(ofc_global_context->resource_map,
-                                          &row->header_.uuid);
 
         /* get interface status via ioctl() */
         struct ifreq ethreq;
@@ -348,10 +342,9 @@ get_ports_state(void)
         ioctl(ioctlfd, SIOCETHTOOL, &ethreq);
 
         ds_put_format(&string, "<port>");
-        ds_put_format(&string, "<resource-id>%s</resource-id>", resource_id);
+        ds_put_format(&string, "<name>%s</name>", row->name);
         ds_put_format(&string, "<number>%" PRIu64 "</number>",
                       (row->n_ofport > 0 ? row->ofport[0] : 0));
-        ds_put_format(&string, "<name>%s</name>", row->name);
         /* TODO openflow:
            <current-rate>%s</current-rate>
            <max-rate>%s</max-rate>

@@ -879,9 +879,21 @@ ofconf_init(const char *ovs_db_path)
 void
 ofconf_txn_init(void)
 {
-
     ovsdb_handler->txn = ovsdb_idl_txn_create(ovsdb_handler->idl);
     ovsdb_handler->symtab = ovsdb_symbol_table_create();
+}
+
+/*
+ * Abort the transaction being prepared.
+ */
+void
+ofconf_txn_abort(void)
+{
+    /* cleanup */
+    ovsdb_symbol_table_destroy(ovsdb_handler->symtab);
+    ovsdb_idl_txn_destroy(ovsdb_handler->txn);
+    ovsdb_handler->symtab = NULL;
+    ovsdb_handler->txn = NULL;
 }
 
 /*
@@ -937,10 +949,7 @@ ofconf_txn_commit(struct nc_err **e)
     }
 
     /* cleanup */
-    ovsdb_symbol_table_destroy(ovsdb_handler->symtab);
-    ovsdb_idl_txn_destroy(ovsdb_handler->txn);
-    ovsdb_handler->symtab = NULL;
-    ovsdb_handler->txn = NULL;
+    ofconf_txn_abort();
 
     return ret;
 }

@@ -45,6 +45,11 @@ void ofc_destroy(void);
 void txn_init(void);
 
 /*
+ * Delete complete OVSDB content
+ */
+void txn_del_all(void);
+
+/*
  * Set port parameters
  */
 int txn_set_port(xmlNodePtr p, struct nc_err **e);

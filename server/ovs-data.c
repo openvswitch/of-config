@@ -1106,6 +1106,24 @@ txn_set_bridge(xmlNodePtr p, struct nc_err **e)
     return EXIT_SUCCESS;
 }
 
+void
+txn_del_all(void)
+{
+    const struct ovsrec_open_vswitch *ovs;
+    const struct ovsrec_flow_sample_collector_set *fscs;
+
+    /* remove all settings - we need only to remove two base tables
+     * Open_vSwitch and Flow_Sample_Collector_set, the rest will be done by
+     * garbage collection
+     */
+    OVSREC_OPEN_VSWITCH_FOR_EACH(ovs, ovsdb_handler->idl) {
+        ovsrec_open_vswitch_delete(ovs);
+    }
+
+    OVSREC_FLOW_SAMPLE_COLLECTOR_SET_FOR_EACH(fscs, ovsdb_handler->idl) {
+        ovsrec_flow_sample_collector_set_delete(fscs);
+    }
+}
 
 /*
  * Abort the transaction being prepared.

@@ -644,9 +644,7 @@ get_bridges_config(void)
             if (port == NULL) {
                 continue;
             }
-            append_resource_refs(&string,
-                                 (struct ovsdb_idl_row **) port->interfaces,
-                                 port->n_interfaces, "port");
+            ds_put_format(&string, "<port>%s</port>", port->name);
         }
         append_resource_refs(&string,
                              (struct ovsdb_idl_row **) row->value_flow_tables,

@@ -39,6 +39,17 @@ char *get_config_data(void);
 void ofconf_destroy(void);
 
 /*
+ * Start a new transaction on 'ovsdb_handler'. There can be only a single
+ * active transaction at a time.
+ */
+void ofconf_txn_init(void);
+
+/*
+ * Finish the current transaction on 'ovsdb_handler'.
+ */
+int ofconf_txn_commit(struct nc_err **e);
+
+/*
  * local-data.c
  */
 

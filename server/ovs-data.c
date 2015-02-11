@@ -37,12 +37,14 @@
 #include <ofp-msgs.h>
 #include <poll-loop.h>
 
-#include <libnetconf/netconf.h>
+#include <libnetconf.h>
 
 #include "data.h"
 
 typedef struct {
     struct ovsdb_idl *idl;
+    struct ovsdb_symbol_table *symtab;
+    struct ovsdb_idl_txn *txn;
     unsigned int seqno;
     struct vconn *vconn;
     ofc_resmap_t *resource_map;
@@ -858,6 +860,8 @@ ofconf_init(const char *ovs_db_path)
 
     ovsrec_init();
     p->idl = ovsdb_idl_create(ovs_db_path, &ovsrec_idl_class, true, true);
+    p->txn = NULL;
+    p->symtab = NULL;
     p->seqno = ovsdb_idl_get_seqno(p->idl);
     ofconf_update(p);
     ovsdb_handler = p;
@@ -866,6 +870,79 @@ ofconf_init(const char *ovs_db_path)
     ioctlfd = socket(PF_INET, SOCK_DGRAM, IPPROTO_IP);
 
     return true;
+}
+
+/*
+ * Start a new transaction on 'ovsdb_handler'. There can be only a single
+ * active transaction at a time.
+ */
+void
+ofconf_txn_init(void)
+{
+
+    ovsdb_handler->txn = ovsdb_idl_txn_create(ovsdb_handler->idl);
+    ovsdb_handler->symtab = ovsdb_symbol_table_create();
+}
+
+/*
+ * Finish the current transaction on 'ovsdb_handler'.
+ */
+int
+ofconf_txn_commit(struct nc_err **e)
+{
+    const char *errmsg;
+    int ret = EXIT_SUCCESS;
+    enum ovsdb_idl_txn_status status;
+
+    status = ovsdb_idl_txn_commit_block(ovsdb_handler->txn);
+
+    switch (status) {
+    case TXN_SUCCESS:
+        nc_verb_verbose("OVSDB transaction successful");
+        break;
+    case TXN_UNCHANGED:
+        nc_verb_verbose("OVSDB unchanged");
+        break;
+    default:
+        /* error */
+        ret = EXIT_FAILURE;
+        *e = nc_err_new(NC_ERR_OP_FAILED);
+
+        switch (status) {
+        case TXN_UNCOMMITTED:
+        case TXN_INCOMPLETE:
+            nc_verb_error("Invalid OVSDB transaction");
+            nc_err_set(*e, NC_ERR_PARAM_MSG, "Invalid OVSDB transaction");
+            break;
+        case TXN_ABORTED:
+            /* Should not happen--we never call ovsdb_idl_txn_abort(). */
+            nc_verb_error("OVSDB transaction aborted");
+            nc_err_set(*e, NC_ERR_PARAM_MSG, "OVSDB transaction aborted");
+            break;
+        case TXN_TRY_AGAIN:
+        case TXN_ERROR:
+            nc_verb_error("OVSDB transaction failed (%s)",
+                          errmsg = ovsdb_idl_txn_get_error(ovsdb_handler->txn));
+            nc_err_set(*e, NC_ERR_PARAM_MSG, errmsg);
+            break;
+        case TXN_NOT_LOCKED:
+            /* Should not happen--we never call ovsdb_idl_set_lock(). */
+            nc_verb_error("OVSDB not locked");
+            nc_err_set(*e, NC_ERR_PARAM_MSG, "OVSDB not locked");
+            break;
+        default:
+            nc_verb_error("Unknown OVSDB result (%d)", status);
+            nc_err_set(*e, NC_ERR_PARAM_MSG, "Unknown OVSDB result");
+        }
+    }
+
+    /* cleanup */
+    ovsdb_symbol_table_destroy(ovsdb_handler->symtab);
+    ovsdb_idl_txn_destroy(ovsdb_handler->txn);
+    ovsdb_handler->symtab = NULL;
+    ovsdb_handler->txn = NULL;
+
+    return ret;
 }
 
 void

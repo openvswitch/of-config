@@ -66,6 +66,8 @@ ofc_apply(xmlDocPtr doc, struct nc_err **e)
         return ofcds_deleteconfig(NULL, NC_DATASTORE_RUNNING, e);
     }
 
+    ofconf_txn_init();
+
     /* TODO: apply to OVSDB */
     for (node = root->children; node; node = node->next) {
         if (node->type != XML_ELEMENT_NODE) {
@@ -80,7 +82,7 @@ ofc_apply(xmlDocPtr doc, struct nc_err **e)
         /* TODO: handle the rest of nodes */
     }
 
-    return EXIT_SUCCESS;
+    return ofconf_txn_commit(e);
 }
 
 int

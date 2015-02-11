@@ -1,4 +1,19 @@
 <?xml version="1.0"?>
 <capable-switch xmlns="urn:onf:config:yang">
   <id>openvswitch</id>
+  <resources>
+    <port>
+      <name>ofc-bridge-internal-port</name>
+      <requested-number>666</requested-number>
+    </port>
+  </resources>
+  <logical-switches>
+    <switch>
+      <id>ofc-bridge</id>
+      <datapath-id>00:01:02:03:04:05:06:07</datapath-id>
+      <resources>
+        <port>ofc-bridge-internal-port</port>
+      </resources>
+    </switch>
+  </logical-switches>
 </capable-switch>

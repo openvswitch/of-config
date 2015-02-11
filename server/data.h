@@ -45,6 +45,16 @@ void ofconf_destroy(void);
 void ofconf_txn_init(void);
 
 /*
+ * Set port parameters
+ */
+int ofconf_txn_addport(xmlNodePtr p, struct nc_err **e);
+
+/*
+ * Set bridge parameters
+ */
+int ofconf_txn_addbridge(xmlNodePtr p, struct nc_err **e);
+
+/*
  * Abort the transaction being prepared.
  */
 void ofconf_txn_abort(void);

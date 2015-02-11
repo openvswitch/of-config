@@ -59,7 +59,7 @@ int ofcds_deleteconfig(void *UNUSED(data), NC_DATASTORE UNUSED(target),
 static int
 ofc_apply(xmlDocPtr doc, struct nc_err **e)
 {
-    xmlNodePtr root, node;
+    xmlNodePtr root, l1, l2;
 
     if (!doc || !(root = xmlDocGetRootElement(doc))) {
         /* no data -> delete-config */
@@ -69,14 +69,40 @@ ofc_apply(xmlDocPtr doc, struct nc_err **e)
     ofconf_txn_init();
 
     /* TODO: apply to OVSDB */
-    for (node = root->children; node; node = node->next) {
-        if (node->type != XML_ELEMENT_NODE) {
+    for (l1 = root->children; l1; l1 = l1->next) {
+        if (l1->type != XML_ELEMENT_NODE) {
             continue;
         }
 
-        if (xmlStrEqual(node->name, BAD_CAST "id")) {
+        if (xmlStrEqual(l1->name, BAD_CAST "id")) {
             /* TODO: check that there is id, since it is mandatory */
-            ofc_set_switchid(node);
+            ofc_set_switchid(l1);
+        } else if (xmlStrEqual(l1->name, BAD_CAST "resources")) {
+            for (l2 = l1->children; l2; l2 = l2->next) {
+                if (l2->type != XML_ELEMENT_NODE) {
+                    continue;
+                }
+
+                if (xmlStrEqual(l2->name, BAD_CAST "port")) {
+                    ofconf_txn_addport(l2, e);
+                }
+                /* TODO:
+                 * queue
+                 * owned-certificate
+                 * external-certificate
+                 * flow-table
+                 */
+            }
+        } else if (xmlStrEqual(l1->name, BAD_CAST "logical-switches")) {
+            for (l2 = l1->children; l2; l2 = l2->next) {
+                if (l2->type != XML_ELEMENT_NODE) {
+                    continue;
+                }
+
+                if (xmlStrEqual(l2->name, BAD_CAST "switch")) {
+                    ofconf_txn_addbridge(l2, e);
+                }
+            }
         }
 
         /* TODO: handle the rest of nodes */

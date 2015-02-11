@@ -37,6 +37,8 @@
 #include <ofp-msgs.h>
 #include <poll-loop.h>
 
+#include <libxml/tree.h>
+
 #include <libnetconf.h>
 
 #include "data.h"
@@ -882,6 +884,219 @@ ofconf_txn_init(void)
     ovsdb_handler->txn = ovsdb_idl_txn_create(ovsdb_handler->idl);
     ovsdb_handler->symtab = ovsdb_symbol_table_create();
 }
+
+struct ovsrec_interface *
+ofconf_get_if(const char* name)
+{
+    const struct ovsrec_interface *iface;
+
+    if (!name) {
+        return NULL;
+    }
+
+    OVSREC_INTERFACE_FOR_EACH(iface, ovsdb_handler->idl) {
+        if (!strcmp(name, iface->name)) {
+            return (struct ovsrec_interface *)iface;
+        }
+    }
+
+    return NULL;
+}
+
+struct ovsrec_port *
+ofconf_get_port(const char* name)
+{
+    const struct ovsrec_port *port;
+
+    if (!name) {
+        return NULL;
+    }
+
+    OVSREC_PORT_FOR_EACH(port, ovsdb_handler->idl) {
+        if (!strcmp(name, port->name)) {
+            return (struct ovsrec_port *)port;
+        }
+    }
+
+    return NULL;
+}
+
+/* /capable-switch/resources/port/requested-number */
+void
+ofconf_txn_mod_if_rn(const struct ovsrec_interface *iface, const char* value)
+{
+    int64_t rn;
+
+    rn = strtol(value, NULL, 10);
+    ovsrec_interface_verify_ofport_request(iface);
+    ovsrec_interface_set_ofport_request(iface, &rn ,1);
+}
+
+/*
+ * Set port parameters
+ */
+int
+ofconf_txn_addport(xmlNodePtr p, struct nc_err **e)
+{
+    char *xmlval;
+    xmlNodePtr node;
+    struct ovsrec_interface *iface;
+    struct ovsrec_port *port;
+
+    assert(p);
+    assert(e);
+
+    port = ovsrec_port_insert(ovsdb_handler->txn);
+    iface = ovsrec_interface_insert(ovsdb_handler->txn);
+
+    for(node = p->children; node; node = node->next) {
+        if (node->type != XML_ELEMENT_NODE) {
+            continue;
+        }
+
+        if (xmlStrEqual(node->name, BAD_CAST "name")) {
+            xmlval = (char*)xmlNodeGetContent(node);
+            ovsrec_interface_set_name(iface, xmlval);
+            free(xmlval);
+
+            xmlval = (char*)xmlNodeGetContent(node);
+            ovsrec_port_set_name(port, xmlval);
+            free(xmlval);
+
+            ovsrec_port_set_interfaces(port, &iface, 1);
+        } else if(xmlStrEqual(node->name, BAD_CAST "requested-number")) {
+            xmlval = (char*)xmlNodeGetContent(node);
+            ofconf_txn_mod_if_rn(iface, xmlval);
+            free(xmlval);
+        }
+        /* TODO:
+         * configuration
+         * features/advertised
+         * tunnel-type
+         */
+    }
+
+    return EXIT_SUCCESS;
+}
+
+/* /capable-switch/logical-switches/switch/datapath-id */
+void
+ofconf_txn_mod_br_dp(const struct ovsrec_bridge *br, const char* value)
+{
+    int i, j;
+    static char dp[17];
+    struct smap othcfg;
+
+    if (!value || strlen(value) != 23) {
+        nc_verb_error("Invalid datapath (%s)", value);
+        return;
+    }
+
+    for(i = j = 0; i < 17; i++, j++) {
+        while (j < strlen(value) && value[j] == ':') {
+            j++;
+        }
+        dp[i] = value[j];
+    }
+
+    smap_clone(&othcfg, &br->other_config);
+    smap_replace(&othcfg, "datapath-id", dp);
+    ovsrec_bridge_verify_other_config(br);
+    ovsrec_bridge_set_other_config(br, &othcfg);
+    smap_destroy(&othcfg);
+}
+
+static void
+ofconf_txn_ovs_insert_br(const struct ovsrec_open_vswitch *ovs,
+                         struct ovsrec_bridge *bridge)
+{
+    struct ovsrec_bridge **bridges;
+    size_t i;
+
+    bridges = malloc(sizeof *ovs->bridges * (ovs->n_bridges + 1));
+    for (i = 0; i < ovs->n_bridges; i++) {
+        bridges[i] = ovs->bridges[i];
+    }
+    bridges[ovs->n_bridges] = bridge;
+    ovsrec_open_vswitch_set_bridges(ovs, bridges, ovs->n_bridges + 1);
+    free(bridges);
+}
+
+static void
+ofconf_txn_br_insert_port(struct ovsrec_bridge *bridge,
+                          struct ovsrec_port *port)
+{
+    struct ovsrec_port **ports;
+    size_t i;
+
+    ports = malloc(sizeof *bridge->ports * (bridge->n_ports + 1));
+    for (i = 0; i < bridge->n_ports; i++) {
+        ports[i] = bridge->ports[i];
+    }
+    ports[bridge->n_ports] = port;
+    ovsrec_bridge_set_ports(bridge, ports, bridge->n_ports + 1);
+    free(ports);
+}
+
+/*
+ * Set bridge parameters
+ */
+int
+ofconf_txn_addbridge(xmlNodePtr p, struct nc_err **e)
+{
+    xmlNodePtr node, res;
+    char *xmlval;
+    struct ovsrec_bridge *bridge;
+
+    assert(p);
+    assert(e);
+
+    bridge = ovsrec_bridge_insert(ovsdb_handler->txn);
+
+    for(node = p->children; node; node = node->next) {
+        if (node->type != XML_ELEMENT_NODE) {
+            continue;
+        }
+
+        if (xmlStrEqual(node->name, BAD_CAST "id")) {
+            xmlval = (char*)xmlNodeGetContent(node);
+            ovsrec_bridge_set_name(bridge, xmlval);
+            free(xmlval);
+        } else if (xmlStrEqual(node->name, BAD_CAST "datapath-id")) {
+            xmlval = (char*)xmlNodeGetContent(node);
+            ofconf_txn_mod_br_dp(bridge, xmlval);
+            free(xmlval);
+        } else if (xmlStrEqual(node->name, BAD_CAST "resources")) {
+            for (res = node->children; res; res = res->next) {
+                if (res->type != XML_ELEMENT_NODE) {
+                    continue;
+                }
+
+                if (xmlStrEqual(res->name, BAD_CAST "port")) {
+                    xmlval = (char*)xmlNodeGetContent(res);
+                    ofconf_txn_br_insert_port(bridge, ofconf_get_port(xmlval));
+                    free(xmlval);
+                }
+                /* TODO:
+                 * queue
+                 * certificate
+                 * flow-table
+                 */
+            }
+        }
+        /* TODO:
+         * controllers
+         * enabled
+         * lost-connection-behavior
+         */
+    }
+
+    ofconf_txn_ovs_insert_br(ovsrec_open_vswitch_first(ovsdb_handler->idl),
+                             bridge);
+
+    return EXIT_SUCCESS;
+}
+
 
 /*
  * Abort the transaction being prepared.

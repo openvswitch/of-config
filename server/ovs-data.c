@@ -267,9 +267,9 @@ dump_port_features(struct ds *s, uint32_t mask)
 
     /* dump pause element */
     if (ADVERTISED_Asym_Pause & mask) {
-        ds_put_format(s, "<pause>asymetric</pause>");
+        ds_put_format(s, "<pause>asymmetric</pause>");
     } else if (ADVERTISED_Pause & mask) {
-        ds_put_format(s, "<pause>symetric</pause>");
+        ds_put_format(s, "<pause>symmetric</pause>");
     } else {
         ds_put_format(s, "<pause>unsupported</pause>");
     }
@@ -442,9 +442,9 @@ get_ports_state(void)
 
         /* pause is filled with the same value as in advertised */
         if (ADVERTISED_Asym_Pause & ecmd.advertising) {
-            ds_put_format(&string, "<pause>asymetric</pause>");
+            ds_put_format(&string, "<pause>asymmetric</pause>");
         } else if (ADVERTISED_Pause & ecmd.advertising) {
-            ds_put_format(&string, "<pause>symetric</pause>");
+            ds_put_format(&string, "<pause>symmetric</pause>");
         } else {
             ds_put_format(&string, "<pause>unsupported</pause>");
         }

@@ -61,12 +61,17 @@ ofc_apply(xmlDocPtr doc, struct nc_err **e)
 {
     xmlNodePtr root, l1, l2;
 
-    if (!doc || !(root = xmlDocGetRootElement(doc))) {
-        /* no data -> delete-config */
-        return ofcds_deleteconfig(NULL, NC_DATASTORE_RUNNING, e);
-    }
-
+    /* start transaction preparation */
     txn_init();
+
+    /* first, remove current content */
+    txn_del_all();
+    ofc_set_switchid(NULL);
+
+    if (!doc || !(root = xmlDocGetRootElement(doc))) {
+        /* no data -> content deleted, so we're done */
+        return txn_commit(e);
+    }
 
     /* TODO: apply to OVSDB */
     for (l1 = root->children; l1; l1 = l1->next) {
@@ -406,9 +411,30 @@ cleanup:
 }
 
 int
-ofcds_deleteconfig(void *UNUSED(data), NC_DATASTORE UNUSED(target),
-                   struct nc_err **UNUSED(error))
+ofcds_deleteconfig(void *UNUSED(data), NC_DATASTORE target,
+                   struct nc_err **error)
 {
+    switch(target) {
+    case NC_DATASTORE_RUNNING:
+        txn_init();
+        txn_del_all();
+        ofc_set_switchid(NULL);
+        return txn_commit(error);
+    case NC_DATASTORE_STARTUP:
+        xmlFreeDoc(gds_startup);
+        gds_startup = NULL;
+        break;
+    case NC_DATASTORE_CANDIDATE:
+        xmlFreeDoc(gds_cand);
+        gds_cand = NULL;
+        break;
+    default:
+        nc_verb_error("Invalid <delete-config> target.");
+        *error = nc_err_new(NC_ERR_BAD_ELEM);
+        nc_err_set(*error, NC_ERR_PARAM_INFO_BADELEM, "target");
+        return EXIT_FAILURE;
+    }
+
     return EXIT_SUCCESS;
 }
 

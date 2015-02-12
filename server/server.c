@@ -182,7 +182,8 @@ main(int argc, char **argv)
     /* TODO */
 
     /* init libnetconf for a multilayer server */
-    if ((r = nc_init(NC_INIT_ALL | NC_INIT_MULTILAYER)) < 0) {
+    r = nc_init((NC_INIT_ALL & ~NC_INIT_NACM) | NC_INIT_MULTILAYER);
+    if (r < 0) {
         nc_verb_error("libnetconf initialization failed.");
         return (EXIT_FAILURE);
     }

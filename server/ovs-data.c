@@ -91,9 +91,24 @@ static void
 find_and_append_smap_val(const struct smap *s, const char *key,
                          const char *elem, struct ds *string)
 {
+    int i, j;
+    char dpid[24];
 
     const char *value = smap_get(s, key);
     if (value != NULL) {
+        /* exception for datapath-id format conversion */
+        if (!strcmp(elem, "datapath-id")) {
+            for(i = 0, j = 1; j < 24; j++) {
+                if (!(j % 3)) {
+                    dpid[j - 1] = ':';
+                } else {
+                    dpid[j - 1] = value[i++];
+                }
+            }
+            dpid[j - 1] = '\0';
+            value = dpid;
+        }
+
         ds_put_format(string, "<%s>%s</%s>", elem, value, elem);
     }
 }

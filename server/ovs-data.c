@@ -256,7 +256,7 @@ dump_port_features(struct ds *s, uint32_t mask)
     } else if (ADVERTISED_Pause & mask) {
         ds_put_format(s, "<pause>symetric</pause>");
     } else {
-        ds_put_format(s, "<pause>unsuported</pause>");
+        ds_put_format(s, "<pause>unsupported</pause>");
     }
 }
 
@@ -431,7 +431,7 @@ get_ports_state(void)
         } else if (ADVERTISED_Pause & ecmd.advertising) {
             ds_put_format(&string, "<pause>symetric</pause>");
         } else {
-            ds_put_format(&string, "<pause>unsuported</pause>");
+            ds_put_format(&string, "<pause>unsupported</pause>");
         }
 
         ds_put_format(&string, "</current><supported>");

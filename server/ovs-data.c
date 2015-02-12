@@ -45,7 +45,6 @@
 
 typedef struct {
     struct ovsdb_idl *idl;
-    struct ovsdb_symbol_table *symtab;
     struct ovsdb_idl_txn *txn;
     unsigned int seqno;
     struct vconn *vconn;
@@ -878,7 +877,6 @@ ofc_init(const char *ovs_db_path)
     ovsrec_init();
     p->idl = ovsdb_idl_create(ovs_db_path, &ovsrec_idl_class, true, true);
     p->txn = NULL;
-    p->symtab = NULL;
     p->seqno = ovsdb_idl_get_seqno(p->idl);
     ofconf_update(p);
     ovsdb_handler = p;
@@ -897,7 +895,6 @@ void
 txn_init(void)
 {
     ovsdb_handler->txn = ovsdb_idl_txn_create(ovsdb_handler->idl);
-    ovsdb_handler->symtab = ovsdb_symbol_table_create();
 }
 
 struct ovsrec_interface *
@@ -1147,10 +1144,10 @@ void
 txn_abort(void)
 {
     /* cleanup */
-    ovsdb_symbol_table_destroy(ovsdb_handler->symtab);
-    ovsdb_idl_txn_destroy(ovsdb_handler->txn);
-    ovsdb_handler->symtab = NULL;
-    ovsdb_handler->txn = NULL;
+    if (ovsdb_handler && ovsdb_handler->txn) {
+        ovsdb_idl_txn_destroy(ovsdb_handler->txn);
+        ovsdb_handler->txn = NULL;
+    }
 }
 
 /*

@@ -238,7 +238,7 @@ main(int argc, char **argv)
 
     if (ncds_consolidate() != 0) {
         retval = EXIT_FAILURE;
-        nc_verb_error("Consoidating data models failed.");
+        nc_verb_error("Consolidating data models failed.");
         goto cleanup;
     }
 

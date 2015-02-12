@@ -78,7 +78,7 @@ int txn_commit(struct nc_err **e);
  */
 int ofc_set_switchid(xmlNodePtr node);
 
-/* get stored /capable=switch/id value */
+/* get stored /capable-switch/id value */
 const xmlChar *ofc_get_switchid(void);
 
 #endif /* data.h */

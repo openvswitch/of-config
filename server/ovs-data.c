@@ -939,53 +939,155 @@ txn_mod_iface_reqnumber(const struct ovsrec_interface *iface, const char* value)
 {
     int64_t rn;
 
-    rn = strtol(value, NULL, 10);
     ovsrec_interface_verify_ofport_request(iface);
-    ovsrec_interface_set_ofport_request(iface, &rn ,1);
+    if (value) {
+        rn = strtol(value, NULL, 10);
+        ovsrec_interface_set_ofport_request(iface, &rn, 1);
+    } else {
+        ovsrec_interface_set_ofport_request(iface, NULL, 0);
+    }
 }
 
 /*
  * Set port parameters
  */
 int
-txn_set_port(xmlNodePtr p, struct nc_err **e)
+txn_set_port(xmlNodePtr p,  NC_EDIT_OP_TYPE op, struct nc_err **e)
 {
-    char *xmlval;
+    xmlChar *xmlval;
     xmlNodePtr node;
-    struct ovsrec_interface *iface;
-    struct ovsrec_port *port;
+    NC_EDIT_OP_TYPE nop;
+    const struct ovsrec_interface *iface = NULL;
+    const struct ovsrec_port *port = NULL;
+    int present = 0;
 
     assert(p);
     assert(e);
 
-    port = ovsrec_port_insert(ovsdb_handler->txn);
-    iface = ovsrec_interface_insert(ovsdb_handler->txn);
+    if (op == NC_EDIT_OP_ERROR) {
+        return EXIT_FAILURE;
+    }
 
-    for(node = p->children; node; node = node->next) {
-        if (node->type != XML_ELEMENT_NODE) {
-            continue;
+    /* try to get the affected port from the OVSDB */
+    node = go2node(p, BAD_CAST "name");
+    xmlval = node->children->content; /* port's name */
+    OVSREC_PORT_FOR_EACH(port, ovsdb_handler->idl) {
+        if (xmlStrEqual(xmlval, BAD_CAST port->name)) {
+            if (port->n_interfaces >= 1) {
+                iface = port->interfaces[0];
+                present = 1;
+            }
+            if (!present) {
+                *e = nc_err_new(NC_ERR_OP_FAILED);
+                nc_err_set(*e, NC_ERR_PARAM_MSG, "invalid running data, port without interface");
+                return EXIT_FAILURE;
+            }
+            break;
         }
+    }
 
-        if (xmlStrEqual(node->name, BAD_CAST "name")) {
-            xmlval = (char*)xmlNodeGetContent(node);
-            ovsrec_interface_set_name(iface, xmlval);
-            free(xmlval);
-
-            xmlval = (char*)xmlNodeGetContent(node);
-            ovsrec_port_set_name(port, xmlval);
-            free(xmlval);
-
-            ovsrec_port_set_interfaces(port, &iface, 1);
-        } else if(xmlStrEqual(node->name, BAD_CAST "requested-number")) {
-            xmlval = (char*)xmlNodeGetContent(node);
-            txn_mod_iface_reqnumber(iface, xmlval);
-            free(xmlval);
+    if (op == NC_EDIT_OP_DELETE || op == NC_EDIT_OP_NOTSET) {
+        /* the port configuration must be present */
+        if (!present) {
+            *e = nc_err_new(NC_ERR_DATA_MISSING);
+            return EXIT_FAILURE;
         }
-        /* TODO:
-         * configuration
-         * features/advertised
-         * tunnel-type
-         */
+    } else if (op == NC_EDIT_OP_CREATE) {
+        /* the port configuration must not be present */
+        if (present) {
+            *e = nc_err_new(NC_ERR_DATA_EXISTS);
+            return EXIT_FAILURE;
+        }
+    }
+
+    if (op == NC_EDIT_OP_DELETE || op == NC_EDIT_OP_REMOVE || op == NC_EDIT_OP_REPLACE) {
+        /* remove current configuration */
+        if (iface) {
+            ovsrec_interface_delete(iface);
+        }
+        if (port) {
+            ovsrec_port_delete(port);
+        }
+    }
+
+    if (op == NC_EDIT_OP_REPLACE || op == NC_EDIT_OP_CREATE) {
+        /* prepare new structures to set content of the port configuration */
+        port = ovsrec_port_insert(ovsdb_handler->txn);
+        iface = ovsrec_interface_insert(ovsdb_handler->txn);
+        ovsrec_port_set_interfaces(port, (struct ovsrec_interface**)&iface, 1);
+    }
+
+    if (op == NC_EDIT_OP_MERGE || op == NC_EDIT_OP_CREATE ||
+                    op == NC_EDIT_OP_REPLACE || op == NC_EDIT_OP_NOTSET) {
+        for (node = p->children; node; node = node->next) {
+            if (node->type != XML_ELEMENT_NODE) {
+                continue;
+            }
+
+            if (xmlStrEqual(node->name, BAD_CAST "name")) {
+                nop = edit_op_get(node, op, e);
+                switch (nop) {
+                case NC_EDIT_OP_DELETE:
+                case NC_EDIT_OP_REMOVE:
+                    /* this is stupid since it is the key, but user wants it */
+                    ovsrec_interface_set_name(iface, NULL);
+                    break; /* continue with next node */
+                case NC_EDIT_OP_MERGE: /* name is key so there is no change */
+                case NC_EDIT_OP_NOTSET: /* NONE */
+                    break; /* continue with next node */
+                case NC_EDIT_OP_ERROR:
+                    return EXIT_FAILURE;
+                case NC_EDIT_OP_CREATE:
+                    if (present) {
+                        /* always error, name is key so it cannot be changed */
+                        *e = nc_err_new(NC_ERR_DATA_EXISTS);
+                    }
+                    break;
+                default:
+                    /* REPLACE, inherited CREATE */
+                    xmlval = xmlNodeGetContent(node);
+                    ovsrec_interface_set_name(iface, (char*) xmlval);
+                    xmlFree(xmlval);
+
+                    xmlval = xmlNodeGetContent(node);
+                    ovsrec_port_set_name(port, (char*) xmlval);
+                    xmlFree(xmlval);
+
+                    break;
+                }
+
+            } else if (xmlStrEqual(node->name, BAD_CAST "requested-number")) {
+                nop = edit_op_get(node, op, e);
+                switch (nop) {
+                case NC_EDIT_OP_DELETE:
+                case NC_EDIT_OP_REMOVE:
+                    txn_mod_iface_reqnumber(iface, NULL);
+                    break; /* continue with next node */
+                case NC_EDIT_OP_NOTSET: /* NONE */
+                    break; /* continue with next node */
+                case NC_EDIT_OP_ERROR:
+                    return EXIT_FAILURE;
+                case NC_EDIT_OP_CREATE:
+                    if (iface->n_ofport_request > 0) {
+                        *e = nc_err_new(NC_ERR_DATA_EXISTS);
+                        return EXIT_FAILURE;
+                    }
+                    /* no break */
+                default:
+                    /* MERGE, REPLACE, CREATE */
+                    xmlval = xmlNodeGetContent(node);
+                    txn_mod_iface_reqnumber(iface, (char*) xmlval);
+                    xmlFree(xmlval);
+
+                    break;
+                }
+            }
+            /* TODO:
+             * configuration
+             * features/advertised
+             * tunnel-type
+             */
+        }
     }
 
     return EXIT_SUCCESS;
@@ -999,21 +1101,28 @@ txn_mod_bridge_datapath(const struct ovsrec_bridge *br, const char* value)
     static char dp[17];
     struct smap othcfg;
 
-    if (!value || strlen(value) != 23) {
-        nc_verb_error("Invalid datapath (%s)", value);
-        return;
-    }
-
-    for(i = j = 0; i < 17; i++, j++) {
-        while (j < strlen(value) && value[j] == ':') {
-            j++;
-        }
-        dp[i] = value[j];
-    }
-
     smap_clone(&othcfg, &br->other_config);
-    smap_replace(&othcfg, "datapath-id", dp);
     ovsrec_bridge_verify_other_config(br);
+
+    if (value) {
+         if (strlen(value) != 23) {
+             nc_verb_error("Invalid datapath (%s)", value);
+             smap_destroy(&othcfg);
+             return;
+         }
+
+        for (i = j = 0; i < 17; i++, j++) {
+            while (j < strlen(value) && value[j] == ':') {
+                j++;
+            }
+            dp[i] = value[j];
+        }
+
+        smap_replace(&othcfg, "datapath-id", dp);
+    } else {
+        smap_remove(&othcfg, "datapath-id");
+    }
+
     ovsrec_bridge_set_other_config(br, &othcfg);
     smap_destroy(&othcfg);
 }
@@ -1059,61 +1168,155 @@ txn_bridge_insert_port(struct ovsrec_bridge *bridge,
  * Set bridge parameters
  */
 int
-txn_set_bridge(xmlNodePtr p, struct nc_err **e)
+txn_set_bridge(xmlNodePtr p, NC_EDIT_OP_TYPE op, struct nc_err **e)
 {
     xmlNodePtr node, res;
-    char *xmlval;
-    struct ovsrec_bridge *bridge;
+    NC_EDIT_OP_TYPE nop;
+    xmlChar *xmlval;
+    const struct ovsrec_bridge *bridge;
     const struct ovsrec_open_vswitch *ovs;
+    int present = 0;
 
     assert(p);
     assert(e);
 
-    bridge = ovsrec_bridge_insert(ovsdb_handler->txn);
-
-    for(node = p->children; node; node = node->next) {
-        if (node->type != XML_ELEMENT_NODE) {
-            continue;
-        }
-
-        if (xmlStrEqual(node->name, BAD_CAST "id")) {
-            xmlval = (char*)xmlNodeGetContent(node);
-            ovsrec_bridge_set_name(bridge, xmlval);
-            free(xmlval);
-        } else if (xmlStrEqual(node->name, BAD_CAST "datapath-id")) {
-            xmlval = (char*)xmlNodeGetContent(node);
-            txn_mod_bridge_datapath(bridge, xmlval);
-            free(xmlval);
-        } else if (xmlStrEqual(node->name, BAD_CAST "resources")) {
-            for (res = node->children; res; res = res->next) {
-                if (res->type != XML_ELEMENT_NODE) {
-                    continue;
-                }
-
-                if (xmlStrEqual(res->name, BAD_CAST "port")) {
-                    xmlval = (char*)xmlNodeGetContent(res);
-                    txn_bridge_insert_port(bridge, ofc_get_port(xmlval));
-                    free(xmlval);
-                }
-                /* TODO:
-                 * queue
-                 * certificate
-                 * flow-table
-                 */
-            }
-        }
-        /* TODO:
-         * controllers
-         * enabled
-         * lost-connection-behavior
-         */
+    if (op == NC_EDIT_OP_ERROR) {
+        return EXIT_FAILURE;
     }
 
+    /* get the Open_vSwitch table for bridge links manipulation */
     ovs = ovsrec_open_vswitch_first(ovsdb_handler->idl);
     if (!ovs) {
         ovs = ovsrec_open_vswitch_insert(ovsdb_handler->txn);
     }
-    txn_ovs_insert_bridge(ovs , bridge);
+
+    /* try to get the affected port from the OVSDB */
+    node = go2node(p, BAD_CAST "id");
+    xmlval = node->children->content; /* port's name */
+    OVSREC_BRIDGE_FOR_EACH(bridge, ovsdb_handler->idl) {
+        if (xmlStrEqual(xmlval, BAD_CAST bridge->name)) {
+            present = 1;
+            break;
+        }
+    }
+
+    if (op == NC_EDIT_OP_DELETE || op == NC_EDIT_OP_NOTSET) {
+        /* the port configuration must be present */
+        if (!bridge) {
+            *e = nc_err_new(NC_ERR_DATA_MISSING);
+            return EXIT_FAILURE;
+        }
+    } else if (op == NC_EDIT_OP_CREATE) {
+        /* the port configuration must not be present */
+        if (bridge) {
+            *e = nc_err_new(NC_ERR_DATA_EXISTS);
+            return EXIT_FAILURE;
+        }
+    }
+
+    if (op == NC_EDIT_OP_DELETE || op == NC_EDIT_OP_REMOVE || op == NC_EDIT_OP_REPLACE) {
+        /* remove current configuration */
+        if (bridge) {
+            ovsrec_bridge_delete(bridge);
+        }
+    }
+
+    if (op == NC_EDIT_OP_REPLACE || op == NC_EDIT_OP_CREATE) {
+        /* prepare new structures to set content of the port configuration */
+        bridge = ovsrec_bridge_insert(ovsdb_handler->txn);
+    }
+
+
+    if (op == NC_EDIT_OP_MERGE || op == NC_EDIT_OP_CREATE ||
+                    op == NC_EDIT_OP_REPLACE || op == NC_EDIT_OP_NOTSET) {
+        if (!present) {
+            /* add the bridge into the list in Open_vSwitch table */
+            txn_ovs_insert_bridge(ovs, (struct ovsrec_bridge*)bridge);
+        }
+
+        for(node = p->children; node; node = node->next) {
+            if (node->type != XML_ELEMENT_NODE) {
+                continue;
+            }
+
+            if (xmlStrEqual(node->name, BAD_CAST "id")) {
+                nop = edit_op_get(node, op, e);
+                switch (nop) {
+                case NC_EDIT_OP_DELETE:
+                case NC_EDIT_OP_REMOVE:
+                    /* this is stupid since it is the key, but user wants it */
+                    ovsrec_bridge_set_name(bridge, NULL);
+                    break; /* continue with next node */
+                case NC_EDIT_OP_MERGE: /* id is key so there is no change */
+                case NC_EDIT_OP_NOTSET: /* NONE */
+                    break; /* continue with next node */
+                case NC_EDIT_OP_ERROR:
+                    return EXIT_FAILURE;
+                case NC_EDIT_OP_CREATE:
+                    if (present) {
+                        /* always error, id is key so it cannot be changed */
+                        *e = nc_err_new(NC_ERR_DATA_EXISTS);
+                    }
+                    break;
+                default:
+                    /* REPLACE, inherited CREATE */
+                    xmlval = xmlNodeGetContent(node);
+                    ovsrec_bridge_set_name(bridge, (char*)xmlval);
+                    xmlFree(xmlval);
+
+                    break;
+                }
+            } else if (xmlStrEqual(node->name, BAD_CAST "datapath-id")) {
+                nop = edit_op_get(node, op, e);
+                switch (nop) {
+                case NC_EDIT_OP_DELETE:
+                case NC_EDIT_OP_REMOVE:
+                    txn_mod_bridge_datapath(bridge, NULL);
+                    break; /* continue with next node */
+                case NC_EDIT_OP_NOTSET: /* NONE */
+                    break; /* continue with next node */
+                case NC_EDIT_OP_ERROR:
+                    return EXIT_FAILURE;
+                case NC_EDIT_OP_CREATE:
+                    if (smap_get(&bridge->other_config, "datapath-id")) {
+                        *e = nc_err_new(NC_ERR_DATA_EXISTS);
+                        return EXIT_FAILURE;
+                    }
+                    /* no break */
+                default:
+                    /* MERGE, REPLACE, CREATE */
+                    xmlval = xmlNodeGetContent(node);
+                    txn_mod_bridge_datapath(bridge, (char*)xmlval);
+                    xmlFree(xmlval);
+
+                    break;
+                }
+            } else if (xmlStrEqual(node->name, BAD_CAST "resources")) {
+                for (res = node->children; res; res = res->next) {
+                    if (res->type != XML_ELEMENT_NODE) {
+                        continue;
+                    }
+
+                    if (xmlStrEqual(res->name, BAD_CAST "port")) {
+                        xmlval = xmlNodeGetContent(res);
+                        txn_bridge_insert_port((struct ovsrec_bridge *)bridge,
+                                               ofc_get_port((char*)xmlval));
+                        xmlFree(xmlval);
+                    }
+                    /* TODO:
+                     * queue
+                     * certificate
+                     * flow-table
+                     */
+                }
+            }
+            /* TODO:
+             * controllers
+             * enabled
+             * lost-connection-behavior
+             */
+        }
+    }
 
     return EXIT_SUCCESS;
 }

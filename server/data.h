@@ -27,6 +27,22 @@
 #include "res-map.h"
 
 /*
+ * ofconfig-datastore.c
+ */
+
+/*
+ * Get the child node with the specified name
+ */
+xmlNodePtr go2node(xmlNodePtr parent, xmlChar *name);
+
+/*
+ * Get the operation value from the node, if not present, it tries to get it
+ * from parents. If no operation set, it returns defop
+ */
+NC_EDIT_OP_TYPE edit_op_get(xmlNodePtr node, NC_EDIT_DEFOP_TYPE defop,
+                            struct nc_err **e);
+
+/*
  * ovs-data.c
  */
 
@@ -52,12 +68,12 @@ void txn_del_all(void);
 /*
  * Set port parameters
  */
-int txn_set_port(xmlNodePtr p, struct nc_err **e);
+int txn_set_port(xmlNodePtr p, NC_EDIT_OP_TYPE op, struct nc_err **e);
 
 /*
  * Set bridge parameters
  */
-int txn_set_bridge(xmlNodePtr p, struct nc_err **e);
+int txn_set_bridge(xmlNodePtr p, NC_EDIT_OP_TYPE op,  struct nc_err **e);
 
 /*
  * Abort the transaction being prepared.

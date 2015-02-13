@@ -59,66 +59,6 @@ xmlDocPtr gds_cand = NULL;
 int ofcds_deleteconfig(void *UNUSED(data), NC_DATASTORE UNUSED(target),
                        struct nc_err **UNUSED(error));
 
-static int
-ofc_apply(xmlDocPtr doc, struct nc_err **e)
-{
-    xmlNodePtr root, l1, l2;
-
-    /* start transaction preparation */
-    txn_init();
-
-    /* first, remove current content */
-    txn_del_all();
-    ofc_set_switchid(NULL);
-
-    if (!doc || !(root = xmlDocGetRootElement(doc))) {
-        /* no data -> content deleted, so we're done */
-        return txn_commit(e);
-    }
-
-    /* TODO: apply to OVSDB */
-    for (l1 = root->children; l1; l1 = l1->next) {
-        if (l1->type != XML_ELEMENT_NODE) {
-            continue;
-        }
-
-        if (xmlStrEqual(l1->name, BAD_CAST "id")) {
-            /* TODO: check that there is id, since it is mandatory */
-            ofc_set_switchid(l1);
-        } else if (xmlStrEqual(l1->name, BAD_CAST "resources")) {
-            for (l2 = l1->children; l2; l2 = l2->next) {
-                if (l2->type != XML_ELEMENT_NODE) {
-                    continue;
-                }
-
-                if (xmlStrEqual(l2->name, BAD_CAST "port")) {
-                    txn_set_port(l2, e);
-                }
-                /* TODO:
-                 * queue
-                 * owned-certificate
-                 * external-certificate
-                 * flow-table
-                 */
-            }
-        } else if (xmlStrEqual(l1->name, BAD_CAST "logical-switches")) {
-            for (l2 = l1->children; l2; l2 = l2->next) {
-                if (l2->type != XML_ELEMENT_NODE) {
-                    continue;
-                }
-
-                if (xmlStrEqual(l2->name, BAD_CAST "switch")) {
-                    txn_set_bridge(l2, e);
-                }
-            }
-        }
-
-        /* TODO: handle the rest of nodes */
-    }
-
-    return txn_commit(e);
-}
-
 int
 ofcds_init(void *UNUSED(data))
 {
@@ -310,6 +250,466 @@ ofcds_getconfig(void *UNUSED(data), NC_DATASTORE target, struct nc_err **error)
 }
 
 int
+ofcds_deleteconfig(void *UNUSED(data), NC_DATASTORE target,
+                   struct nc_err **error)
+{
+    switch(target) {
+    case NC_DATASTORE_RUNNING:
+        txn_init();
+        txn_del_all();
+        ofc_set_switchid(NULL);
+        return txn_commit(error);
+    case NC_DATASTORE_STARTUP:
+        xmlFreeDoc(gds_startup);
+        gds_startup = NULL;
+        break;
+    case NC_DATASTORE_CANDIDATE:
+        xmlFreeDoc(gds_cand);
+        gds_cand = NULL;
+        break;
+    default:
+        nc_verb_error("Invalid <delete-config> target.");
+        *error = nc_err_new(NC_ERR_BAD_ELEM);
+        nc_err_set(*error, NC_ERR_PARAM_INFO_BADELEM, "target");
+        return EXIT_FAILURE;
+    }
+
+    return EXIT_SUCCESS;
+}
+
+
+static void
+edit_op_cleanup(xmlNodePtr node)
+{
+    xmlNodePtr child;
+    xmlAttrPtr op;
+
+    if (!node) {
+        return;
+    }
+
+    /* remove operation attribute */
+    op = xmlHasNsProp(node, BAD_CAST "operation", BAD_CAST NC_NS_BASE10);
+    if (op) {
+        xmlRemoveProp(op);
+    }
+
+    for (child = node->children; child; child = child->next) {
+        if (child->type != XML_ELEMENT_NODE) {
+            continue;
+        }
+
+        /* go recursively */
+        edit_op_cleanup(child);
+    }
+}
+
+NC_EDIT_OP_TYPE
+edit_op_get(xmlNodePtr node, NC_EDIT_DEFOP_TYPE defop, struct nc_err **e)
+{
+    NC_EDIT_OP_TYPE op;
+    xmlChar *ops;
+    xmlNodePtr i;
+
+    i = node;
+    while (i && i->type == XML_ELEMENT_NODE) {
+        ops = xmlGetNsProp(i, BAD_CAST "operation", BAD_CAST NC_NS_BASE10);
+        if (ops) {
+            if (xmlStrEqual(ops, BAD_CAST "merge")) {
+                op = NC_EDIT_OP_MERGE;
+            } else if (xmlStrEqual(ops, BAD_CAST "replace")) {
+                op = NC_EDIT_OP_REPLACE;
+            } else if (xmlStrEqual(ops, BAD_CAST "create")) {
+                op = NC_EDIT_OP_CREATE;
+            } else if (xmlStrEqual(ops, BAD_CAST "delete")) {
+                op = NC_EDIT_OP_DELETE;
+            } else if (xmlStrEqual(ops, BAD_CAST "remove")) {
+                op = NC_EDIT_OP_REMOVE;
+            } else {
+                *e = nc_err_new(NC_ERR_BAD_ATTR);
+                nc_err_set(*e, NC_ERR_PARAM_INFO_BADATTR, "operation");
+                op = NC_EDIT_OP_ERROR;
+            }
+            xmlFree(ops);
+            return op;
+        }
+        i = i->parent;
+    }
+
+    /* no specific operation found, use defop - if defop is NONE, map it to
+     * NOTSET (0) since there is collision between defop and op values. We can
+     * do it since the NOTSET value is checked on beginning of the edit-config
+     * processing and replaced by MERGE.
+     */
+    return (NC_EDIT_OP_TYPE) (defop == NC_EDIT_DEFOP_NONE ? NC_EDIT_DEFOP_NOTSET : defop);
+}
+
+xmlNodePtr
+go2node(xmlNodePtr parent, xmlChar *name)
+{
+    xmlNodePtr child;
+
+    if (!parent) {
+        return NULL;
+    }
+
+    for(child = parent->children; child; child = child->next) {
+        if (child->type != XML_ELEMENT_NODE) {
+            continue;
+        }
+        if (xmlStrEqual(child->name, name)) {
+            break;
+        }
+    }
+
+    return child;
+}
+
+static int
+edit_ovs_switchid(xmlNodePtr nodecfg, NC_EDIT_DEFOP_TYPE defop,
+                  struct nc_err **e)
+{
+    NC_EDIT_OP_TYPE op;
+
+    op = edit_op_get(nodecfg, defop, e);
+    if (op == NC_EDIT_OP_ERROR) {
+        return EXIT_FAILURE;
+    }
+
+    switch(op) {
+    case NC_EDIT_OP_CREATE:
+        if (ofc_get_switchid()) {
+            /* already exists */
+            *e = nc_err_new(NC_ERR_DATA_EXISTS);
+            return EXIT_FAILURE;
+        }
+        /* no break */
+    case NC_EDIT_OP_MERGE:
+    case NC_EDIT_OP_REPLACE:
+        ofc_set_switchid(nodecfg);
+        break;
+    case NC_EDIT_OP_DELETE:
+        if (!ofc_get_switchid()) {
+            /* no such element */
+            *e = nc_err_new(NC_ERR_DATA_MISSING);
+            return EXIT_FAILURE;
+        }
+        /* no break */
+    case NC_EDIT_OP_REMOVE:
+        ofc_set_switchid(NULL);
+        break;
+    default:
+        /* none */
+        break;
+    }
+
+    return EXIT_SUCCESS;
+
+}
+
+/* process edit-config on /capable-switch/id */
+static int
+edit_xml_switchid(xmlNodePtr nodecfg, xmlNodePtr ds_parent,
+                  NC_EDIT_DEFOP_TYPE defop, struct nc_err **e)
+{
+    NC_EDIT_OP_TYPE op;
+    xmlNodePtr nodeds = NULL;
+
+    op = edit_op_get(nodecfg, defop, e);
+    if (op == NC_EDIT_OP_ERROR) {
+        return EXIT_FAILURE;
+    }
+
+    switch(op) {
+    case NC_EDIT_OP_CREATE:
+        nodeds = go2node(ds_parent, BAD_CAST "id");
+        if (nodeds) {
+            /* already exists */
+            *e = nc_err_new(NC_ERR_DATA_EXISTS);
+            return EXIT_FAILURE;
+        }
+        /* no break */
+    case NC_EDIT_OP_MERGE:
+    case NC_EDIT_OP_REPLACE:
+        nodeds = go2node(ds_parent, BAD_CAST "id");
+        if (nodeds) {
+            xmlNodeSetContent(nodeds, nodecfg->children->content);
+        } else {
+            xmlNewTextChild(ds_parent, ds_parent->ns, nodecfg->name,
+                            nodecfg->children->content);
+        }
+        break;
+    case NC_EDIT_OP_DELETE:
+        nodeds = go2node(ds_parent, BAD_CAST "id");
+        if (!nodeds) {
+            /* no such element */
+            *e = nc_err_new(NC_ERR_DATA_EXISTS);
+            return EXIT_FAILURE;
+        }
+        /* no break */
+    case NC_EDIT_OP_REMOVE:
+        nodeds = go2node(ds_parent, BAD_CAST "id");
+        if (nodeds) {
+            xmlUnlinkNode(nodeds);
+            xmlFreeNode(nodeds);
+        }
+        break;
+    default:
+        /* none */
+        break;
+    }
+
+    return EXIT_SUCCESS;
+}
+
+static int
+edit_ovs_root(xmlNodePtr cfg, NC_EDIT_DEFOP_TYPE defop, struct nc_err **e)
+{
+    xmlNodePtr l1, l2;
+    int ret = EXIT_SUCCESS;
+
+    if (!cfg) {
+        return EXIT_SUCCESS;
+    }
+
+    for (l1 = cfg->children; l1; l1 = l1->next) {
+        if (l1->type != XML_ELEMENT_NODE) {
+            continue;
+        }
+
+        /* do edit-config with elements from cfg */
+        if (xmlStrEqual(l1->name, BAD_CAST "id")) {
+            if ((ret = edit_ovs_switchid(l1, defop, e)) != EXIT_SUCCESS) {
+                break;
+            }
+        } else if (xmlStrEqual(l1->name, BAD_CAST "resources")) {
+            for (l2 = l1->children; l2; l2 = l2->next) {
+                if (l2->type != XML_ELEMENT_NODE) {
+                    continue;
+                }
+
+                if (xmlStrEqual(l2->name, BAD_CAST "port")) {
+                    txn_set_port(l2, edit_op_get(l2, defop, e), e);
+                }
+                /* TODO:
+                 * queue
+                 * owned-certificate
+                 * external-certificate
+                 * flow-table
+                 */
+            }
+        } else if (xmlStrEqual(l1->name, BAD_CAST "logical-switches")) {
+            for (l2 = l1->children; l2; l2 = l2->next) {
+                if (l2->type != XML_ELEMENT_NODE) {
+                    continue;
+                }
+
+                if (xmlStrEqual(l2->name, BAD_CAST "switch")) {
+                    txn_set_bridge(l2, edit_op_get(l2, defop, e), e);
+                }
+            }
+        }
+    }
+
+    return ret;
+}
+
+static int
+edit_xml_root(xmlNodePtr cfg, xmlNodePtr ds, NC_EDIT_DEFOP_TYPE defop,
+              struct nc_err **e)
+{
+    xmlNodePtr l1, l2;
+    int ret = EXIT_SUCCESS;
+
+    if (!cfg) {
+        return EXIT_SUCCESS;
+    }
+
+    for (l1 = cfg->children; l1; l1 = l1->next) {
+        if (l1->type != XML_ELEMENT_NODE) {
+            continue;
+        }
+
+        /* do edit-config with elements from cfg */
+        if (xmlStrEqual(l1->name, BAD_CAST "id")) {
+            if ((ret = edit_xml_switchid(l1, ds, defop, e)) != EXIT_SUCCESS) {
+                break;
+            }
+        } else if (xmlStrEqual(l1->name, BAD_CAST "resources")) {
+            for (l2 = l1->children; l2; l2 = l2->next) {
+                if (l2->type != XML_ELEMENT_NODE) {
+                    continue;
+                }
+
+                if (xmlStrEqual(l2->name, BAD_CAST "port")) {
+                    /* TODO */
+                }
+                /* TODO:
+                 * queue
+                 * owned-certificate
+                 * external-certificate
+                 * flow-table
+                 */
+            }
+        } else if (xmlStrEqual(l1->name, BAD_CAST "logical-switches")) {
+            for (l2 = l1->children; l2; l2 = l2->next) {
+                if (l2->type != XML_ELEMENT_NODE) {
+                    continue;
+                }
+
+                if (xmlStrEqual(l2->name, BAD_CAST "switch")) {
+                    /* TODO */
+                }
+            }
+        }
+    }
+
+    return ret;
+}
+
+
+int
+ofcds_editconfig(void *UNUSED(data), const nc_rpc * UNUSED(rpc),
+                 NC_DATASTORE target, const char *config,
+                 NC_EDIT_DEFOP_TYPE defop,
+                 NC_EDIT_ERROPT_TYPE UNUSED(errop),
+                 struct nc_err **error)
+{
+    int ret = EXIT_FAILURE;
+    xmlDocPtr cfgds = NULL, cfg = NULL;
+    xmlNodePtr rootcfg;
+    NC_EDIT_OP_TYPE op;
+
+    if (defop == NC_EDIT_DEFOP_NOTSET) {
+        defop = NC_EDIT_DEFOP_MERGE;
+    }
+
+    cfg = xmlReadMemory(config, strlen(config), NULL, NULL, XML_READ_OPT);
+    rootcfg = xmlDocGetRootElement(cfg);
+    if (!cfg || (rootcfg && !xmlStrEqual(rootcfg->name,
+    BAD_CAST "capable-switch"))) {
+        nc_verb_error("Invalid <edit-config> configuration data.");
+        *error = nc_err_new(NC_ERR_BAD_ELEM);
+        nc_err_set(*error, NC_ERR_PARAM_INFO_BADELEM, "config");
+        return EXIT_FAILURE;
+    }
+    op = edit_op_get(rootcfg, defop, error);
+    if (op == NC_EDIT_OP_ERROR) {
+        return EXIT_FAILURE;
+    }
+
+    switch (target) {
+    case NC_DATASTORE_RUNNING:
+        if (op == NC_EDIT_OP_REPLACE) {
+            /* replace complete configuration */
+            txn_init();
+            txn_del_all();
+            ofc_set_switchid(NULL);
+            ret = edit_ovs_root(rootcfg, NC_EDIT_DEFOP_REPLACE, error);
+            xmlFreeDoc(cfg);
+
+            if (ret != EXIT_SUCCESS) {
+                txn_abort();
+                return ret;
+            } else {
+                return txn_commit(error);
+            }
+        }
+        break;
+    case NC_DATASTORE_STARTUP:
+        if (op == NC_EDIT_OP_REPLACE) {
+            /* replace complete configuration */
+            xmlFreeDoc(gds_startup);
+            gds_startup = cfg;
+            edit_op_cleanup(xmlDocGetRootElement(gds_startup));
+            return EXIT_SUCCESS;
+        }
+        cfgds = gds_startup;
+        break;
+    case NC_DATASTORE_CANDIDATE:
+        if (op == NC_EDIT_OP_REPLACE) {
+            /* replace complete configuration */
+            xmlFreeDoc(gds_cand);
+            gds_cand = cfg;
+            edit_op_cleanup(xmlDocGetRootElement(gds_cand));
+            return EXIT_SUCCESS;
+        }
+        cfgds = gds_cand;
+        break;
+    default:
+        nc_verb_error("Invalid <edit-config> target.");
+        *error = nc_err_new(NC_ERR_BAD_ELEM);
+        nc_err_set(*error, NC_ERR_PARAM_INFO_BADELEM, "target");
+        goto cleanup;
+    }
+
+    /*
+     * global replace was handled, so we have only local merge, replace, create,
+     * delete, remove and the default merge or none. If there are no config
+     * data, we are done because it mace sense only in global replace
+     */
+    if (!rootcfg) {
+        xmlFreeDoc(cfg);
+        return EXIT_SUCCESS;
+    }
+
+    /* otherwise, process the request */
+    if (target == NC_DATASTORE_RUNNING) {
+        txn_init();
+        switch (op) {
+        case NC_EDIT_OP_REPLACE:
+            txn_del_all();
+            ofc_set_switchid(NULL);
+            ret = edit_ovs_root(rootcfg, NC_EDIT_DEFOP_REPLACE, error);
+            break;
+        case NC_EDIT_OP_CREATE:
+            /* rootds must not exist, detect it via switchid */
+            if (ofc_get_switchid()) {
+                *error = nc_err_new(NC_ERR_DATA_EXISTS);
+                goto cleanup;
+            } else {
+                /* defop is replace, but target data do not exist so they will
+                 * be created
+                 */
+                ret = edit_ovs_root(rootcfg, NC_EDIT_DEFOP_REPLACE, error);
+            }
+            break;
+        case NC_EDIT_OP_DELETE:
+            /* rootds must exist, detect it via switchid */
+            if (!ofc_get_switchid()) {
+                *error = nc_err_new(NC_ERR_DATA_MISSING);
+                goto cleanup;
+            }
+            /* no break */
+        case NC_EDIT_OP_REMOVE:
+            txn_del_all();
+            ofc_set_switchid(NULL);
+            break;
+        default:
+            /* MERGE, NONE */
+            if (edit_ovs_root(rootcfg, defop, error)) {
+                goto cleanup;
+            }
+        }
+        ret = txn_commit(error);
+    } else { /* STARTUP or CANDIDATE */
+        if (edit_xml_root(rootcfg, xmlDocGetRootElement(cfgds), defop,
+                        error)) {
+            goto cleanup;
+        }
+    }
+
+
+cleanup:
+    if (target == NC_DATASTORE_RUNNING) {
+        txn_abort();
+    }
+    xmlFreeDoc(cfg);
+
+    return ret;
+}
+
+int
 ofcds_copyconfig(void *UNUSED(data), NC_DATASTORE target,
                  NC_DATASTORE source, char *config,
                  struct nc_err **error)
@@ -367,9 +767,17 @@ ofcds_copyconfig(void *UNUSED(data), NC_DATASTORE target,
     switch(target) {
     case NC_DATASTORE_RUNNING:
         /* apply source to OVSDB */
-        if (ofc_apply(src_doc, error) != 0) {
-            goto cleanup;
+        txn_init();
+        /* first, remove the current content */
+        txn_del_all();
+        ofc_set_switchid(NULL);
+        if (edit_ovs_root(xmlDocGetRootElement(src_doc), NC_EDIT_DEFOP_REPLACE,
+                          error) != 0) {
+            txn_abort();
+        } else {
+            ret = txn_commit(error);
         }
+        goto cleanup;
         break;
     case NC_DATASTORE_STARTUP:
     case NC_DATASTORE_CANDIDATE:
@@ -413,279 +821,6 @@ cleanup:
     return ret;
 }
 
-int
-ofcds_deleteconfig(void *UNUSED(data), NC_DATASTORE target,
-                   struct nc_err **error)
-{
-    switch(target) {
-    case NC_DATASTORE_RUNNING:
-        txn_init();
-        txn_del_all();
-        ofc_set_switchid(NULL);
-        return txn_commit(error);
-    case NC_DATASTORE_STARTUP:
-        xmlFreeDoc(gds_startup);
-        gds_startup = NULL;
-        break;
-    case NC_DATASTORE_CANDIDATE:
-        xmlFreeDoc(gds_cand);
-        gds_cand = NULL;
-        break;
-    default:
-        nc_verb_error("Invalid <delete-config> target.");
-        *error = nc_err_new(NC_ERR_BAD_ELEM);
-        nc_err_set(*error, NC_ERR_PARAM_INFO_BADELEM, "target");
-        return EXIT_FAILURE;
-    }
-
-    return EXIT_SUCCESS;
-}
-
-static NC_EDIT_OP_TYPE
-edit_get_op(xmlNodePtr node, NC_EDIT_DEFOP_TYPE defop, struct nc_err **e)
-{
-    NC_EDIT_OP_TYPE op;
-    xmlChar *ops;
-    xmlNodePtr i;
-
-    assert(node);
-
-    i = node;
-    do {
-        ops = xmlGetNsProp(i, BAD_CAST "operation", BAD_CAST NC_NS_BASE10);
-        if (ops) {
-            if (xmlStrEqual(ops, BAD_CAST "merge")) {
-                op = NC_EDIT_OP_MERGE;
-            } else if (xmlStrEqual(ops, BAD_CAST "replace")) {
-                op = NC_EDIT_OP_REPLACE;
-            } else if (xmlStrEqual(ops, BAD_CAST "create")) {
-                op = NC_EDIT_OP_CREATE;
-            } else if (xmlStrEqual(ops, BAD_CAST "delete")) {
-                op = NC_EDIT_OP_DELETE;
-            } else if (xmlStrEqual(ops, BAD_CAST "remove")) {
-                op = NC_EDIT_OP_REMOVE;
-            } else {
-                *e = nc_err_new(NC_ERR_BAD_ATTR);
-                nc_err_set(*e, NC_ERR_PARAM_INFO_BADATTR, "operation");
-                op = NC_EDIT_OP_ERROR;
-            }
-            xmlFree(ops);
-            return op;
-        }
-        i = i->parent;
-    } while (i && i->type == XML_ELEMENT_NODE);
-
-    /* no specific operation found, use defop */
-    return (NC_EDIT_OP_TYPE) defop;
-}
-
-static xmlNodePtr
-go2node(xmlNodePtr parent, xmlChar *name)
-{
-    xmlNodePtr child;
-
-    if (!parent) {
-        return NULL;
-    }
-
-    for(child = parent->children; child; child = child->next) {
-        if (child->type != XML_ELEMENT_NODE) {
-            continue;
-        }
-        if (xmlStrEqual(child->name, name)) {
-            break;
-        }
-    }
-
-    return child;
-}
-
-static int
-edit_ovs_switchid(xmlNodePtr nodecfg, NC_EDIT_DEFOP_TYPE defop,
-                  struct nc_err **e)
-{
-    NC_EDIT_OP_TYPE op;
-
-    op = edit_get_op(nodecfg, defop, e);
-    if (op == NC_EDIT_OP_ERROR) {
-        return EXIT_FAILURE;
-    }
-
-    switch(op) {
-    case NC_EDIT_OP_CREATE:
-        if (ofc_get_switchid()) {
-            /* already exists */
-            *e = nc_err_new(NC_ERR_DATA_EXISTS);
-            return EXIT_FAILURE;
-        }
-        /* no break */
-    case NC_EDIT_OP_MERGE:
-    case NC_EDIT_OP_REPLACE:
-        ofc_set_switchid(nodecfg);
-        break;
-    case NC_EDIT_OP_DELETE:
-        if (!ofc_get_switchid()) {
-            /* no such element */
-            *e = nc_err_new(NC_ERR_DATA_MISSING);
-            return EXIT_FAILURE;
-        }
-        /* no break */
-    case NC_EDIT_OP_REMOVE:
-        ofc_set_switchid(NULL);
-        break;
-    default:
-        /* none */
-        break;
-    }
-
-    return EXIT_SUCCESS;
-
-}
-
-/* process edit-config on /capable-switch/id */
-static int
-edit_xml_switchid(xmlNodePtr nodecfg, xmlNodePtr ds_parent,
-                  NC_EDIT_DEFOP_TYPE defop, struct nc_err **e)
-{
-    NC_EDIT_OP_TYPE op;
-    xmlNodePtr nodeds = NULL;
-
-    op = edit_get_op(nodecfg, defop, e);
-    if (op == NC_EDIT_OP_ERROR) {
-        return EXIT_FAILURE;
-    }
-
-    switch(op) {
-    case NC_EDIT_OP_CREATE:
-        nodeds = go2node(ds_parent, BAD_CAST "id");
-        if (nodeds) {
-            /* already exists */
-            *e = nc_err_new(NC_ERR_DATA_EXISTS);
-            return EXIT_FAILURE;
-        }
-        /* no break */
-    case NC_EDIT_OP_MERGE:
-    case NC_EDIT_OP_REPLACE:
-        nodeds = go2node(ds_parent, BAD_CAST "id");
-        if (nodeds) {
-            xmlNodeSetContent(nodeds, nodecfg->children->content);
-        } else {
-            xmlNewTextChild(ds_parent, ds_parent->ns, nodecfg->name,
-                            nodecfg->children->content);
-        }
-        break;
-    case NC_EDIT_OP_DELETE:
-        nodeds = go2node(ds_parent, BAD_CAST "id");
-        if (!nodeds) {
-            /* no such element */
-            *e = nc_err_new(NC_ERR_DATA_EXISTS);
-            return EXIT_FAILURE;
-        }
-        /* no break */
-    case NC_EDIT_OP_REMOVE:
-        nodeds = go2node(ds_parent, BAD_CAST "id");
-        if (nodeds) {
-            xmlUnlinkNode(nodeds);
-            xmlFreeNode(nodeds);
-        }
-        break;
-    default:
-        /* none */
-        break;
-    }
-
-    return EXIT_SUCCESS;
-}
-
-int
-ofcds_editconfig(void *UNUSED(data), const nc_rpc * UNUSED(rpc),
-                 NC_DATASTORE target, const char *config,
-                 NC_EDIT_DEFOP_TYPE defop,
-                 NC_EDIT_ERROPT_TYPE UNUSED(errop),
-                 struct nc_err **error)
-{
-    int ret = EXIT_FAILURE;
-    char *cfgs;
-    xmlDocPtr cfgds = NULL, cfg = NULL;
-    xmlNodePtr rootcfg, rootds, node;
-
-    if (defop == NC_EDIT_DEFOP_NOTSET) {
-        defop = NC_EDIT_DEFOP_MERGE;
-    }
-
-    cfg = xmlReadMemory(config, strlen(config), NULL, NULL, XML_READ_OPT);
-    rootcfg = xmlDocGetRootElement(cfg);
-    if (!cfg || (rootcfg && !xmlStrEqual(rootcfg->name, BAD_CAST "capable-switch"))) {
-        nc_verb_error("Invalid <edit-config> configuration data.");
-        *error = nc_err_new(NC_ERR_BAD_ELEM);
-        nc_err_set(*error, NC_ERR_PARAM_INFO_BADELEM, "config");
-        return EXIT_FAILURE;
-    }
-
-    switch(target) {
-    case NC_DATASTORE_RUNNING:
-        cfgs = ofc_get_config_data();
-        cfgds = xmlReadMemory(cfgs, strlen(cfgs), NULL, NULL, XML_READ_OPT);
-        free(cfgs);
-        break;
-    case NC_DATASTORE_STARTUP:
-        cfgds = gds_startup;
-        break;
-    case NC_DATASTORE_CANDIDATE:
-        cfgds = gds_cand;
-        break;
-    default:
-        nc_verb_error("Invalid <edit-config> target.");
-        *error = nc_err_new(NC_ERR_BAD_ELEM);
-        nc_err_set(*error, NC_ERR_PARAM_INFO_BADELEM, "target");
-        goto cleanup;
-    }
-    rootds = xmlDocGetRootElement(cfgds);
-
-    txn_init();
-
-    if (!rootcfg && defop == NC_EDIT_DEFOP_REPLACE) {
-        /* replace by empty data -> delete-config */
-        txn_del_all();
-        ofc_set_switchid(NULL);
-    }
-
-    for (node = rootcfg->children; node; node = node->next) {
-        if (node->type != XML_ELEMENT_NODE) {
-            continue;
-        }
-
-        /* do edit-config with elements from cfg */
-        if (xmlStrEqual(node->name, BAD_CAST "id")) {
-            if (target == NC_DATASTORE_RUNNING) {
-                if (edit_ovs_switchid(node, defop, error)) {
-                    goto cleanup;
-                }
-            } else { /* STARTUP or CANDIDATE */
-                if (edit_xml_switchid(node, rootds, defop, error)) {
-                    goto cleanup;
-                }
-            }
-        } else if (xmlStrEqual(node->name, BAD_CAST "resources")) {
-            /* TODO */
-        } else if (xmlStrEqual(node->name, BAD_CAST "logical-switches")) {
-            /* TODO */
-        }
-    }
-
-    ret = txn_commit(error);
-
-cleanup:
-    txn_abort();
-
-    if (target == NC_DATASTORE_RUNNING) {
-        xmlFreeDoc(cfgds);
-    }
-    xmlFreeDoc(cfg);
-
-    return ret;
-}
-
 struct ncds_custom_funcs ofcds_funcs = {
     .init = ofcds_init,
     .free = ofcds_free,
@@ -699,3 +834,4 @@ struct ncds_custom_funcs ofcds_funcs = {
     .deleteconfig = ofcds_deleteconfig,
     .editconfig = ofcds_editconfig,
 };
+

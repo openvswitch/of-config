@@ -777,6 +777,10 @@ ofc_get_config_data(void)
         return strdup("");
     }
 
+    if (ovsdb_handler == NULL) {
+        return NULL;
+    }
+    ofconf_update(ovsdb_handler);
     queues = get_queues_config();
     if (queues == (NULL)) {
         queues = strdup("");

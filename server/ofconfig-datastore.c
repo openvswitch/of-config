@@ -40,7 +40,7 @@
 #define XML_READ_OPT XML_PARSE_NOBLANKS|XML_PARSE_NSCLEAN
 
 /* daemonize flag from server.c */
-extern int daemonize;
+extern int ofc_daemonize;
 
 /* local locks info */
 struct {
@@ -71,7 +71,7 @@ ofcds_init(void *UNUSED(data))
      * ofc-server. So we have to rewrite syslog settings back by another
      * openlog() call
      */
-    if (daemonize) {
+    if (ofc_daemonize) {
         openlog("ofc-server", LOG_PID, LOG_DAEMON);
     } else {
         openlog("ofc-server", LOG_PID | LOG_PERROR, LOG_DAEMON);

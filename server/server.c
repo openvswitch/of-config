@@ -46,7 +46,7 @@ extern struct ncds_custom_funcs ofcds_funcs;
 volatile int mainloop = 0;
 
 /* daemonize flag for hack in ofconfig-datastore.c */
-volatile int daemonize = 1;
+volatile int ofc_daemonize = 1;
 
 /* Print usage help */
 static void
@@ -130,7 +130,7 @@ main(int argc, char **argv)
                                       &longindex)) != -1) {
         switch (next_option) {
         case 'f':
-            daemonize = 0;
+            ofc_daemonize = 0;
             break;
         case 'h':
             print_usage(argv[0]);
@@ -168,7 +168,7 @@ main(int argc, char **argv)
     }
 
     /* go to the background as a daemon */
-    if (daemonize == 1) {
+    if (ofc_daemonize == 1) {
         if (daemon(0, 0) != 0) {
             nc_verb_error("Going to background failed (%s)", strerror(errno));
             return (EXIT_FAILURE);

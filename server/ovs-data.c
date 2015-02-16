@@ -470,92 +470,96 @@ dump_port_features(struct ds *s, uint32_t mask)
 }
 
 static char *
-get_ports_config(void)
+get_ports_config(const struct ovsrec_bridge *bridge)
 {
-    const struct ovsrec_interface *row, *next;
+    const struct ovsrec_interface *row;
+    size_t port_it, ifc;
     struct ds string;
     struct vconn *vconnp;
-    /* XXX what about multiple bridges?  We need to pass bridge name here */
-    const char *bridge_name = "ofc-bridge";
+    const char *bridge_name = bridge->name;
     struct ofpbuf *of_ports = NULL;
     struct ofputil_phy_port *of_port = NULL;
     enum ofputil_port_config c;
     ofc_of_open_vconn(bridge_name, &vconnp);
     of_ports = ofc_of_get_ports(vconnp);
-
     ds_init(&string);
-    OVSREC_INTERFACE_FOR_EACH_SAFE(row, next, ovsdb_handler->idl) {
 
-        ds_put_format(&string, "<port>");
-        ds_put_format(&string, "<name>%s</name>", row->name);
-        ds_put_format(&string, "<requested-number>%" PRIu64 "</requested-number>",
-                      (row->n_ofport_request > 0 ? row->ofport_request[0] : 0));
-        ds_put_format(&string, "<configuration>");
+    /* iterate over all interfaces of all ports */
+    for (port_it = 0; port_it < bridge->n_ports; port_it++) {
+        for (ifc = 0; ifc < bridge->ports[port_it]->n_interfaces; ifc++) {
+            row = bridge->ports[port_it]->interfaces[ifc];
 
-        /* get interface status via ioctl() */
-        struct ifreq ethreq;
-        memset(&ethreq, 0, sizeof ethreq);
-        strncpy(ethreq.ifr_name, row->name, sizeof ethreq.ifr_name);
-        ioctl(ioctlfd, SIOCGIFFLAGS, &ethreq);
-        of_port = ofc_of_getport_byname(of_ports, row->name);
-        if (of_port != NULL) {
-            c = of_port->config;
-            ds_put_format(&string, "<admin-state>%s</admin-state>"
-                          "<no-receive>%s</no-receive>"
-                          "<no-forward>%s</no-forward>"
-                          "<no-packet-in>%s</no-packet-in>",
-                          (c & OFPUTIL_PC_PORT_DOWN ? "down" : "up"),
-                          OFC_PORT_CONF_BIT(c, OFPUTIL_PC_NO_RECV),
-                          OFC_PORT_CONF_BIT(c, OFPUTIL_PC_NO_FWD),
-                          OFC_PORT_CONF_BIT(c, OFPUTIL_PC_NO_PACKET_IN));
-        } else {
-            /* port was not found in OpenFlow reply, but we have ethtool */
-            ds_put_format(&string, "<admin-state>%s</admin-state>",
-                          ethreq.ifr_flags & IFF_UP ? "up" : "down");
-        }
+            ds_put_format(&string, "<port>");
+            ds_put_format(&string, "<name>%s</name>", row->name);
+            ds_put_format(&string, "<requested-number>%" PRIu64 "</requested-number>",
+                          (row->n_ofport_request > 0 ? row->ofport_request[0] : 0));
+            ds_put_format(&string, "<configuration>");
 
-        ds_put_format(&string, "</configuration>");
+            /* get interface status via ioctl() */
+            struct ifreq ethreq;
+            memset(&ethreq, 0, sizeof ethreq);
+            strncpy(ethreq.ifr_name, row->name, sizeof ethreq.ifr_name);
+            ioctl(ioctlfd, SIOCGIFFLAGS, &ethreq);
+            of_port = ofc_of_getport_byname(of_ports, row->name);
+            if (of_port != NULL) {
+                c = of_port->config;
+                ds_put_format(&string, "<admin-state>%s</admin-state>"
+                              "<no-receive>%s</no-receive>"
+                              "<no-forward>%s</no-forward>"
+                              "<no-packet-in>%s</no-packet-in>",
+                              (c & OFPUTIL_PC_PORT_DOWN ? "down" : "up"),
+                              OFC_PORT_CONF_BIT(c, OFPUTIL_PC_NO_RECV),
+                              OFC_PORT_CONF_BIT(c, OFPUTIL_PC_NO_FWD),
+                              OFC_PORT_CONF_BIT(c, OFPUTIL_PC_NO_PACKET_IN));
+            } else {
+                /* port was not found in OpenFlow reply, but we have ethtool */
+                ds_put_format(&string, "<admin-state>%s</admin-state>",
+                        ethreq.ifr_flags & IFF_UP ? "up" : "down");
+            }
 
-        /* get interface features via ioctl() */
-        struct ethtool_cmd ecmd;
-        memset(&ecmd, 0, sizeof ecmd);
-        ecmd.cmd = ETHTOOL_GSET;
-        ethreq.ifr_data = &ecmd;
-        ioctl(ioctlfd, SIOCETHTOOL, &ethreq);
-        ds_put_format(&string, "<features><advertised>");
-        dump_port_features(&string, ecmd.advertising);
-        ds_put_format(&string, "</advertised></features>");
+            ds_put_format(&string, "</configuration>");
 
-        if (!strcmp(row->type, "gre")) {
-            ds_put_format(&string, "<ipgre-tunnel>");
-            find_and_append_smap_val(&row->options, "local_ip",
-                                     "local-endpoint-ipv4-adress", &string);
-            find_and_append_smap_val(&row->options, "remote_ip",
-                                     "remote-endpoint-ipv4-adress", &string);
-            find_and_append_smap_val(&row->options, "csum",
-                                     "checksum-present", &string);
-            find_and_append_smap_val(&row->options, "key", "key", &string);
-            ds_put_format(&string, "</ipgre-tunnel>");
-        } else if (!strcmp(row->type, "vxlan")) {
-            ds_put_format(&string, "<vxlan-tunnel>");
-            find_and_append_smap_val(&row->options, "local_ip",
-                                     "local-endpoint-ipv4-adress", &string);
-            find_and_append_smap_val(&row->options, "remote_ip",
-                                     "remote-endpoint-ipv4-adress", &string);
+            /* get interface features via ioctl() */
+            struct ethtool_cmd ecmd;
+            memset(&ecmd, 0, sizeof ecmd);
+            ecmd.cmd = ETHTOOL_GSET;
+            ethreq.ifr_data = &ecmd;
+            ioctl(ioctlfd, SIOCETHTOOL, &ethreq);
+            ds_put_format(&string, "<features><advertised>");
+            dump_port_features(&string, ecmd.advertising);
+            ds_put_format(&string, "</advertised></features>");
 
-            find_and_append_smap_val(&row->options, "key", "vni", &string);
-            ds_put_format(&string, "</vxlan-tunnel>");
-        } else if ((!strcmp(row->type, "gre64"))
+            if (!strcmp(row->type, "gre")) {
+                ds_put_format(&string, "<ipgre-tunnel>");
+                find_and_append_smap_val(&row->options, "local_ip",
+                        "local-endpoint-ipv4-adress", &string);
+                find_and_append_smap_val(&row->options, "remote_ip",
+                        "remote-endpoint-ipv4-adress", &string);
+                find_and_append_smap_val(&row->options, "csum",
+                        "checksum-present", &string);
+                find_and_append_smap_val(&row->options, "key", "key", &string);
+                ds_put_format(&string, "</ipgre-tunnel>");
+            } else if (!strcmp(row->type, "vxlan")) {
+                ds_put_format(&string, "<vxlan-tunnel>");
+                find_and_append_smap_val(&row->options, "local_ip",
+                        "local-endpoint-ipv4-adress", &string);
+                find_and_append_smap_val(&row->options, "remote_ip",
+                        "remote-endpoint-ipv4-adress", &string);
+
+                find_and_append_smap_val(&row->options, "key", "vni", &string);
+                ds_put_format(&string, "</vxlan-tunnel>");
+            } else if ((!strcmp(row->type, "gre64"))
                     || (!strcmp(row->type, "geneve"))
                     || (!strcmp(row->type, "lisp"))) {
-            ds_put_format(&string, "<tunnel>");
-            find_and_append_smap_val(&row->options, "local_ip",
-                                     "local-endpoint-ipv4-adress", &string);
-            find_and_append_smap_val(&row->options, "remote_ip",
-                                     "remote-endpoint-ipv4-adress", &string);
-            ds_put_format(&string, "</tunnel>");
+                ds_put_format(&string, "<tunnel>");
+                find_and_append_smap_val(&row->options, "local_ip",
+                        "local-endpoint-ipv4-adress", &string);
+                find_and_append_smap_val(&row->options, "remote_ip",
+                        "remote-endpoint-ipv4-adress", &string);
+                ds_put_format(&string, "</tunnel>");
+            }
+            ds_put_format(&string, "</port>");
         }
-        ds_put_format(&string, "</port>");
     }
     if (of_ports != NULL) {
         ofpbuf_delete(of_ports);
@@ -567,121 +571,125 @@ get_ports_config(void)
 }
 
 static char *
-get_ports_state(void)
+get_ports_state(const struct ovsrec_bridge *bridge)
 {
-    const struct ovsrec_interface *row, *next;
+    const struct ovsrec_interface *row;
+    size_t port_it, ifc;
     struct ds string;
     struct vconn *vconnp;
-    /* XXX what about multiple bridges?  We need to pass bridge name here */
-    const char *bridge_name = "ofc-bridge";
+    const char *bridge_name = bridge->name;
     struct ofpbuf *of_ports = NULL;
     struct ofputil_phy_port *of_port = NULL;
     ofc_of_open_vconn(bridge_name, &vconnp);
     of_ports = ofc_of_get_ports(vconnp);
-
     ds_init(&string);
-    OVSREC_INTERFACE_FOR_EACH_SAFE(row, next, ovsdb_handler->idl) {
 
-        /* get interface status via ioctl() */
-        struct ifreq ethreq;
-        struct ethtool_cmd ecmd;
-        memset(&ethreq, 0, sizeof ethreq);
-        memset(&ecmd, 0, sizeof ecmd);
-        strncpy(ethreq.ifr_name, row->name, sizeof ethreq.ifr_name);
-        ecmd.cmd = ETHTOOL_GSET;
-        ethreq.ifr_data = &ecmd;
-        ioctl(ioctlfd, SIOCETHTOOL, &ethreq);
+    /* iterate over all interfaces of all ports */
+    for (port_it = 0; port_it < bridge->n_ports; port_it++) {
+        for (ifc = 0; ifc < bridge->ports[port_it]->n_interfaces; ifc++) {
+            row = bridge->ports[port_it]->interfaces[ifc];
 
-        ds_put_format(&string, "<port>");
-        ds_put_format(&string, "<name>%s</name>", row->name);
-        ds_put_format(&string, "<number>%" PRIu64 "</number>",
-                      (row->n_ofport > 0 ? row->ofport[0] : 0));
-        of_port = ofc_of_getport_byname(of_ports, row->name);
-        if (of_port != NULL) {
-           ds_put_format(&string, "<current-rate>%"PRIu32"</current-rate>"
-                         "<max-rate>%"PRIu32"</max-rate>",
-                         of_port->curr_speed, of_port->max_speed);
+            /* get interface status via ioctl() */
+            struct ifreq ethreq;
+            struct ethtool_cmd ecmd;
+            memset(&ethreq, 0, sizeof ethreq);
+            memset(&ecmd, 0, sizeof ecmd);
+            strncpy(ethreq.ifr_name, row->name, sizeof ethreq.ifr_name);
+            ecmd.cmd = ETHTOOL_GSET;
+            ethreq.ifr_data = &ecmd;
+            ioctl(ioctlfd, SIOCETHTOOL, &ethreq);
+
+            ds_put_format(&string, "<port>");
+            ds_put_format(&string, "<name>%s</name>", row->name);
+            ds_put_format(&string, "<number>%" PRIu64 "</number>",
+                    (row->n_ofport > 0 ? row->ofport[0] : 0));
+            of_port = ofc_of_getport_byname(of_ports, row->name);
+            if (of_port != NULL) {
+                ds_put_format(&string, "<current-rate>%"PRIu32"</current-rate>"
+                        "<max-rate>%"PRIu32"</max-rate>",
+                        of_port->curr_speed, of_port->max_speed);
+            }
+            ds_put_format(&string, "<state>");
+            ds_put_format(&string, "<oper-state>%s</oper-state>",
+                    (row->link_state != NULL ? row->link_state : "down"));
+
+            find_and_append_smap_val(&row->other_config, "stp_state", "blocked",
+                    &string);
+            if (of_port != NULL) {
+                ds_put_format(&string, "<live>%s</live>",
+                        OFC_PORT_CONF_BIT(of_port->state, OFPUTIL_PS_LIVE));
+            }
+
+            ds_put_format(&string, "</state>");
+
+            ds_put_format(&string, "<features><current>");
+            /* rate
+             * - get speed and convert it with duplex value to OFPortRateType
+             */
+            switch ((ecmd.speed_hi << 16) | ecmd.speed) {
+                case 10:
+                    ds_put_format(&string, "<rate>10Mb");
+                    break;
+                case 100:
+                    ds_put_format(&string, "<rate>100Mb");
+                    break;
+                case 1000:
+                    ds_put_format(&string, "<rate>1Gb");
+                    break;
+                case 10000:
+                    ds_put_format(&string, "<rate>10Gb");
+                    ecmd.duplex = DUPLEX_FULL + 1; /* do not print duplex suffix */
+                    break;
+                case 40000:
+                    ds_put_format(&string, "<rate>40Gb");
+                    ecmd.duplex = DUPLEX_FULL + 1; /* do not print duplex suffix */
+                    break;
+                default:
+                    ds_put_format(&string, "<rate>");
+                    ecmd.duplex = DUPLEX_FULL + 1; /* do not print duplex suffix */
+            }
+            switch (ecmd.duplex) {
+                case DUPLEX_HALF:
+                    ds_put_format(&string, "-HD</rate>");
+                    break;
+                case DUPLEX_FULL:
+                    ds_put_format(&string, "-FD</rate>");
+                    break;
+                default:
+                    ds_put_format(&string, "</rate>");
+                    break;
+            }
+
+            /* auto-negotiation */
+            ds_put_format(&string, "<auto-negotiate>%s</auto-negotiate>",
+                    ecmd.autoneg ? "true" : "false");
+            /* medium */
+            switch(ecmd.port) {
+                case PORT_TP:
+                    ds_put_format(&string, "<medium>copper</medium>");
+                    break;
+                case PORT_FIBRE:
+                    ds_put_format(&string, "<medium>fiber</medium>");
+                    break;
+            }
+
+            /* pause is filled with the same value as in advertised */
+            if (ADVERTISED_Asym_Pause & ecmd.advertising) {
+                ds_put_format(&string, "<pause>asymmetric</pause>");
+            } else if (ADVERTISED_Pause & ecmd.advertising) {
+                ds_put_format(&string, "<pause>symmetric</pause>");
+            } else {
+                ds_put_format(&string, "<pause>unsupported</pause>");
+            }
+
+            ds_put_format(&string, "</current><supported>");
+            dump_port_features(&string, ecmd.supported);
+            ds_put_format(&string, "</supported><advertised-peer>");
+            dump_port_features(&string, ecmd.lp_advertising);
+            ds_put_format(&string, "</advertised-peer></features>");
+
+            ds_put_format(&string, "</port>");
         }
-        ds_put_format(&string, "<state>");
-        ds_put_format(&string, "<oper-state>%s</oper-state>",
-                      (row->link_state != NULL ? row->link_state : "down"));
-
-        find_and_append_smap_val(&row->other_config, "stp_state", "blocked",
-                                 &string);
-        if (of_port != NULL) {
-            ds_put_format(&string, "<live>%s</live>",
-                          OFC_PORT_CONF_BIT(of_port->state, OFPUTIL_PS_LIVE));
-        }
-
-        ds_put_format(&string, "</state>");
-
-        ds_put_format(&string, "<features><current>");
-        /* rate
-         * - get speed and convert it with duplex value to OFPortRateType
-         */
-        switch ((ecmd.speed_hi << 16) | ecmd.speed) {
-        case 10:
-            ds_put_format(&string, "<rate>10Mb");
-            break;
-        case 100:
-            ds_put_format(&string, "<rate>100Mb");
-            break;
-        case 1000:
-            ds_put_format(&string, "<rate>1Gb");
-            break;
-        case 10000:
-            ds_put_format(&string, "<rate>10Gb");
-            ecmd.duplex = DUPLEX_FULL + 1; /* do not print duplex suffix */
-            break;
-        case 40000:
-            ds_put_format(&string, "<rate>40Gb");
-            ecmd.duplex = DUPLEX_FULL + 1; /* do not print duplex suffix */
-            break;
-        default:
-            ds_put_format(&string, "<rate>");
-            ecmd.duplex = DUPLEX_FULL + 1; /* do not print duplex suffix */
-        }
-        switch (ecmd.duplex) {
-        case DUPLEX_HALF:
-            ds_put_format(&string, "-HD</rate>");
-            break;
-        case DUPLEX_FULL:
-            ds_put_format(&string, "-FD</rate>");
-            break;
-        default:
-            ds_put_format(&string, "</rate>");
-            break;
-        }
-
-        /* auto-negotiation */
-        ds_put_format(&string, "<auto-negotiate>%s</auto-negotiate>",
-                      ecmd.autoneg ? "true" : "false");
-        /* medium */
-        switch(ecmd.port) {
-        case PORT_TP:
-            ds_put_format(&string, "<medium>copper</medium>");
-            break;
-        case PORT_FIBRE:
-            ds_put_format(&string, "<medium>fiber</medium>");
-            break;
-        }
-
-        /* pause is filled with the same value as in advertised */
-        if (ADVERTISED_Asym_Pause & ecmd.advertising) {
-            ds_put_format(&string, "<pause>asymmetric</pause>");
-        } else if (ADVERTISED_Pause & ecmd.advertising) {
-            ds_put_format(&string, "<pause>symmetric</pause>");
-        } else {
-            ds_put_format(&string, "<pause>unsupported</pause>");
-        }
-
-        ds_put_format(&string, "</current><supported>");
-        dump_port_features(&string, ecmd.supported);
-        ds_put_format(&string, "</supported><advertised-peer>");
-        dump_port_features(&string, ecmd.lp_advertising);
-        ds_put_format(&string, "</advertised-peer></features>");
-
-        ds_put_format(&string, "</port>");
     }
     if (of_ports != NULL) {
         ofpbuf_delete(of_ports);
@@ -999,10 +1007,14 @@ ofc_get_config_data(void)
     char *bridges;
     char *owned_certificates;
     char *external_certificates;
+    const struct ovsrec_bridge *bridge;
+    struct ds ports_ds;
 
     if (ovsdb_handler == NULL) {
         return NULL;
     }
+
+    ds_init(&ports_ds);
 
     id = (const char*)ofc_get_switchid();
     if (!id) {
@@ -1017,10 +1029,16 @@ ofc_get_config_data(void)
     queues = get_queues_config();
     if (queues == (NULL)) {
         queues = strdup("");
-    } ports = get_ports_config();
-    if (ports == (NULL)) {
-        ports = strdup("");
-    } flow_tables = get_flow_tables_config();
+    }
+    OVSREC_BRIDGE_FOR_EACH(bridge, ovsdb_handler->idl) {
+        ports = get_ports_config(bridge);
+        if (ports == NULL) {
+            strdup("");
+        }
+        ds_put_format(&ports_ds, "%s", ports);
+        free(ports);
+    }
+    flow_tables = get_flow_tables_config();
     if (flow_tables == (NULL)) {
         flow_tables = strdup("");
     } bridges = get_bridges_config();
@@ -1036,12 +1054,12 @@ ofc_get_config_data(void)
 
     ds_init(&state_data);
 
-    ds_put_format(&state_data, config_data_format, id, ports, queues,
+    ds_put_format(&state_data, config_data_format, id, ds_cstr(&ports_ds), queues,
                   flow_tables, owned_certificates, external_certificates,
                   bridges);
 
     free(queues);
-    free(ports);
+    ds_destroy(&ports_ds);
     free(flow_tables);
     free(bridges);
     free(owned_certificates);
@@ -1062,17 +1080,24 @@ ofc_get_state_data(void)
     char *ports;
     char *flow_tables;
     char *bridges;
+    const struct ovsrec_bridge *bridge;
 
     struct ds state_data;
+    struct ds ports_ds;
 
     if (ovsdb_handler == NULL) {
         return NULL;
     }
+    ds_init(&ports_ds);
     ofconf_update(ovsdb_handler);
 
-    ports = get_ports_state();
-    if (ports == (NULL)) {
-        ports = strdup("");
+    OVSREC_BRIDGE_FOR_EACH(bridge, ovsdb_handler->idl) {
+        ports = get_ports_state(bridge);
+        if (ports == NULL) {
+            strdup("");
+        }
+        ds_put_format(&ports_ds, "%s", ports);
+        free(ports);
     }
     flow_tables = get_flow_tables_state();
     if (flow_tables == (NULL)) {
@@ -1085,12 +1110,12 @@ ofc_get_state_data(void)
 
     ds_init(&state_data);
 
-    ds_put_format(&state_data, state_data_format, "1.2", ports, flow_tables,
-                  bridges);
+    ds_put_format(&state_data, state_data_format, "1.2", ds_cstr(&ports_ds),
+                  flow_tables, bridges);
 
-    free(ports);
     free(flow_tables);
     free(bridges);
+    ds_destroy(&ports_ds);
 
     return ds_steal_cstr(&state_data);
 }

@@ -43,6 +43,10 @@
 
 #include "data.h"
 
+/* Tests bit of OpenFlow port config and returns "true"/"false" */
+#define OFC_PORT_CONF_BIT(conf, bit) \
+    (conf & bit ? "true" : "false")
+
 typedef struct {
     struct ovsdb_idl *idl;
     struct ovsdb_idl_txn *txn;
@@ -68,15 +72,206 @@ print_uuid_ro(const struct uuid *uuid)
     str[37] = 0;
     return str;
 }
-#if 0
-/* unused */
-static char *
-print_uuid(const struct uuid *uuid)
-{
-    return strdup(print_uuid_ro(uuid));
-}
-#endif
 
+
+/* OpenFlow helpers to get information about interfaces */
+
+/* Prepare vconnp - connection with bridge using OpenFlow.  Bridge is
+ * identified by name (e.g. ofc-bridge).  We use default OF versions
+ * (OFPUTIL_DEFAULT_VERSIONS).
+ *
+ * This function was copied from ovs-ofctl and modified.
+ *
+ * Function returns 0 on success, otherwise errno value.  If successful,
+ * stores a pointer to the new connection in '*vconnp', otherwise a null
+ * pointer. */
+static int
+open_vconn_socket(const char *name, struct vconn **vconnp)
+{
+    int error;
+    char *vconn_name = xasprintf("unix:%s", name);
+
+    error = vconn_open(vconn_name, OFPUTIL_DEFAULT_VERSIONS, DSCP_DEFAULT,
+                       vconnp);
+    if (error && error != ENOENT) {
+        nc_verb_error("OpenFlow: %s: failed to open socket (%s)", name,
+                      ovs_strerror(error));
+    }
+    free(vconn_name);
+
+    return error;
+}
+
+/* Creates connection via OpenFlow with the bridge identified by 'name'.
+ *
+ * Function was partially copied from ovs-ofctl and modified.
+ *
+ * Function returns true on success.  If successful, it stores a pointer
+ * to the new connection in '*vconnp', otherwise a null pointer. */
+bool
+ofc_of_open_vconn(const char *name, struct vconn **vconnp)
+{
+    char *datapath_name, *datapath_type, *socket_name;
+    enum ofputil_protocol protocol;
+    char *bridge_path;
+    int ofp_version;
+    int error;
+
+    bridge_path = xasprintf("%s/%s.mgmt", OFC_OVS_OFSOCKET_DIR, name);
+
+    /* changed to called function */
+    dp_parse_name(name, &datapath_name, &datapath_type);
+
+    socket_name = xasprintf("%s/%s.mgmt", OFC_OVS_OFSOCKET_DIR, datapath_name);
+    free(datapath_name);
+    free(datapath_type);
+
+    if (strchr(name, ':')) {
+        vconn_open(name, OFPUTIL_DEFAULT_VERSIONS, DSCP_DEFAULT, vconnp);
+    } else if (!open_vconn_socket(name, vconnp)) {
+        /* Fall Through. */
+    } else if (!open_vconn_socket(bridge_path, vconnp)) {
+        /* Fall Through. */
+    } else if (!open_vconn_socket(socket_name, vconnp)) {
+        /* Fall Through. */
+    } else {
+        nc_verb_error("OpenFlow: %s is not a bridge or a socket.", name);
+        return false;
+    }
+
+    free(bridge_path);
+    free(socket_name);
+
+    nc_verb_verbose("OpenFlow: connecting to %s", vconn_get_name(*vconnp));
+    error = vconn_connect_block(*vconnp);
+    if (error) {
+        nc_verb_error("OpenFlow: %s: failed to connect to socket (%s).", name,
+                      ovs_strerror(error));
+        return false;
+    }
+
+    ofp_version = vconn_get_version(*vconnp);
+    protocol = ofputil_protocol_from_ofp_version(ofp_version);
+    if (!protocol) {
+        nc_verb_error("OpenFlow: %s: unsupported OpenFlow version 0x%02x.",
+                      name, ofp_version);
+        return false;
+    }
+
+    return true;
+}
+
+/* Gets information about interfaces using 'vconnp' connection.  Function
+ * returns pointer to OpenFlow buffer (implemented by OVS) that is used
+ * to get results. */
+struct ofpbuf *
+ofc_of_get_ports(struct vconn *vconnp)
+{
+    struct ofpbuf *request;
+    struct ofpbuf *reply;
+    int ofp_version;
+
+    /* existence of version was checked in ofc_of_open_vconn() */
+    ofp_version = vconn_get_version(vconnp);
+
+    request = ofputil_encode_port_desc_stats_request(ofp_version, OFPP_NONE);
+    vconn_transact(vconnp, request, &reply);
+
+    /* updates reply size */
+    ofputil_switch_features_has_ports(reply);
+    return reply;
+}
+
+/* Sets value of configuration bit of 'port_name' interface.  It can be used
+ * to set: OFPUTIL_PC_NO_FWD, OFPUTIL_PC_NO_PACKET_IN, OFPUTIL_PC_NO_RECV,
+ * OFPUTIL_PC_PORT_DOWN given as 'bit'.  If 'value' is 0, clear configuration
+ * bit.  Otherwise, set 'bit' to 1.
+ */
+void
+ofc_of_mod_port(struct vconn *vconnp, const char *port_name,
+                enum ofputil_port_config bit, char value)
+{
+    enum ofptype type;
+    int ofp_version;
+    enum ofputil_protocol protocol;
+    struct ofputil_phy_port pp;
+    struct ofputil_port_mod pm;
+    struct ofp_header *oh;
+    struct ofpbuf b, *request, *reply = ofc_of_get_ports(vconnp);
+
+    if (reply == NULL) {
+        return;
+    }
+    ofp_version = vconn_get_version(vconnp);
+
+    protocol = ofputil_protocol_from_ofp_version(ofp_version);
+    oh = ofpbuf_data(reply);
+
+    /* get the beginning of data */
+    ofpbuf_use_const(&b, oh, ntohs(oh->length));
+    if (ofptype_pull(&type, &b) || type != OFPTYPE_PORT_DESC_STATS_REPLY) {
+        nc_verb_error("OpenFlow: bad reply.");
+        return;
+    }
+
+    /* find port by name */
+    while (!ofputil_pull_phy_port(oh->version, &b, &pp)) {
+        /* modify port */
+        if (!strncmp(pp.name, port_name, strlen(pp.name))) {
+            /* prepare port for transaction */
+            pm.port_no = pp.port_no;
+            pm.config = 0;
+            pm.mask = 0;
+            pm.advertise = 0;
+            memcpy(pm.hw_addr, pp.hw_addr, ETH_ADDR_LEN);
+            pm.mask = bit;
+            /* set value to selected bit: */
+            pm.config = (value != 0 ? bit : 0);
+
+            request = ofputil_encode_port_mod(&pm, protocol);
+            ofpmsg_update_length(request);
+            vconn_transact_noreply(vconnp, request, &reply);
+            break;
+        }
+    }
+    ofpbuf_delete(reply);
+}
+
+/* Finds interface with 'name' in OpenFlow 'reply' and returns pointer to it.
+ * If interface is not found, function returns NULL.  'reply' should be
+ * prepared by ofc_of_get_ports().  Note that 'reply' still needs to be
+ * freed. */
+struct ofputil_phy_port *
+ofc_of_getport_byname(struct ofpbuf *reply, const char *name)
+{
+    struct ofpbuf b;
+    static struct ofputil_phy_port pp;
+    struct ofp_header *oh;
+    enum ofptype type;
+
+    if (reply == NULL) {
+        return NULL;
+    }
+
+    /* get the beginning of data */
+    oh = ofpbuf_data(reply);
+    ofpbuf_use_const(&b, oh, ntohs(oh->length));
+    if (ofptype_pull(&type, &b) || type != OFPTYPE_PORT_DESC_STATS_REPLY) {
+        nc_verb_error("OpenFlow: bad reply.");
+        return NULL;
+    }
+
+    while (!ofputil_pull_phy_port(oh->version, &b, &pp)) {
+        /* this is the point where we have information about state and
+           configuration of interface */
+        if (!strncmp(pp.name, name, strlen(pp.name))) {
+            return &pp;
+        }
+    }
+    return NULL;
+}
+
+
 /*
  * If key is in the string map s, append the it's value into string,
  * otherwise don't append anything.
@@ -279,6 +474,14 @@ get_ports_config(void)
 {
     const struct ovsrec_interface *row, *next;
     struct ds string;
+    struct vconn *vconnp;
+    /* XXX what about multiple bridges?  We need to pass bridge name here */
+    const char *bridge_name = "ofc-bridge";
+    struct ofpbuf *of_ports = NULL;
+    struct ofputil_phy_port *of_port = NULL;
+    enum ofputil_port_config c;
+    ofc_of_open_vconn(bridge_name, &vconnp);
+    of_ports = ofc_of_get_ports(vconnp);
 
     ds_init(&string);
     OVSREC_INTERFACE_FOR_EACH_SAFE(row, next, ovsdb_handler->idl) {
@@ -294,13 +497,23 @@ get_ports_config(void)
         memset(&ethreq, 0, sizeof ethreq);
         strncpy(ethreq.ifr_name, row->name, sizeof ethreq.ifr_name);
         ioctl(ioctlfd, SIOCGIFFLAGS, &ethreq);
-        ds_put_format(&string, "<admin-state>%s</admin-state>",
-                      ethreq.ifr_flags & IFF_UP ? "up" : "down");
-        /* TODO openflow:
-           ds_put_format(&string, "<no-receive>%s</no-receive>", "XXX");
-           ds_put_format(&string, "<no-forward>%s</no-forward>", "XXX");
-           ds_put_format(&string, "<no-packet-in>%s</no-packet-in>", "XXX");
-           */
+        of_port = ofc_of_getport_byname(of_ports, row->name);
+        if (of_port != NULL) {
+            c = of_port->config;
+            ds_put_format(&string, "<admin-state>%s</admin-state>"
+                          "<no-receive>%s</no-receive>"
+                          "<no-forward>%s</no-forward>"
+                          "<no-packet-in>%s</no-packet-in>",
+                          (c & OFPUTIL_PC_PORT_DOWN ? "down" : "up"),
+                          OFC_PORT_CONF_BIT(c, OFPUTIL_PC_NO_RECV),
+                          OFC_PORT_CONF_BIT(c, OFPUTIL_PC_NO_FWD),
+                          OFC_PORT_CONF_BIT(c, OFPUTIL_PC_NO_PACKET_IN));
+        } else {
+            /* port was not found in OpenFlow reply, but we have ethtool */
+            ds_put_format(&string, "<admin-state>%s</admin-state>",
+                          ethreq.ifr_flags & IFF_UP ? "up" : "down");
+        }
+
         ds_put_format(&string, "</configuration>");
 
         /* get interface features via ioctl() */
@@ -344,6 +557,12 @@ get_ports_config(void)
         }
         ds_put_format(&string, "</port>");
     }
+    if (of_ports != NULL) {
+        ofpbuf_delete(of_ports);
+    }
+    if (vconnp != NULL) {
+        vconn_close(vconnp);
+    }
     return ds_steal_cstr(&string);
 }
 
@@ -352,6 +571,13 @@ get_ports_state(void)
 {
     const struct ovsrec_interface *row, *next;
     struct ds string;
+    struct vconn *vconnp;
+    /* XXX what about multiple bridges?  We need to pass bridge name here */
+    const char *bridge_name = "ofc-bridge";
+    struct ofpbuf *of_ports = NULL;
+    struct ofputil_phy_port *of_port = NULL;
+    ofc_of_open_vconn(bridge_name, &vconnp);
+    of_ports = ofc_of_get_ports(vconnp);
 
     ds_init(&string);
     OVSREC_INTERFACE_FOR_EACH_SAFE(row, next, ovsdb_handler->idl) {
@@ -370,22 +596,23 @@ get_ports_state(void)
         ds_put_format(&string, "<name>%s</name>", row->name);
         ds_put_format(&string, "<number>%" PRIu64 "</number>",
                       (row->n_ofport > 0 ? row->ofport[0] : 0));
-        /* TODO openflow:
-           <current-rate>%s</current-rate>
-           <max-rate>%s</max-rate>
-           originally via ioctl(), but of provides values as curr_speed and
-           max_speed in struct ofp_port when no standard speed is set, it also
-           can accumulate speeds in case of port aggregation, which I'm not
-           sure is possible to get via ioctl()
-         */
+        of_port = ofc_of_getport_byname(of_ports, row->name);
+        if (of_port != NULL) {
+           ds_put_format(&string, "<current-rate>%"PRIu32"</current-rate>"
+                         "<max-rate>%"PRIu32"</max-rate>",
+                         of_port->curr_speed, of_port->max_speed);
+        }
         ds_put_format(&string, "<state>");
         ds_put_format(&string, "<oper-state>%s</oper-state>",
                       (row->link_state != NULL ? row->link_state : "down"));
 
         find_and_append_smap_val(&row->other_config, "stp_state", "blocked",
                                  &string);
-        /* TODO openflow:
-            <live>%s</live> */
+        if (of_port != NULL) {
+            ds_put_format(&string, "<live>%s</live>",
+                          OFC_PORT_CONF_BIT(of_port->state, OFPUTIL_PS_LIVE));
+        }
+
         ds_put_format(&string, "</state>");
 
         ds_put_format(&string, "<features><current>");
@@ -455,6 +682,12 @@ get_ports_state(void)
         ds_put_format(&string, "</advertised-peer></features>");
 
         ds_put_format(&string, "</port>");
+    }
+    if (of_ports != NULL) {
+        ofpbuf_delete(of_ports);
+    }
+    if (vconnp != NULL) {
+        vconn_close(vconnp);
     }
     return ds_steal_cstr(&string);
 }

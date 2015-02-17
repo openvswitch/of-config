@@ -65,6 +65,18 @@ void txn_init(void);
  */
 void txn_del_all(void);
 
+/* new functions */
+void txn_del_bridge_port(const xmlChar *br_name, const xmlChar *port_name);
+void txn_add_bridge_port(const xmlChar *br_name, const xmlChar *port_name);
+void txn_del_bridge(const xmlChar *br_name);
+void txn_add_bridge(xmlNodePtr node);
+void txn_mod_bridge_datapath(const xmlChar *br_name, const xmlChar* value);
+
+void txn_del_port(const xmlChar *port_name);
+void txn_add_port(xmlNodePtr node);
+void txn_mod_port_reqnumber(const xmlChar *port_name, const xmlChar* value);
+void txn_mod_port_admin_state(const xmlChar *port_name, const xmlChar* value);
+
 /*
  * Set port parameters
  */

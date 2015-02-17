@@ -480,8 +480,12 @@ get_ports_config(const struct ovsrec_bridge *bridge)
     struct ofpbuf *of_ports = NULL;
     struct ofputil_phy_port *of_port = NULL;
     enum ofputil_port_config c;
-    ofc_of_open_vconn(bridge_name, &vconnp);
-    of_ports = ofc_of_get_ports(vconnp);
+    if (ofc_of_open_vconn(bridge_name, &vconnp) == true) {
+        of_ports = ofc_of_get_ports(vconnp);
+    } else {
+        nc_verb_error("OpenFlow: could not connect to '%s' bridge.",
+                      bridge_name);
+    }
     ds_init(&string);
 
     /* iterate over all interfaces of all ports */
@@ -580,8 +584,13 @@ get_ports_state(const struct ovsrec_bridge *bridge)
     const char *bridge_name = bridge->name;
     struct ofpbuf *of_ports = NULL;
     struct ofputil_phy_port *of_port = NULL;
-    ofc_of_open_vconn(bridge_name, &vconnp);
-    of_ports = ofc_of_get_ports(vconnp);
+
+    if (ofc_of_open_vconn(bridge_name, &vconnp) == true) {
+        of_ports = ofc_of_get_ports(vconnp);
+    } else {
+        nc_verb_error("OpenFlow: could not connect to '%s' bridge.",
+                      bridge_name);
+    }
     ds_init(&string);
 
     /* iterate over all interfaces of all ports */

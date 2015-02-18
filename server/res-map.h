@@ -90,5 +90,15 @@ ofc_tuple_t *ofc_resmap_find_u(ofc_resmap_t *rm, const struct uuid *uuid);
  */
 void ofc_resmap_destroy(ofc_resmap_t **rm);
 
+
+/*
+ * Certificates (external and owned) are mapped to same UUID.
+ * There is no need to allocate resmap for certificates.
+ */
+struct ofc_resmap_certificate {
+    struct uuid uuid;       /* UUID of SSL row */
+    char *external_resid;   /* resource-id of external-certificate */
+    char *owned_resid;      /* resource-id of owned-certificate */
+};
 #endif
 

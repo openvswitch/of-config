@@ -224,7 +224,7 @@ ofc_of_mod_port_internal(struct vconn *vconnp, const char *port_name,
     /* find port by name */
     while (!ofputil_pull_phy_port(oh->version, &b, &pp)) {
         /* modify port */
-        if (!strncmp(pp.name, port_name, strlen(pp.name))) {
+        if (!strncmp(pp.name, port_name, strlen(pp.name)+1)) {
             /* prepare port for transaction */
             pm.port_no = pp.port_no;
             pm.config = 0;
@@ -317,7 +317,7 @@ ofc_of_getport_byname(struct ofpbuf *reply, const char *name)
     while (!ofputil_pull_phy_port(oh->version, &b, &pp)) {
         /* this is the point where we have information about state and
            configuration of interface */
-        if (!strncmp(pp.name, name, strlen(pp.name))) {
+        if (!strncmp(pp.name, name, strlen(pp.name)+1)) {
             return &pp;
         }
     }

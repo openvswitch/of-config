@@ -1814,6 +1814,43 @@ cleanup:
     return bridge_name;
 }
 
+void
+txn_mod_port_add_tunnel(const xmlChar *port_name, xmlNodePtr tunnel_node)
+{
+    xmlNodePtr iter;
+    char *option, *value;
+    struct smap opt_cl;
+    const struct ovsrec_interface *ifc, *next, *found = NULL;
+
+    OVSREC_INTERFACE_FOR_EACH_SAFE(ifc, next, ovsdb_handler->idl) {
+        if (!strncmp(ifc->name, (char *) port_name, strlen(ifc->name)+1)) {
+            found = ifc;
+            break;
+        }
+    }
+    if (found == NULL) {
+        /* not found */
+        return;
+    }
+
+    smap_clone(&opt_cl, &ifc->options);
+
+    for (iter = tunnel_node->children; iter; iter = iter->next) {
+        if (iter->type == XML_DOCUMENT_NODE) {
+            if (xmlStrEqual(iter->name, BAD_CAST "local-endpoint-ipv4-adress")) {
+                option = "local_ip";
+                value = (char *) xmlNodeGetContent(iter);
+
+            } else if (xmlStrEqual(iter->name, BAD_CAST "remote-endpoint-ipv4-adress")) {
+                option = "remote_ip";
+                value = (char *) xmlNodeGetContent(iter);
+            }
+            smap_add_once(&opt_cl, option, (char *) value);
+        }
+    }
+    ovsrec_interface_verify_options(ifc);
+    ovsrec_interface_set_options(ifc, &opt_cl);
+}
 
 /* Notes:
 OpenFlow access:

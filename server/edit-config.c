@@ -1184,10 +1184,14 @@ edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running,
                    || xmlStrEqual(edit->name, BAD_CAST "no-packet-in")
                    || xmlStrEqual(edit->name, BAD_CAST "admin-state")) {
 
+            nc_verb_verbose("Modify port configuration (%s:%d)", __FILE__, __LINE__);
             key = go2node(edit->parent->parent, BAD_CAST "name");
             bridge_name = ofc_find_bridge_for_port_iterative(xmlNodeGetContent(key));
 
             ofc_of_mod_port(bridge_name, xmlNodeGetContent(key), edit->name, edit->children->content);
+        } else if (xmlStrEqual(edit->name, BAD_CAST "tunnel")) {
+            key = go2node(edit->parent, BAD_CAST "name");
+            txn_mod_port_add_tunnel(xmlNodeGetContent(key), edit);
         }
     } else {
         /* XML */

@@ -262,7 +262,7 @@ get_operation_elements(NC_EDIT_OP_TYPE op, xmlDocPtr edit)
         return (NULL);
     }
 
-    if (xmlXPathRegisterNs(edit_ctxt, BAD_CAST NC_NS_BASE10, BAD_CAST "nc")) {
+    if (xmlXPathRegisterNs(edit_ctxt, BAD_CAST "nc", BAD_CAST NC_NS_BASE10)) {
         xmlXPathFreeContext(edit_ctxt);
         nc_verb_error("Registering a namespace for XPath failed (%s).", __func__);
         return (NULL);

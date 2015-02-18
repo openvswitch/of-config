@@ -1493,6 +1493,30 @@ txn_add_port(xmlNodePtr node)
     }
 }
 
+void
+txn_del_port_tunnel(const xmlChar *port_name, xmlNodePtr tunnel_node)
+{
+    struct smap opt_cl;
+    const struct ovsrec_interface *ifc, *next, *found = NULL;
+    nc_verb_verbose("Removing tunnel (%s:%d)", __FILE__, __LINE__);
+
+    OVSREC_INTERFACE_FOR_EACH_SAFE(ifc, next, ovsdb_handler->idl) {
+        if (!strncmp(ifc->name, (char *) port_name, strlen(ifc->name)+1)) {
+            found = ifc;
+            break;
+        }
+    }
+    if (found == NULL) {
+        /* not found */
+        return;
+    }
+
+    smap_remove(&ifc->options, "local_ip");
+    smap_remove(&ifc->options, "remote_ip");
+    ovsrec_interface_set_options(ifc, &ifc->options);
+    ovsrec_interface_set_type(found, "");
+}
+
 /* Remove port reference from the Bridge table */
 void
 txn_del_bridge_port(const xmlChar *br_name, const xmlChar *port_name)

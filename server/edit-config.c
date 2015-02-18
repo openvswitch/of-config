@@ -932,6 +932,7 @@ static int
 edit_delete(xmlNodePtr node, int running)
 {
     xmlNodePtr key;
+    xmlChar *value;
 
     if (!node) {
         return EXIT_SUCCESS;
@@ -989,6 +990,13 @@ edit_delete(xmlNodePtr node, int running)
             key = go2node(node->parent, BAD_CAST "name");
             txn_mod_port_reqnumber(key->children->content,
                                    node->children->content);
+        } else if (xmlStrEqual(node->name, BAD_CAST "ipgre-tunnel")
+                   || xmlStrEqual(node->name, BAD_CAST "vxlan-tunnel")
+                   || xmlStrEqual(node->name, BAD_CAST "tunnel")) {
+            key = go2node(node->parent, BAD_CAST "name");
+            value = xmlNodeGetContent(key);
+            txn_del_port_tunnel(value, node);
+            xmlFree(value);
         }
     } else {
         xmlUnlinkNode(node);

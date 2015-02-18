@@ -173,6 +173,10 @@ ofc_of_get_ports(struct vconn *vconnp)
     struct ofpbuf *reply;
     int ofp_version;
 
+    if (vconnp == NULL) {
+        return NULL;
+    }
+
     /* existence of version was checked in ofc_of_open_vconn() */
     ofp_version = vconn_get_version(vconnp);
 

@@ -1477,12 +1477,19 @@ txn_add_port(xmlNodePtr node)
                     if (bridge_name != NULL) {
                         ofc_of_mod_port(bridge_name, port_name, leaf->name, xmlNodeGetContent(leaf));
                     }
+                    xmlFree(port_name);
                 } else {
                     nc_verb_error("unexpected element '%s'", leaf->name);
                 }
             }
+        } else if (xmlStrEqual(aux->name, BAD_CAST "ipgre-tunnel")
+                   || xmlStrEqual(aux->name, BAD_CAST "vxlan-tunnel")
+                   || xmlStrEqual(aux->name, BAD_CAST "tunnel")) {
+            port_name = xmlNodeGetContent(go2node(aux->parent, BAD_CAST "name"));
+            txn_mod_port_add_tunnel(port_name, aux);
+            xmlFree(port_name);
         }
-        /* TODO features, tunnel */
+        /* TODO features */
     }
 }
 
@@ -1684,13 +1691,33 @@ void
 txn_add_bridge(xmlNodePtr node)
 {
     const struct ovsrec_open_vswitch *ovs;
-    const struct ovsrec_bridge *bridge;
+    const struct ovsrec_bridge *bridge, *next;
     const struct ovsrec_port *port;
     xmlNodePtr aux, leaf;
-    xmlChar *xmlval;
+    xmlChar *xmlval, *bridge_id = NULL;
 
     if (!node) {
         return;
+    }
+    /* find id */
+    for (aux = node->children; aux; aux = aux->next) {
+        if (aux->type != XML_ELEMENT_NODE) {
+            continue;
+        }
+
+        if (xmlStrEqual(aux->name, BAD_CAST "id")) {
+            bridge_id = xmlNodeGetContent(aux);
+            break;
+        }
+    }
+
+    /* check for existing bridge id */
+    OVSREC_BRIDGE_FOR_EACH_SAFE(bridge, next, ovsdb_handler->idl) {
+        if (xmlStrEqual(bridge_id, BAD_CAST bridge->name)) {
+            /* existing bridge, exit */
+            xmlFree(bridge_id);
+            return;
+        }
     }
 
     /* get the Open_vSwitch table for bridge links manipulation */
@@ -1703,16 +1730,15 @@ txn_add_bridge(xmlNodePtr node)
     bridge = ovsrec_bridge_insert(ovsdb_handler->txn);
     txn_ovs_insert_bridge(ovs, (struct ovsrec_bridge*)bridge);
 
+    ovsrec_bridge_set_name(bridge, (char *) bridge_id);
+    xmlFree(bridge_id);
+
     for (aux = node->children; aux; aux = aux->next) {
         if (aux->type != XML_ELEMENT_NODE) {
             continue;
         }
 
-        if (xmlStrEqual(aux->name, BAD_CAST "id")) {
-            xmlval = xmlNodeGetContent(aux);
-            ovsrec_bridge_set_name(bridge, (char*)xmlval);
-            xmlFree(xmlval);
-        } else if (xmlStrEqual(aux->name, BAD_CAST "datapath-id")) {
+        if (xmlStrEqual(aux->name, BAD_CAST "datapath-id")) {
             xmlval = xmlNodeGetContent(aux);
             txn_mod_bridge_datapath(BAD_CAST bridge->name, xmlval);
             xmlFree(xmlval);
@@ -1821,6 +1847,7 @@ txn_mod_port_add_tunnel(const xmlChar *port_name, xmlNodePtr tunnel_node)
     char *option, *value;
     struct smap opt_cl;
     const struct ovsrec_interface *ifc, *next, *found = NULL;
+    nc_verb_verbose("Adding tunnel (%s:%d)", __FILE__, __LINE__);
 
     OVSREC_INTERFACE_FOR_EACH_SAFE(ifc, next, ovsdb_handler->idl) {
         if (!strncmp(ifc->name, (char *) port_name, strlen(ifc->name)+1)) {
@@ -1836,7 +1863,7 @@ txn_mod_port_add_tunnel(const xmlChar *port_name, xmlNodePtr tunnel_node)
     smap_clone(&opt_cl, &ifc->options);
 
     for (iter = tunnel_node->children; iter; iter = iter->next) {
-        if (iter->type == XML_DOCUMENT_NODE) {
+        if (iter->type == XML_ELEMENT_NODE) {
             if (xmlStrEqual(iter->name, BAD_CAST "local-endpoint-ipv4-adress")) {
                 option = "local_ip";
                 value = (char *) xmlNodeGetContent(iter);
@@ -1849,6 +1876,14 @@ txn_mod_port_add_tunnel(const xmlChar *port_name, xmlNodePtr tunnel_node)
         }
     }
     ovsrec_interface_verify_options(ifc);
+    if (xmlStrEqual(tunnel_node->name, BAD_CAST "ipgre-tunnel")) {
+        ovsrec_interface_set_type(ifc, "gre");
+    } else if (xmlStrEqual(tunnel_node->name, BAD_CAST "vxlan-tunnel")) {
+        ovsrec_interface_set_type(ifc, "vxlan");
+    } else {
+        ovsrec_interface_set_type(ifc, "gre64");
+        /* or we hesitate about geneve and lisp */
+    }
     ovsrec_interface_set_options(ifc, &opt_cl);
 }
 

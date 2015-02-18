@@ -1189,9 +1189,6 @@ edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running,
             bridge_name = ofc_find_bridge_for_port_iterative(xmlNodeGetContent(key));
 
             ofc_of_mod_port(bridge_name, xmlNodeGetContent(key), edit->name, edit->children->content);
-        } else if (xmlStrEqual(edit->name, BAD_CAST "tunnel")) {
-            key = go2node(edit->parent, BAD_CAST "name");
-            txn_mod_port_add_tunnel(xmlNodeGetContent(key), edit);
         }
     } else {
         /* XML */

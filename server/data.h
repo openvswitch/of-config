@@ -52,6 +52,8 @@ char *ofc_get_state_data(void);
 
 char *ofc_get_config_data(void);
 
+void ofc_of_mod_port(const xmlChar *bridge_name, const xmlChar *port_name, const xmlChar *bit_xchar, const xmlChar *value);
+
 void ofc_destroy(void);
 
 /*
@@ -108,5 +110,9 @@ int ofc_set_switchid(xmlNodePtr node);
 
 /* get stored /capable-switch/id value */
 const xmlChar *ofc_get_switchid(void);
+
+xmlChar *ofc_find_bridge_for_port(xmlNodePtr root, xmlChar *port_name);
+
+xmlChar *ofc_find_bridge_for_port_iterative(xmlChar *port_name);
 
 #endif /* data.h */

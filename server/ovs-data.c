@@ -38,6 +38,8 @@
 #include <poll-loop.h>
 
 #include <libxml/tree.h>
+#include <libxml/xpath.h>
+#include <libxml/xpathInternals.h>
 
 #include <libnetconf.h>
 
@@ -187,8 +189,8 @@ ofc_of_get_ports(struct vconn *vconnp)
  * OFPUTIL_PC_PORT_DOWN given as 'bit'.  If 'value' is 0, clear configuration
  * bit.  Otherwise, set 'bit' to 1.
  */
-void
-ofc_of_mod_port(struct vconn *vconnp, const char *port_name,
+static void
+ofc_of_mod_port_internal(struct vconn *vconnp, const char *port_name,
                 enum ofputil_port_config bit, char value)
 {
     enum ofptype type;
@@ -202,6 +204,7 @@ ofc_of_mod_port(struct vconn *vconnp, const char *port_name,
     if (reply == NULL) {
         return;
     }
+
     ofp_version = vconn_get_version(vconnp);
 
     protocol = ofputil_protocol_from_ofp_version(ofp_version);
@@ -235,6 +238,52 @@ ofc_of_mod_port(struct vconn *vconnp, const char *port_name,
         }
     }
     ofpbuf_delete(reply);
+}
+
+void
+ofc_of_mod_port(const xmlChar *bridge_name, const xmlChar *port_name, const xmlChar *bit_xchar, const xmlChar *value)
+{
+    struct vconn *vconnp;
+    enum ofputil_port_config bit;
+    struct ofpbuf *of_ports = NULL;
+    char val;
+    if (xmlStrEqual(value, BAD_CAST "false")) {
+        val = 0;
+    } else if (xmlStrEqual(value, BAD_CAST "true")) {
+        val = 1;
+    } else if (xmlStrEqual(value, BAD_CAST "down")) {
+        val = 1; /* inverse logic for admin-state */
+    } else if (xmlStrEqual(value, BAD_CAST "up")) {
+        val = 0; /* inverse logic for admin-state */
+    } else {
+        return;
+    }
+    if (xmlStrEqual(bit_xchar, BAD_CAST "no-receive")) {
+        bit = OFPUTIL_PC_NO_RECV;
+    } else if (xmlStrEqual(bit_xchar, BAD_CAST "no-forward")) {
+        bit = OFPUTIL_PC_NO_FWD;
+    } else if (xmlStrEqual(bit_xchar, BAD_CAST "no-packet-in")) {
+        bit = OFPUTIL_PC_NO_PACKET_IN;
+    } else if (xmlStrEqual(bit_xchar, BAD_CAST "admin-state")) {
+        bit = OFPUTIL_PC_PORT_DOWN;
+    } else {
+        nc_verb_error("Bad element");
+        return;
+    }
+
+    if (ofc_of_open_vconn((char *) bridge_name, &vconnp) == true) {
+        of_ports = ofc_of_get_ports(vconnp);
+    } else {
+        nc_verb_error("OpenFlow: could not connect to '%s' bridge.",
+                      bridge_name);
+    }
+    ofc_of_mod_port_internal(vconnp, (char *) port_name, bit, val);
+    if (of_ports != NULL) {
+        ofpbuf_delete(of_ports);
+    }
+    if (vconnp != NULL) {
+        vconn_close(vconnp);
+    }
 }
 
 /* Finds interface with 'name' in OpenFlow 'reply' and returns pointer to it.
@@ -1385,7 +1434,7 @@ void
 txn_add_port(xmlNodePtr node)
 {
     xmlNodePtr aux, leaf;
-    xmlChar *xmlval;
+    xmlChar *xmlval, *port_name, *bridge_name;
     struct ovsrec_port *port;
     struct ovsrec_interface *iface;
 
@@ -1414,11 +1463,19 @@ txn_add_port(xmlNodePtr node)
             xmlFree(xmlval);
         } else if (xmlStrEqual(aux->name, BAD_CAST "configuration")) {
             for (leaf = aux->children; leaf; leaf = leaf->next) {
-                if (xmlStrEqual(leaf->name, BAD_CAST "admin-state")) {
-                    txn_mod_port_admin_state(BAD_CAST iface->name,
-                                             leaf->children->content);
+                if (xmlStrEqual(leaf->name, BAD_CAST "no-receive")
+                           || xmlStrEqual(leaf->name, BAD_CAST "no-packet-in")
+                           || xmlStrEqual(leaf->name, BAD_CAST "no-forward")
+                           || xmlStrEqual(leaf->name, BAD_CAST "admin-state")) {
+                    nc_verb_verbose("txn_add_port: no-receive, no-forward, no-packet-in");
+                    port_name = xmlNodeGetContent(go2node(leaf->parent->parent, BAD_CAST "name"));
+                    bridge_name = ofc_find_bridge_for_port_iterative(port_name);
+                    if (bridge_name != NULL) {
+                        ofc_of_mod_port(bridge_name, port_name, leaf->name, xmlNodeGetContent(leaf));
+                    }
+                } else {
+                    nc_verb_error("unexpected element '%s'", leaf->name);
                 }
-                /* TODO no-receive, no-forward, no-packet-in */
             }
         }
         /* TODO features, tunnel */
@@ -1667,12 +1724,92 @@ txn_add_bridge(xmlNodePtr node)
                     txn_bridge_insert_port(bridge, (struct ovsrec_port *)port);
                     xmlFree(xmlval);
                 }
-                /* TODO no-receive, no-forward, no-packet-in */
+                ///* TODO no-receive, no-forward, no-packet-in */
+                //nc_verb_verbose("no-receive, no-forward, no-packet-in");
+                //port_name = xmlNodeGetContent(go2node(leaf->parent->parent, BAD_CAST "name"));
+                //bridge_name = ofc_find_bridge_for_port(orig_doc, port_name);
+                //if (bridge_name != NULL) {
+                //    ofc_of_mod_port(bridge_name, port_name, leaf->name, xmlNodeGetContent(leaf));
+                //}
             }
         }
         /* TODO controllers, enabled, lost-connection-behavior */
     }
 }
+
+xmlChar *
+ofc_find_bridge_for_port_iterative(xmlChar *port_name)
+{
+    const struct ovsrec_bridge *bridge, *next;
+    const struct ovsrec_port *port;
+    const struct ovsrec_interface *interface;
+    int port_i, inter_i;
+
+    OVSREC_BRIDGE_FOR_EACH_SAFE(bridge, next, ovsdb_handler->idl) {
+        for (port_i = 0; port_i < bridge->n_ports; port_i++) {
+            port = bridge->ports[port_i];
+            for (inter_i = 0; inter_i < port->n_interfaces; inter_i++) {
+                interface = port->interfaces[inter_i];
+                if (!strncmp(interface->name, (char *) port_name, strlen(interface->name)+1)) {
+                    return BAD_CAST bridge->name;
+                }
+            }
+        }
+    }
+    return NULL;
+}
+
+xmlChar *
+ofc_find_bridge_for_port(xmlNodePtr root, xmlChar *port_name)
+{
+    xmlXPathContextPtr xpathCtx;
+    xmlXPathObjectPtr xpathObj;
+    xmlDocPtr doc;
+    char *xpathexpr = NULL;
+    xmlChar *bridge_name = NULL;
+    int size;
+    if (root == NULL) {
+        return NULL;
+    }
+    doc = root->doc;
+    xpathexpr = xasprintf("//ofc:switch/ofc:resources/ofc:port['%s']/../../ofc:id[1]",
+                          (char *) port_name);
+    /* Create xpath evaluation context */
+    xpathCtx = xmlXPathNewContext(doc);
+    if(xpathCtx == NULL) {
+        nc_verb_error("Unable to create new XPath context");
+        goto cleanup;
+    }
+
+    if (xmlXPathRegisterNs(xpathCtx, BAD_CAST "ofc", BAD_CAST "urn:onf:config:yang")) {
+        nc_verb_error("Registering a namespace for XPath failed (%s).", __func__);
+        goto cleanup;
+    }
+
+    /* Evaluate xpath expression */
+    xpathObj = xmlXPathEvalExpression(BAD_CAST xpathexpr, xpathCtx);
+    if(xpathObj == NULL) {
+        nc_verb_error("Unable to evaluate xpath expression \"%s\"", xpathexpr);
+        goto cleanup;
+    }
+
+    /* Print results */
+    size = (xpathObj->nodesetval) ? xpathObj->nodesetval->nodeNr : 0;
+    if (size == 1) {
+        if (xpathObj->nodesetval->nodeTab[0]
+            && xpathObj->nodesetval->nodeTab[0]->children
+            && xpathObj->nodesetval->nodeTab[0]->children->content) {
+            bridge_name = xmlNodeGetContent(xpathObj->nodesetval->nodeTab[0]);
+        }
+    }
+
+cleanup:
+    /* Cleanup, use bridge_name that was initialized or set */
+    xmlXPathFreeObject(xpathObj);
+    xmlXPathFreeContext(xpathCtx);
+    return bridge_name;
+}
+
 
 /* Notes:
 OpenFlow access:

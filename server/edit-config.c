@@ -1115,6 +1115,7 @@ edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running,
             struct nc_err** error)
 {
     xmlNodePtr key, parent;
+    xmlChar *bridge_name;
 
     /* remove operation attribute */
     xmlRemoveProp(xmlHasNsProp(edit, BAD_CAST "operation",
@@ -1178,6 +1179,15 @@ edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running,
             key = go2node(edit->parent, BAD_CAST "name");
             txn_mod_port_reqnumber(key->children->content,
                                    edit->children->content);
+        } else if (xmlStrEqual(edit->name, BAD_CAST "no-receive")
+                   || xmlStrEqual(edit->name, BAD_CAST "no-forward")
+                   || xmlStrEqual(edit->name, BAD_CAST "no-packet-in")
+                   || xmlStrEqual(edit->name, BAD_CAST "admin-state")) {
+
+            key = go2node(edit->parent->parent, BAD_CAST "name");
+            bridge_name = ofc_find_bridge_for_port_iterative(xmlNodeGetContent(key));
+
+            ofc_of_mod_port(bridge_name, xmlNodeGetContent(key), edit->name, edit->children->content);
         }
     } else {
         /* XML */

@@ -333,6 +333,10 @@ ofcds_editconfig(void *UNUSED(data), const nc_rpc * UNUSED(rpc),
         goto error_cleanup;
     }
 
+    if (target == NC_DATASTORE_RUNNING) {
+        txn_init();
+    }
+
     if (compact_edit_operations(cfg, defop) != EXIT_SUCCESS) {
         nc_verb_error("Compacting edit-config operations failed.");
         if (error != NULL) {

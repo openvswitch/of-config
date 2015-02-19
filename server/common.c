@@ -20,19 +20,18 @@
 
 void clb_print(NC_VERB_LEVEL level, const char* msg)
 {
-
-	switch (level) {
-	case NC_VERB_ERROR:
-		syslog(LOG_ERR, "%s", msg);
-		break;
-	case NC_VERB_WARNING:
-		syslog(LOG_WARNING, "%s", msg);
-		break;
-	case NC_VERB_VERBOSE:
-		syslog(LOG_INFO, "%s", msg);
-		break;
-	case NC_VERB_DEBUG:
-		syslog(LOG_DEBUG, "%s", msg);
-		break;
-	}
+    switch (level) {
+    case NC_VERB_ERROR:
+        syslog(LOG_ERR, "%s", msg);
+        break;
+    case NC_VERB_WARNING:
+        syslog(LOG_WARNING, "%s", msg);
+        break;
+    case NC_VERB_VERBOSE:
+        syslog(LOG_INFO, "%s", msg);
+        break;
+    case NC_VERB_DEBUG:
+        syslog(LOG_DEBUG, "%s", msg);
+        break;
+    }
 }

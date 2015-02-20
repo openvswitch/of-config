@@ -1,0 +1,11 @@
+<?xml version="1.0"?>
+<capable-switch xmlns="urn:onf:config:yang">
+  <id>openvswitch</id>
+  <resources>
+    <queue xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0" nc:operation="remove">
+      <resource-id>cfe5654e-0fad-4586-b36e-1984645fbb49</resource-id>
+    </queue>
+  </resources>
+</capable-switch>
+
+

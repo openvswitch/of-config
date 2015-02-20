@@ -24,6 +24,8 @@
 #include <stdint.h>
 #include <sys/ioctl.h>
 #include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 #include <unistd.h>
 
 /* libovs */
@@ -55,6 +57,7 @@ typedef struct {
     unsigned int seqno;
     struct vconn *vconn;
     ofc_resmap_t *resource_map;
+	struct ofc_resmap_certificate *cert_map;
 } ovsdb_t;
 ovsdb_t *ovsdb_handler = NULL;
 
@@ -1085,26 +1088,177 @@ get_bridges_config(void)
 }
 
 static char *
-get_owned_certificates_config()
+get_owned_certificates_config(void)
 {
-    /* TODO owned certificate "<owned-certificate>"
-     * "<resource-id>%s</resource-id>" "<certificate>%s</certificate>"
-     * "<private-key>" "<key-type>" "<dsa>" "<DSAKeyValue>" "<P>%s</P>"
-     * "<Q>%s</Q>" "<J>%s</J>" "<G>%s</G>" "<Y>%s</Y>" "<Seed>%s</Seed>"
-     * "<PgenCounter>%s</PgenCounter>" "</DSAKeyValue>" "</dsa>" "<rsa>"
-     * "<RSAKeyValue>" "<Modulus>%s</Modulus>" "<Exponent>%s</Exponent>"
-     * "</RSAKeyValue>" "</rsa>" "</key-type>" "</private-key>"
-     * "</owned-certificate>" */
-    return NULL;
+    struct ds str;
+    off_t size;
+    char* pem, *pem_start, *pem_end;
+    const struct ovsrec_ssl *ssl;
+    int fd;
+
+    ds_init(&str);
+
+    ssl = ovsrec_ssl_first(ovsdb_handler->idl);
+    if (ssl != NULL && ovsdb_handler->cert_map->owned_resid != NULL &&
+            ssl->certificate != NULL && ssl->private_key != NULL) {
+        if (memcmp(&ovsdb_handler->cert_map->uuid, &ssl->header_.uuid, sizeof(struct uuid))) {
+            ds_destroy(&str);
+            return NULL;
+        }
+
+        ds_put_format(&str, "<owned-certificate>");
+        ds_put_format(&str, "<resource-id>%s</resource-id>", ovsdb_handler->cert_map->owned_resid);
+
+        /* certificate */
+        fd = open(ssl->certificate, O_RDONLY);
+        if (fd == -1) {
+            ds_destroy(&str);
+            return NULL;
+        }
+        size = lseek(fd, 0, SEEK_END);
+        lseek(fd, 0, SEEK_SET);
+        pem = malloc(size+1);
+        if (pem == NULL) {
+            ds_destroy(&str);
+            close(fd);
+            return NULL;
+        }
+        if (read(fd, pem, size) < size) {
+            ds_destroy(&str);
+            close(fd);
+            free(pem);
+            return NULL;
+        }
+        close(fd);
+        pem[size] = '\0';
+
+        pem_start = strstr(pem, "-----BEGIN CERTIFICATE-----\n");
+        pem_end = strstr(pem, "\n-----END CERTIFICATE-----");
+        if (pem_start == NULL || pem_end == NULL) {
+            ds_destroy(&str);
+            free(pem);
+            return NULL;
+        }
+        pem_start += 28;
+        *pem_end = '\0';
+
+        ds_put_format(&str, "<certificate>%s</certificate>", pem_start);
+        free(pem);
+
+        /* private-key */
+        ds_put_format(&str, "<private-key>");
+
+        fd = open(ssl->private_key, O_RDONLY);
+        if (fd == -1) {
+            ds_destroy(&str);
+            return NULL;
+        }
+        size = lseek(fd, 0, SEEK_END);
+        lseek(fd, 0, SEEK_SET);
+        pem = malloc(size+1);
+        if (pem == NULL) {
+            ds_destroy(&str);
+            close(fd);
+            return NULL;
+        }
+        if (read(fd, pem, size) < size) {
+            ds_destroy(&str);
+            close(fd);
+            free(pem);
+            return NULL;
+        }
+        close(fd);
+        pem[size] = '\0';
+
+        pem_start = strstr(pem, "-----BEGIN RSA PRIVATE KEY-----\n");
+        pem_end = strstr(pem, "\n-----END RSA PRIVATE KEY-----");
+        if (pem_start == NULL) {
+            pem_start = strstr(pem, "-----BEGIN DSA PRIVATE KEY-----\n");
+            pem_end = strstr(pem, "\n-----END DSA PRIVATE KEY-----");
+        }
+        if (pem_start == NULL || pem_end == NULL) {
+            ds_destroy(&str);
+            free(pem);
+            return NULL;
+        }
+        pem_start += 32;
+        *pem_end = '\0';
+        pem_end += 10;
+        *(pem_end+3) = '\0';
+
+        ds_put_format(&str, "<key-type>%s</key-type>", pem_end);
+        ds_put_format(&str, "<key-data>%s</key-data>", pem_start);
+        free(pem);
+        ds_put_format(&str, "</private-key>");
+
+        ds_put_format(&str, "</owned-certificate>");
+    }
+
+    return ds_steal_cstr(&str);
 }
 
 static char *
-get_external_certificates_config()
+get_external_certificates_config(void)
 {
-    /* TODO external-certificate "<external-certificate>"
-     * "<resource-id>%s</resource-id>" "<certificate>%s</certificate>"
-     * "</external-certificate>" */
-    return NULL;
+    struct ds str;
+    off_t size;
+    char* pem, *pem_start, *pem_end;
+    const struct ovsrec_ssl *ssl;
+    int fd;
+
+    ds_init(&str);
+
+    ssl = ovsrec_ssl_first(ovsdb_handler->idl);
+    if (ssl != NULL && ovsdb_handler->cert_map->external_resid != NULL &&
+            ssl->ca_cert != NULL) {
+        if (memcmp(&ovsdb_handler->cert_map->uuid, &ssl->header_.uuid, sizeof(struct uuid))) {
+            ds_destroy(&str);
+            return NULL;
+        }
+
+        ds_put_format(&str, "<external-certificate>");
+        ds_put_format(&str, "<resource-id>%s</resource-id>", ovsdb_handler->cert_map->external_resid);
+
+        /* certificate (ca_cert) */
+        fd = open(ssl->ca_cert, O_RDONLY);
+        if (fd == -1) {
+            ds_destroy(&str);
+            return NULL;
+        }
+        size = lseek(fd, 0, SEEK_END);
+        lseek(fd, 0, SEEK_SET);
+        pem = malloc(size+1);
+        if (pem == NULL) {
+            ds_destroy(&str);
+            close(fd);
+            return NULL;
+        }
+        if (read(fd, pem, size) < size) {
+            ds_destroy(&str);
+            close(fd);
+            free(pem);
+            return NULL;
+        }
+        close(fd);
+        pem[size] = '\0';
+
+        pem_start = strstr(pem, "-----BEGIN CERTIFICATE-----\n");
+        pem_end = strstr(pem, "\n-----END CERTIFICATE-----");
+        if (pem_start == NULL || pem_end == NULL) {
+            ds_destroy(&str);
+            free(pem);
+            return NULL;
+        }
+        pem_start += 28;
+        *pem_end = '\0';
+
+        ds_put_format(&str, "<certificate>%s</certificate>", pem_start);
+        free(pem);
+
+        ds_put_format(&str, "</external-certificate>");
+    }
+
+    return ds_steal_cstr(&str);
 }
 
 /* synchronize local copy of OVSDB */
@@ -1284,6 +1438,12 @@ ofc_init(const char *ovs_db_path)
         return false;
     }
 
+    p->cert_map = calloc(1, sizeof(struct ofc_resmap_certificate));
+    if (p->cert_map == NULL) {
+        free(p);
+        return false;
+    }
+
     ovsrec_init();
     p->idl = ovsdb_idl_create(ovs_db_path, &ovsrec_idl_class, true, true);
     p->txn = NULL;
@@ -1305,6 +1465,7 @@ ofc_destroy(void)
         ovsdb_idl_destroy(ovsdb_handler->idl);
 
         ofc_resmap_destroy(&ovsdb_handler->resource_map);
+        free(ovsdb_handler->cert_map);
 
         free(ovsdb_handler);
         ovsdb_handler = NULL;
@@ -1769,6 +1930,284 @@ txn_del_bridge_port(const xmlChar *br_name, const xmlChar *port_name)
 }
 
 void
+txn_add_owned_certificate(xmlNodePtr node)
+{
+    const struct ovsrec_open_vswitch *ovs;
+    const struct ovsrec_ssl *ssl;
+    xmlNodePtr aux, leaf;
+    xmlChar *xmlval;
+    int fd, mod;
+    char *key_type, *key_data;
+
+    if (!node) {
+        return;
+    }
+
+    /* prepare new structures to set content of the SSL configuration */
+    ssl = ovsrec_ssl_first(ovsdb_handler->idl);
+    if (!ssl) {
+        mod = 0;
+        ssl = ovsrec_ssl_insert(ovsdb_handler->txn);
+    } else {
+        mod = 1;
+        if (memcmp(&ovsdb_handler->cert_map->uuid, &ssl->header_.uuid, sizeof(struct uuid))) {
+            /* TODO error, this SSL table UUID does not match the saved one */
+        }
+    }
+
+    for (aux = node->children; aux; aux = aux->next) {
+        if (aux->type != XML_ELEMENT_NODE) {
+            continue;
+        }
+
+        if (xmlStrEqual(aux->name, BAD_CAST "resource-id")) {
+            xmlval = xmlNodeGetContent(aux);
+            if (mod) {
+                if (ovsdb_handler->cert_map->owned_resid != NULL &&
+                    strcmp(ovsdb_handler->cert_map->owned_resid, (char*) xmlval)) {
+                    xmlFree(xmlval);
+                    /* TODO error, second owned-certificate item in the list, not allowed */
+                }
+            } else {
+                if (ovsdb_handler->cert_map->owned_resid != NULL) {
+                    /* TODO error, resid filled without any SSL table */
+                }
+                memcpy(&ovsdb_handler->cert_map->uuid, &ssl->header_.uuid, sizeof(struct uuid));
+            }
+            ovsdb_handler->cert_map->owned_resid = (char*) xmlval;
+            xmlval = NULL;
+        } else if (xmlStrEqual(aux->name, BAD_CAST "certificate")) {
+            /* TODO error check */
+            fd = creat(OFC_DATADIR "/cert.pem", 0644);
+            write(fd, "-----BEGIN CERTIFICATE-----\n", 28);
+            xmlval = xmlNodeGetContent(aux);
+            write(fd, (char*) xmlval, xmlStrlen(xmlval));
+            xmlFree(xmlval);
+            write(fd, "\n-----END CERTIFICATE-----", 26);
+            close(fd);
+            ovsrec_ssl_set_certificate(ssl, OFC_DATADIR "/cert.pem");
+        } else if (xmlStrEqual(aux->name, BAD_CAST "private-key")) {
+            for (leaf = aux->children; leaf; leaf = leaf->next) {
+                if (xmlStrEqual(leaf->name, BAD_CAST "key-type")) {
+                    key_type = (char*) xmlNodeGetContent(leaf);
+                } else if (xmlStrEqual(leaf->name, BAD_CAST "key-data")) {
+                    key_data = (char*) xmlNodeGetContent(leaf);
+                }
+            }
+
+            /* TODO error check */
+            fd = creat(OFC_DATADIR "/key.pem", 0600);
+            write(fd, "-----BEGIN ", 11);
+            write(fd, key_type, strlen(key_type));
+            write(fd, " PRIVATE KEY-----\n", 18);
+            write(fd, key_data, strlen(key_data));
+            write(fd, "\n-----END ", 10);
+            write(fd, key_type, strlen(key_type));
+            write(fd, " PRIVATE KEY-----", 17);
+            close(fd);
+            free(key_type);
+            free(key_data);
+            ovsrec_ssl_set_private_key(ssl, OFC_DATADIR "/key.pem");
+        }
+    }
+
+    /* get the Open_vSwitch table for linking the SSL structure into */
+    if (!mod) {
+        ovs = ovsrec_open_vswitch_first(ovsdb_handler->idl);
+        if (!ovs) {
+            ovs = ovsrec_open_vswitch_insert(ovsdb_handler->txn);
+        }
+        ovsrec_open_vswitch_set_ssl(ovs, ssl);
+    }
+}
+
+void
+txn_add_external_certificate(xmlNodePtr node)
+{
+    const struct ovsrec_open_vswitch *ovs;
+    const struct ovsrec_ssl *ssl;
+    xmlNodePtr aux;
+    xmlChar *xmlval;
+    int fd, mod;
+
+    if (!node) {
+        return;
+    }
+
+    /* prepare new structures to set content of the SSL configuration */
+    ssl = ovsrec_ssl_first(ovsdb_handler->idl);
+    if (!ssl) {
+        mod = 0;
+        ssl = ovsrec_ssl_insert(ovsdb_handler->txn);
+    } else {
+        mod = 1;
+        if (memcmp(&ovsdb_handler->cert_map->uuid, &ssl->header_.uuid, sizeof(struct uuid))) {
+            /* TODO error, this SSL table UUID does not match the saved one */
+        }
+    }
+
+    for (aux = node->children; aux; aux = aux->next) {
+        if (aux->type != XML_ELEMENT_NODE) {
+            continue;
+        }
+
+        if (xmlStrEqual(aux->name, BAD_CAST "resource-id")) {
+            xmlval = xmlNodeGetContent(aux);
+            if (mod) {
+                if (ovsdb_handler->cert_map->external_resid != NULL &&
+                        strcmp(ovsdb_handler->cert_map->external_resid, (char*) xmlval)) {
+                    xmlFree(xmlval);
+                    /* TODO error, second external-certificate item in the list, not allowed */
+                }
+            } else {
+                if (ovsdb_handler->cert_map->external_resid != NULL) {
+                    /* TODO error, resid filled without any SSL table */
+                }
+                memcpy(&ovsdb_handler->cert_map->uuid, &ssl->header_.uuid, sizeof(struct uuid));
+            }
+            ovsdb_handler->cert_map->external_resid = (char*) xmlval;
+            xmlval = NULL;
+        } else if (xmlStrEqual(aux->name, BAD_CAST "certificate")) {
+            /* TODO error check */
+            fd = creat(OFC_DATADIR "/ca_cert.pem", 0644);
+            write(fd, "-----BEGIN CERTIFICATE-----\n", 28);
+            xmlval = xmlNodeGetContent(aux);
+            write(fd, (char*) xmlval, xmlStrlen(xmlval));
+            xmlFree(xmlval);
+            write(fd, "\n-----END CERTIFICATE-----", 26);
+            close(fd);
+            ovsrec_ssl_set_ca_cert(ssl, OFC_DATADIR "/ca_cert.pem");
+        }
+    }
+
+    /* get the Open_vSwitch table for linking the SSL structure into */
+    if (!mod) {
+        ovs = ovsrec_open_vswitch_first(ovsdb_handler->idl);
+        if (!ovs) {
+            ovs = ovsrec_open_vswitch_insert(ovsdb_handler->txn);
+        }
+        ovsrec_open_vswitch_set_ssl(ovs, ssl);
+    }
+}
+
+void
+txn_del_owned_certificate(xmlNodePtr node)
+{
+    const struct ovsrec_open_vswitch *ovs;
+    const struct ovsrec_ssl *ssl;
+    xmlNodePtr aux;
+    xmlChar *xmlval;
+
+    if (!node) {
+        return;
+    }
+
+    ssl = ovsrec_ssl_first(ovsdb_handler->idl);
+    if (!ssl) {
+        /* TODO error, cannot delete, no SSL table */
+    }
+    if (memcmp(&ovsdb_handler->cert_map->uuid, &ssl->header_.uuid, sizeof(struct uuid))) {
+        /* TODO error, this SSL table UUID does not match the saved one */
+    }
+
+    for (aux = node->children; aux; aux = aux->next) {
+        if (aux->type != XML_ELEMENT_NODE) {
+            continue;
+        }
+
+        if (xmlStrEqual(aux->name, BAD_CAST "resource-id")) {
+            xmlval = xmlNodeGetContent(aux);
+            if (ovsdb_handler->cert_map->owned_resid == NULL ||
+                    strcmp(ovsdb_handler->cert_map->owned_resid, (char*) xmlval)) {
+                xmlFree(xmlval);
+                /* TODO error, unknown saved resid, should not happen normally */
+            }
+            xmlFree(xmlval);
+
+            free(ovsdb_handler->cert_map->owned_resid);
+            ovsdb_handler->cert_map->owned_resid = NULL;
+        } else if (xmlStrEqual(aux->name, BAD_CAST "certificate")) {
+            /* TODO error check */
+            unlink(OFC_DATADIR "/cert.pem");
+            ovsrec_ssl_set_certificate(ssl, NULL);
+        } else if (xmlStrEqual(aux->name, BAD_CAST "private-key")) {
+            /* TODO error check */
+            unlink(OFC_DATADIR "/key.pem");
+            ovsrec_ssl_set_private_key(ssl, NULL);
+        }
+    }
+
+    /* get the Open_vSwitch table for linking the SSL structure into */
+    ovs = ovsrec_open_vswitch_first(ovsdb_handler->idl);
+    if (!ovs) {
+        /* TODO error, no vswitch structure to delete from, how come? */
+    }
+    if (ovsdb_handler->cert_map->external_resid == NULL && ssl->ca_cert == NULL) {
+        ovsrec_open_vswitch_set_ssl(ovs, NULL);
+        ovsrec_ssl_delete(ssl);
+    } else {
+        ovsrec_open_vswitch_set_ssl(ovs, ssl);
+    }
+}
+
+void
+txn_del_external_certificate(xmlNodePtr node)
+{
+    const struct ovsrec_open_vswitch *ovs;
+    const struct ovsrec_ssl *ssl;
+    xmlNodePtr aux;
+    xmlChar *xmlval;
+
+    if (!node) {
+        return;
+    }
+
+    ssl = ovsrec_ssl_first(ovsdb_handler->idl);
+    if (!ssl) {
+        /* TODO error, cannot delete, no SSL table */
+    }
+    if (memcmp(&ovsdb_handler->cert_map->uuid, &ssl->header_.uuid, sizeof(struct uuid))) {
+        /* TODO error, this SSL table UUID does not match the saved one */
+    }
+
+    for (aux = node->children; aux; aux = aux->next) {
+        if (aux->type != XML_ELEMENT_NODE) {
+            continue;
+        }
+
+        if (xmlStrEqual(aux->name, BAD_CAST "resource-id")) {
+            xmlval = xmlNodeGetContent(aux);
+            if (ovsdb_handler->cert_map->external_resid == NULL ||
+                    strcmp(ovsdb_handler->cert_map->external_resid, (char*) xmlval)) {
+                xmlFree(xmlval);
+                /* TODO error, unknown saved resid, should not happen normally */
+            }
+            xmlFree(xmlval);
+
+            free(ovsdb_handler->cert_map->external_resid);
+            ovsdb_handler->cert_map->external_resid = NULL;
+        } else if (xmlStrEqual(aux->name, BAD_CAST "certificate")) {
+            /* TODO error check */
+            unlink(OFC_DATADIR "/ca_cert.pem");
+            ovsrec_ssl_set_ca_cert(ssl, NULL);
+        }
+    }
+
+    /* get the Open_vSwitch table for linking the SSL structure into */
+    ovs = ovsrec_open_vswitch_first(ovsdb_handler->idl);
+    if (!ovs) {
+        /* TODO error, no vswitch structure to delete from, how come? */
+    }
+    if (ovsdb_handler->cert_map->owned_resid == NULL &&
+            ssl->certificate == NULL && ssl->private_key == NULL) {
+        ovsrec_open_vswitch_set_ssl(ovs, NULL);
+        ovsrec_ssl_delete(ssl);
+    } else {
+        ovsrec_open_vswitch_set_ssl(ovs, ssl);
+    }
+}
+
+void
 txn_add_bridge_port(const xmlChar *br_name, const xmlChar *port_name)
 {
     const struct ovsrec_bridge *bridge;
@@ -1908,6 +2347,81 @@ txn_del_bridge_queue(const xmlChar *br_name, const xmlChar *resource_id)
         }
     }
 }
+
+void
+txn_add_bridge_certificate(const xmlChar *br_name, const xmlChar *resource_id)
+{
+    const struct ovsrec_bridge *bridge;
+    const struct ovsrec_ssl *ssl;
+
+    if (!resource_id || !br_name) {
+        return;
+    }
+
+    nc_verb_verbose("Add certificate %s to %s bridge resource list.",
+                    BAD_CAST resource_id, BAD_CAST br_name);
+    OVSREC_BRIDGE_FOR_EACH(bridge, ovsdb_handler->idl) {
+        if (xmlStrEqual(br_name, BAD_CAST bridge->name)) {
+            break;
+        }
+    }
+    if (bridge == NULL) {
+        /* not found */
+        return;
+    }
+
+    if (ovsdb_handler->cert_map->owned_resid == NULL || strcmp(ovsdb_handler->cert_map->owned_resid, (const char *) resource_id)) {
+        /* not found */
+        return;
+    }
+    ssl = ovsrec_ssl_first(ovsdb_handler->idl);
+    if (ssl == NULL || memcmp(&ssl->header_.uuid, &ovsdb_handler->cert_map->uuid, sizeof(struct uuid))) {
+        /* something wrong */
+        return;
+    }
+
+    /* TODO make the bridge use the ssl somehow */
+    //ovsrec_bridge_set_ssl(bridge, ssl);
+}
+
+void
+txn_del_bridge_certificate(const xmlChar *br_name, const xmlChar *resource_id)
+{
+    const struct ovsrec_bridge *bridge;
+    //struct ovsrec_ssl *ssl;
+
+    if (!resource_id || !br_name) {
+        return;
+    }
+
+    nc_verb_verbose("Delete certificate %s from %s bridge resource list.",
+                    BAD_CAST resource_id, BAD_CAST br_name);
+    OVSREC_BRIDGE_FOR_EACH(bridge, ovsdb_handler->idl) {
+        if (xmlStrEqual(br_name, BAD_CAST bridge->name)) {
+            break;
+        }
+    }
+    if (bridge == NULL) {
+        /* not found */
+        return;
+    }
+
+    /* The owned-certificate node could have been already removed,
+     * before getting here, so there is nothing for me to check. */
+    /*if (ovsdb_handler->cert_map->owned_resid == NULL || strcmp(ovsdb_handler->cert_map->owned_resid, (const char *) resource_id)) {
+        * not found *
+        return;
+    }
+    ssl = ovsrec_ssl_first(ovsdb_handler->idl);
+    if (ssl == NULL) { || memcmp(&ssl->header_.uuid, &ovsdb_handler->cert_map->uuid, sizeof(struct uuid))) {
+        * something wrong *
+        return;
+    }*/
+
+    /* TODO make the bridge use the ssl somehow */
+    //ovsrec_bridge_set_ssl(bridge, NULL);
+}
+
 
 void
 txn_del_bridge_flow_table(const xmlChar *br_name, const xmlChar *resource_id)

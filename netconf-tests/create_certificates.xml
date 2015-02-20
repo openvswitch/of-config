@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<capable-switch xmlns="urn:onf:config:yang">
+  <id>openvswitch</id>
+  <resources>
+    <owned-certificate>
+      <resource-id>owncertid</resource-id>
+      <certificate>MIID+TCCAuGgA...</certificate>
+      <private-key>
+        <key-type>RSA</key-type>
+        <key-data>MIIEowIBAAKCAQ...</key-data>
+      </private-key>
+    </owned-certificate>
+    <external-certificate>
+      <resource-id>extcertid</resource-id>
+      <certificate>MIID7TCCAtWgA...</certificate>
+    </external-certificate>
+  </resources>
+</capable-switch>

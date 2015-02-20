@@ -961,8 +961,15 @@ edit_delete(xmlNodePtr node, int running)
                 if (xmlStrEqual(node->name, BAD_CAST "port")) {
                     key = go2node(node, BAD_CAST "name");
                     txn_del_port(key->children->content);
+                } else if (xmlStrEqual(node->name, BAD_CAST "queue")) {
+                    /* TODO queue */
+                } else if (xmlStrEqual(node->name, BAD_CAST "owned-certificate")) {
+                    txn_del_owned_certificate(node);
+                } else if (xmlStrEqual(node->name, BAD_CAST "external-certificate")) {
+                    txn_del_external_certificate(node);
+                } else { /* flow-table */
+                    /* TODO flow-table */
                 }
-                /* TODO queue, owned-certificate, external-certificate, flow-table */
             } else { /* logical-switch */
                 /* get bridge name */
                 key = go2node(node->parent->parent, BAD_CAST "id");
@@ -974,8 +981,11 @@ edit_delete(xmlNodePtr node, int running)
                 } else if (xmlStrEqual(node->name, BAD_CAST "queue")) {
                     txn_del_bridge_queue(key->children->content,
                                            node->children->content);
+                } else if (xmlStrEqual(node->name, BAD_CAST "certificate")) {
+                    txn_del_bridge_certificate(key->children->content,
+                                           node->children->content);
                 }
-                /* TODO queue, certificate, flow-table */
+                /* TODO queue, flow-table */
             }
         } else if (xmlStrEqual(node->name, BAD_CAST "switch")) {
             /* remove bridge */
@@ -1166,9 +1176,11 @@ edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running,
                     txn_add_queue(edit);
                 } else if (xmlStrEqual(edit->name, BAD_CAST "flow-table")) {
                     txn_add_flow_table(edit);
+                } else if (xmlStrEqual(edit->name, BAD_CAST "owned-certificate")) {
+                    txn_add_owned_certificate(edit);
+                } else { /* external-certificate */
+                    txn_add_external_certificate(edit);
                 }
-
-                /* TODO owned-certificate, external-certificate */
             } else { /* logical-switch */
                 /* get bridge name */
                 key = go2node(edit->parent->parent, BAD_CAST "id");
@@ -1180,8 +1192,11 @@ edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running,
                 } else if (xmlStrEqual(edit->name, BAD_CAST "flow-table")) {
                     txn_add_bridge_flow_table(key->children->content,
                                         edit->children->content);
+                } else if (xmlStrEqual(edit->name, BAD_CAST "certificate")) {
+                    txn_add_bridge_certificate(key->children->content,
+                                        edit->children->content);
                 }
-                /* TODO queue (it is added to port), certificate, flow-table */
+                /* TODO queue (it is added to port), flow-table */
             }
         } else if (xmlStrEqual(edit->name, BAD_CAST "switch")) {
             /* create bridge */

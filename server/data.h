@@ -74,6 +74,8 @@ void txn_del_bridge_queue(const xmlChar *br_name, const xmlChar *resource_id);
 void txn_add_bridge_queue(const xmlChar *br_name, const xmlChar *resource_id);
 void txn_del_bridge_flow_table(const xmlChar *br_name, const xmlChar *resource_id);
 void txn_add_bridge_flow_table(const xmlChar *br_name, const xmlChar *resource_id);
+void txn_del_bridge_certificate(const xmlChar *br_name, const xmlChar *resource_id);
+void txn_add_bridge_certificate(const xmlChar *br_name, const xmlChar *resource_id);
 void txn_del_bridge(const xmlChar *br_name);
 void txn_add_bridge(xmlNodePtr node);
 void txn_mod_bridge_datapath(const xmlChar *br_name, const xmlChar* value);
@@ -88,6 +90,11 @@ void txn_del_port_tunnel(const xmlChar *port_name, xmlNodePtr tunnel_node);
 
 void txn_add_queue(xmlNodePtr node);
 void txn_add_flow_table(xmlNodePtr node);
+
+void txn_add_owned_certificate(xmlNodePtr node);
+void txn_del_owned_certificate(xmlNodePtr node);
+void txn_add_external_certificate(xmlNodePtr node);
+void txn_del_external_certificate(xmlNodePtr node);
 
 /*
  * Set port parameters

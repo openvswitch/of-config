@@ -970,6 +970,9 @@ edit_delete(xmlNodePtr node, int running)
                 if (xmlStrEqual(node->name, BAD_CAST "port")) {
                     txn_del_bridge_port(key->children->content,
                                            node->children->content);
+                } else if (xmlStrEqual(node->name, BAD_CAST "queue")) {
+                    txn_del_bridge_queue(key->children->content,
+                                           node->children->content);
                 }
                 /* TODO queue, certificate, flow-table */
             }
@@ -1158,8 +1161,13 @@ edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running,
             if (xmlStrEqual(edit->parent->parent->name, BAD_CAST "capable-switch")) {
                 if (xmlStrEqual(edit->name, BAD_CAST "port")) {
                     txn_add_port(edit);
+                } else if (xmlStrEqual(edit->name, BAD_CAST "queue")) {
+                    txn_add_queue(edit);
+                } else if (xmlStrEqual(edit->name, BAD_CAST "flow-table")) {
+                    txn_add_flow_table(edit);
                 }
-                /* TODO queue, owned-certificate, external-certificate, flow-table */
+
+                /* TODO owned-certificate, external-certificate */
             } else { /* logical-switch */
                 /* get bridge name */
                 key = go2node(edit->parent->parent, BAD_CAST "id");
@@ -1168,8 +1176,11 @@ edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running,
                 if (xmlStrEqual(edit->name, BAD_CAST "port")) {
                     txn_add_bridge_port(key->children->content,
                                         edit->children->content);
+                } else if (xmlStrEqual(edit->name, BAD_CAST "flow-table")) {
+                    txn_add_bridge_flow_table(key->children->content,
+                                        edit->children->content);
                 }
-                /* TODO queue, certificate, flow-table */
+                /* TODO queue (it is added to port), certificate, flow-table */
             }
         } else if (xmlStrEqual(edit->name, BAD_CAST "switch")) {
             /* create bridge */

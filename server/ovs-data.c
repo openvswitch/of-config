@@ -432,6 +432,52 @@ get_flow_tables_config(void)
     return ds_steal_cstr(&string);
 }
 
+static bool
+find_queue_id(const struct ovsrec_queue *queue, int64_t *id)
+{
+    const struct ovsrec_qos *row;
+    size_t i;
+    int cmp;
+    OVSREC_QOS_FOR_EACH(row, ovsdb_handler->idl) {
+        for (i = 0; i < row->n_queues; i++) {
+            cmp = uuid_compare_3way(&queue->header_.uuid,
+                                    &row->value_queues[i]->header_.uuid);
+            if (cmp == 0) {
+                /* found */
+                *id = row->key_queues[i];
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+static bool
+find_queue_port(const struct ovsrec_queue *queue, const char **port_name)
+{
+    const struct ovsrec_port *row;
+    const struct ovsrec_qos *qos;
+    size_t q;
+    int cmp;
+    OVSREC_PORT_FOR_EACH(row, ovsdb_handler->idl) {
+        qos = row->qos;
+        if (qos == NULL) {
+            continue;
+        }
+        for (q = 0; q < qos->n_queues; q++) {
+            /* compare with resource-id */
+            cmp = uuid_compare_3way(&qos->value_queues[q]->header_.uuid,
+                                    &queue->header_.uuid);
+            if (cmp == 0) {
+                *port_name = row->name;
+                return true;
+            }
+        }
+    }
+    *port_name = NULL;
+    return false;
+}
+
 static char *
 get_queues_config(void)
 {
@@ -445,7 +491,8 @@ get_queues_config(void)
        */
     const struct ovsrec_queue *row, *next;
     struct ds string;
-    const char *resource_id;
+    const char *resource_id, *port_name;
+    int64_t id;
 
     ds_init(&string);
     OVSREC_QUEUE_FOR_EACH_SAFE(row, next, ovsdb_handler->idl) {
@@ -453,8 +500,16 @@ get_queues_config(void)
                                           &row->header_.uuid);
 
         ds_put_format(&string,
-                      "<queue><resource-id>%s</resource-id><properties>",
+                      "<queue><resource-id>%s</resource-id>",
                       resource_id);
+        if (find_queue_id(row, &id)) {
+            ds_put_format(&string, "<id>%"PRIi64"</id>", id);
+        }
+        find_queue_port(row, &port_name);
+        if (port_name != NULL) {
+            ds_put_format(&string, "<port>%s</port>", port_name);
+        }
+        ds_put_format(&string, "<properties>");
         find_and_append_smap_val(&row->other_config, "min-rate", "min-rate",
                                  &string);
         find_and_append_smap_val(&row->other_config, "max-rate", "max-rate",
@@ -1347,17 +1402,40 @@ txn_del_all(void)
 {
     const struct ovsrec_open_vswitch *ovs;
     const struct ovsrec_flow_sample_collector_set *fscs;
+    const struct ovsrec_qos *qos;
+    const struct ovsrec_queue *queue;
+    const struct ovsrec_port *port;
+    nc_verb_verbose("Delete all (%s:%d)", __FILE__, __LINE__);
 
     /* remove all settings - we need only to remove two base tables
      * Open_vSwitch and Flow_Sample_Collector_set, the rest will be done by
      * garbage collection
      */
     OVSREC_OPEN_VSWITCH_FOR_EACH(ovs, ovsdb_handler->idl) {
+        ovsrec_open_vswitch_set_bridges(ovs, NULL, 0);
         ovsrec_open_vswitch_delete(ovs);
     }
 
     OVSREC_FLOW_SAMPLE_COLLECTOR_SET_FOR_EACH(fscs, ovsdb_handler->idl) {
         ovsrec_flow_sample_collector_set_delete(fscs);
+    }
+
+    /* sometimes, Queue is not removed by OVSDB... commit and delete rest */
+    txn_commit(NULL);
+    txn_init();
+
+    OVSREC_QOS_FOR_EACH(qos, ovsdb_handler->idl) {
+        ovsrec_qos_set_queues(qos, NULL, NULL, 0);
+        ovsrec_qos_delete(qos);
+    }
+
+    OVSREC_QUEUE_FOR_EACH(queue, ovsdb_handler->idl) {
+        ovsrec_queue_delete(queue);
+    }
+
+    OVSREC_PORT_FOR_EACH(port, ovsdb_handler->idl) {
+        ovsrec_port_set_qos(port, NULL);
+        ovsrec_port_delete(port);
     }
 }
 
@@ -1458,7 +1536,9 @@ txn_add_port(xmlNodePtr node)
 
         if (xmlStrEqual(aux->name, BAD_CAST "name")) {
             xmlval = xmlNodeGetContent(aux);
+            ovsrec_interface_verify_name(iface);
             ovsrec_interface_set_name(iface, (char*) xmlval);
+            ovsrec_port_verify_name(port);
             ovsrec_port_set_name(port, (char*) xmlval);
             xmlFree(xmlval);
         } else if (xmlStrEqual(aux->name, BAD_CAST "requested-number")) {
@@ -1494,6 +1574,140 @@ txn_add_port(xmlNodePtr node)
 }
 
 void
+txn_add_queue(xmlNodePtr node)
+{
+    xmlNodePtr aux, prop;
+    xmlChar *port_name = NULL, *id = NULL, *min_rate = NULL, *max_rate = NULL;
+    xmlChar *resource_id = NULL;
+    struct ovsrec_qos *qos;
+    struct ovsrec_queue *queue;
+    const struct ovsrec_port *port;
+
+    if (!node) {
+        return;
+    }
+
+    for (aux = node->children; aux; aux = aux->next) {
+        if (aux->type != XML_ELEMENT_NODE) {
+            continue;
+        }
+
+        if (xmlStrEqual(aux->name, BAD_CAST "resource-id")) {
+            resource_id = xmlNodeGetContent(aux);
+        } else if (xmlStrEqual(aux->name, BAD_CAST "id")) {
+            id = xmlNodeGetContent(aux);
+        } else if (xmlStrEqual(aux->name, BAD_CAST "port")) {
+            port_name = xmlNodeGetContent(aux);
+        } else if (xmlStrEqual(aux->name, BAD_CAST "properties")) {
+            for (prop = aux->children; prop; prop = prop->next) {
+                if (xmlStrEqual(prop->name, BAD_CAST "min-rate")) {
+                    min_rate = xmlNodeGetContent(prop);
+                } else if (xmlStrEqual(prop->name, BAD_CAST "max-rate")) {
+                    max_rate = xmlNodeGetContent(prop);
+                }
+            }
+        }
+    }
+    nc_verb_verbose("Add queue %s to %s.", BAD_CAST resource_id, BAD_CAST port_name);
+
+    /* TODO check if exists */
+
+    /* create new */
+    qos = ovsrec_qos_insert(ovsdb_handler->txn);
+    queue = ovsrec_queue_insert(ovsdb_handler->txn);
+    int64_t key;
+    if (sscanf((char *) id, "%"SCNi64, &key) != 1) {
+        /* parsing error, wrong number */
+    }
+    ovsrec_qos_verify_queues(qos);
+    ovsrec_qos_set_queues(qos, (int64_t *) &key, (struct ovsrec_queue **) &queue, 1);
+    OVSREC_PORT_FOR_EACH(port, ovsdb_handler->idl) {
+        if (xmlStrEqual(port_name, BAD_CAST port->name)) {
+            ovsrec_port_verify_qos(port);
+            ovsrec_port_set_qos(port, qos);
+            break;
+        }
+    }
+    if (max_rate != NULL) {
+        smap_add_once(&queue->other_config, "max-rate", (char *) max_rate);
+        xmlFree(max_rate);
+    }
+    if (min_rate != NULL) {
+        smap_add_once(&queue->other_config, "min-rate", (char *) min_rate);
+        xmlFree(min_rate);
+    }
+    ovsrec_queue_verify_other_config(queue);
+    ovsrec_queue_set_other_config(queue, &queue->other_config);
+}
+
+void
+txn_add_flow_table(xmlNodePtr node)
+{
+    xmlNodePtr aux, prop;
+    xmlChar *port_name = NULL, *id = NULL, *min_rate = NULL, *max_rate = NULL;
+    xmlChar *resource_id = NULL;
+    struct ovsrec_qos *qos;
+    struct ovsrec_queue *queue;
+    const struct ovsrec_port *port;
+
+    if (!node) {
+        return;
+    }
+
+    for (aux = node->children; aux; aux = aux->next) {
+        if (aux->type != XML_ELEMENT_NODE) {
+            continue;
+        }
+
+        if (xmlStrEqual(aux->name, BAD_CAST "resource-id")) {
+            resource_id = xmlNodeGetContent(aux);
+        } else if (xmlStrEqual(aux->name, BAD_CAST "id")) {
+            id = xmlNodeGetContent(aux);
+        } else if (xmlStrEqual(aux->name, BAD_CAST "port")) {
+            port_name = xmlNodeGetContent(aux);
+        } else if (xmlStrEqual(aux->name, BAD_CAST "properties")) {
+            for (prop = aux->children; prop; prop = prop->next) {
+                if (xmlStrEqual(prop->name, BAD_CAST "min-rate")) {
+                    min_rate = xmlNodeGetContent(prop);
+                } else if (xmlStrEqual(prop->name, BAD_CAST "max-rate")) {
+                    max_rate = xmlNodeGetContent(prop);
+                }
+            }
+        }
+    }
+    nc_verb_verbose("Add queue %s to %s.", BAD_CAST resource_id, BAD_CAST port_name);
+
+    /* TODO check if exists */
+
+    /* create new */
+    qos = ovsrec_qos_insert(ovsdb_handler->txn);
+    queue = ovsrec_queue_insert(ovsdb_handler->txn);
+    int64_t key;
+    if (sscanf((char *) id, "%"SCNi64, &key) != 1) {
+        /* parsing error, wrong number */
+    }
+    ovsrec_qos_verify_queues(qos);
+    ovsrec_qos_set_queues(qos, (int64_t *) &key, (struct ovsrec_queue **) &queue, 1);
+    OVSREC_PORT_FOR_EACH(port, ovsdb_handler->idl) {
+        if (xmlStrEqual(port_name, BAD_CAST port->name)) {
+            ovsrec_port_verify_qos(port);
+            ovsrec_port_set_qos(port, qos);
+            break;
+        }
+    }
+    if (max_rate != NULL) {
+        smap_add_once(&queue->other_config, "max-rate", (char *) max_rate);
+        xmlFree(max_rate);
+    }
+    if (min_rate != NULL) {
+        smap_add_once(&queue->other_config, "min-rate", (char *) min_rate);
+        xmlFree(min_rate);
+    }
+    ovsrec_queue_verify_other_config(queue);
+    ovsrec_queue_set_other_config(queue, &queue->other_config);
+}
+
+void
 txn_del_port_tunnel(const xmlChar *port_name, xmlNodePtr tunnel_node)
 {
     struct smap opt_cl;
@@ -1511,9 +1725,13 @@ txn_del_port_tunnel(const xmlChar *port_name, xmlNodePtr tunnel_node)
         return;
     }
 
-    smap_remove(&ifc->options, "local_ip");
-    smap_remove(&ifc->options, "remote_ip");
-    ovsrec_interface_set_options(ifc, &ifc->options);
+    smap_clone(&opt_cl, &ifc->options);
+    smap_remove(&opt_cl, "local_ip");
+    smap_remove(&opt_cl, "remote_ip");
+    ovsrec_interface_verify_options(ifc);
+    ovsrec_interface_set_options(ifc, &opt_cl);
+    smap_destroy(&opt_cl);
+    ovsrec_interface_verify_type(found);
     ovsrec_interface_set_type(found, "");
 }
 
@@ -1545,6 +1763,7 @@ txn_del_bridge_port(const xmlChar *br_name, const xmlChar *port_name)
             i++;
         }
     }
+    ovsrec_bridge_verify_ports(bridge);
     ovsrec_bridge_set_ports(bridge, ports, bridge->n_ports - 1);
     free(ports);
 }
@@ -1575,6 +1794,8 @@ txn_add_bridge_port(const xmlChar *br_name, const xmlChar *port_name)
         nc_verb_warning("%s: %s not found", __func__, port ? "bridge" : "port");
         return;
     }
+    nc_verb_verbose("Add port %s to %s bridge resource list.",
+                    BAD_CAST port_name, BAD_CAST br_name);
 
     ports = malloc(sizeof *bridge->ports * (bridge->n_ports + 1));
     for (i = 0; i < bridge->n_ports; i++) {
@@ -1582,8 +1803,130 @@ txn_add_bridge_port(const xmlChar *br_name, const xmlChar *port_name)
     }
     ports[i] = (struct ovsrec_port *)port;
 
+    ovsrec_bridge_verify_ports(bridge);
     ovsrec_bridge_set_ports(bridge, ports, bridge->n_ports + 1);
     free(ports);
+}
+
+void
+txn_add_bridge_queue(const xmlChar *br_name, const xmlChar *resource_id)
+{
+    const struct ovsrec_bridge *bridge;
+    struct ovsrec_qos *qos;
+    ofc_tuple_t *resid = NULL;
+    size_t i, q;
+    int cmp;
+
+    if (!resource_id || !br_name) {
+        return;
+    }
+
+    nc_verb_verbose("Add queue %s to %s bridge resource list.",
+                    BAD_CAST resource_id, BAD_CAST br_name);
+    OVSREC_BRIDGE_FOR_EACH(bridge, ovsdb_handler->idl) {
+        if (xmlStrEqual(br_name, BAD_CAST bridge->name)) {
+            break;
+        }
+    }
+    if (bridge == NULL) {
+        /* not found */
+        return;
+    }
+
+    resid = ofc_resmap_find_r(ovsdb_handler->resource_map, (const char *) resource_id);
+    if (resid == NULL) {
+        /* not found */
+        return;
+    }
+    for (i = 0; i < bridge->n_ports; i++) {
+        qos = bridge->ports[i]->qos;
+        if (qos == NULL) {
+            continue;
+        }
+        for (q = 0; q < qos->n_queues; q++) {
+            /* compare with resource-id */
+            cmp = uuid_compare_3way(&qos->value_queues[q]->header_.uuid,
+                                    &resid->uuid);
+            if (cmp == 0) {
+                ovsrec_port_verify_qos(bridge->ports[i]);
+                ovsrec_port_set_qos(bridge->ports[i], NULL);
+                //ovsrec_qos_delete(qos);
+                return;
+            }
+        }
+    }
+}
+void
+txn_del_bridge_queue(const xmlChar *br_name, const xmlChar *resource_id)
+{
+    const struct ovsrec_bridge *bridge;
+    struct ovsrec_qos *qos;
+    ofc_tuple_t *resid = NULL;
+    size_t i, q;
+    int cmp;
+
+    if (!resource_id || !br_name) {
+        return;
+    }
+
+    nc_verb_verbose("Delete queue %s from %s bridge resource list.",
+                    BAD_CAST resource_id, BAD_CAST br_name);
+    OVSREC_BRIDGE_FOR_EACH(bridge, ovsdb_handler->idl) {
+        if (xmlStrEqual(br_name, BAD_CAST bridge->name)) {
+            break;
+        }
+    }
+    if (bridge == NULL) {
+        /* not found */
+        return;
+    }
+
+    resid = ofc_resmap_find_r(ovsdb_handler->resource_map, (const char *) resource_id);
+    if (resid == NULL) {
+        /* not found */
+        return;
+    }
+    for (i = 0; i < bridge->n_ports; i++) {
+        qos = bridge->ports[i]->qos;
+        if (qos == NULL) {
+            continue;
+        }
+        for (q = 0; q < qos->n_queues; q++) {
+            /* compare with resource-id */
+            cmp = uuid_compare_3way(&qos->value_queues[q]->header_.uuid,
+                                    &resid->uuid);
+            if (cmp == 0) {
+                //ovsrec_port_verify_qos(bridge->ports[i]);
+                //ovsrec_port_set_qos(bridge->ports[i], NULL);
+                //for (q = 0; q < qos->n_queues; q++) {
+                //    ovsrec_queue_delete(qos->value_queues);
+                //}
+                //ovsrec_qos_set_queues(qos, NULL, NULL, 0);
+                //ovsrec_qos_delete(qos);
+                return;
+            }
+        }
+    }
+}
+
+void
+txn_del_bridge_flow_table(const xmlChar *br_name, const xmlChar *resource_id)
+{
+    if (!resource_id || !br_name) {
+        return;
+    }
+    nc_verb_verbose("Remove flow-table %s from %s bridge resource list.",
+                    BAD_CAST resource_id, BAD_CAST br_name);
+}
+
+void
+txn_add_bridge_flow_table(const xmlChar *br_name, const xmlChar *resource_id)
+{
+    if (!resource_id || !br_name) {
+        return;
+    }
+    nc_verb_verbose("Add flow-table %s to %s bridge resource list.",
+                    BAD_CAST resource_id, BAD_CAST br_name);
 }
 
 void
@@ -1613,11 +1956,23 @@ txn_del_bridge(const xmlChar *br_name)
             bridge = ovs->bridges[j];
         }
     }
+    ovsrec_open_vswitch_verify_bridges(ovs);
     ovsrec_open_vswitch_set_bridges(ovs, bridges, ovs->n_bridges - 1);
     free(bridges);
 
     /* remove bridge itself */
     ovsrec_bridge_delete(bridge);
+}
+
+void
+txn_del_queue(const xmlChar *resource_id)
+{
+
+    if (!resource_id) {
+        return;
+    }
+    nc_verb_verbose("Delete queue %s.", BAD_CAST resource_id);
+
 }
 
 /* /capable-switch/logical-switches/switch/datapath-id */
@@ -1666,6 +2021,7 @@ txn_mod_bridge_datapath(const xmlChar *br_name, const xmlChar* value)
         smap_remove(&othcfg, "datapath-id");
     }
 
+    ovsrec_bridge_verify_other_config(bridge);
     ovsrec_bridge_set_other_config(bridge, &othcfg);
     smap_destroy(&othcfg);
 }
@@ -1680,12 +2036,14 @@ txn_ovs_insert_bridge(const struct ovsrec_open_vswitch *ovs,
 
     struct ovsrec_bridge **bridges;
     size_t i;
+    nc_verb_verbose("Add bridge %s %s", bridge->name, print_uuid_ro(&bridge->header_.uuid));
 
     bridges = malloc(sizeof *ovs->bridges * (ovs->n_bridges + 1));
     for (i = 0; i < ovs->n_bridges; i++) {
         bridges[i] = ovs->bridges[i];
     }
     bridges[ovs->n_bridges] = bridge;
+    ovsrec_open_vswitch_verify_bridges(ovs);
     ovsrec_open_vswitch_set_bridges(ovs, bridges, ovs->n_bridges + 1);
     free(bridges);
 }
@@ -1701,12 +2059,14 @@ txn_bridge_insert_port(const struct ovsrec_bridge *bridge,
     if (!bridge || !port) {
         return;
     }
+    nc_verb_verbose("Add port %s %s", port->name, print_uuid_ro(&port->header_.uuid));
 
     ports = malloc(sizeof *bridge->ports * (bridge->n_ports + 1));
     for (i = 0; i < bridge->n_ports; i++) {
         ports[i] = bridge->ports[i];
     }
     ports[bridge->n_ports] = port;
+    ovsrec_bridge_verify_ports(bridge);
     ovsrec_bridge_set_ports(bridge, ports, bridge->n_ports + 1);
     free(ports);
 }
@@ -1754,6 +2114,7 @@ txn_add_bridge(xmlNodePtr node)
     bridge = ovsrec_bridge_insert(ovsdb_handler->txn);
     txn_ovs_insert_bridge(ovs, (struct ovsrec_bridge*)bridge);
 
+    ovsrec_bridge_verify_name(bridge);
     ovsrec_bridge_set_name(bridge, (char *) bridge_id);
     xmlFree(bridge_id);
 
@@ -1899,7 +2260,7 @@ txn_mod_port_add_tunnel(const xmlChar *port_name, xmlNodePtr tunnel_node)
             smap_add_once(&opt_cl, option, (char *) value);
         }
     }
-    ovsrec_interface_verify_options(ifc);
+    ovsrec_interface_verify_type(ifc);
     if (xmlStrEqual(tunnel_node->name, BAD_CAST "ipgre-tunnel")) {
         ovsrec_interface_set_type(ifc, "gre");
     } else if (xmlStrEqual(tunnel_node->name, BAD_CAST "vxlan-tunnel")) {
@@ -1908,6 +2269,7 @@ txn_mod_port_add_tunnel(const xmlChar *port_name, xmlNodePtr tunnel_node)
         ovsrec_interface_set_type(ifc, "gre64");
         /* or we hesitate about geneve and lisp */
     }
+    ovsrec_interface_verify_options(ifc);
     ovsrec_interface_set_options(ifc, &opt_cl);
 }
 

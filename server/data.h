@@ -70,6 +70,10 @@ void txn_del_all(void);
 /* new functions */
 void txn_del_bridge_port(const xmlChar *br_name, const xmlChar *port_name);
 void txn_add_bridge_port(const xmlChar *br_name, const xmlChar *port_name);
+void txn_del_bridge_queue(const xmlChar *br_name, const xmlChar *resource_id);
+void txn_add_bridge_queue(const xmlChar *br_name, const xmlChar *resource_id);
+void txn_del_bridge_flow_table(const xmlChar *br_name, const xmlChar *resource_id);
+void txn_add_bridge_flow_table(const xmlChar *br_name, const xmlChar *resource_id);
 void txn_del_bridge(const xmlChar *br_name);
 void txn_add_bridge(xmlNodePtr node);
 void txn_mod_bridge_datapath(const xmlChar *br_name, const xmlChar* value);
@@ -81,6 +85,9 @@ void txn_mod_port_admin_state(const xmlChar *port_name, const xmlChar* value);
 
 void txn_mod_port_add_tunnel(const xmlChar *port_name, xmlNodePtr tunnel_node);
 void txn_del_port_tunnel(const xmlChar *port_name, xmlNodePtr tunnel_node);
+
+void txn_add_queue(xmlNodePtr node);
+void txn_add_flow_table(xmlNodePtr node);
 
 /*
  * Set port parameters

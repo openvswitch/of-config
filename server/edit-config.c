@@ -821,6 +821,7 @@ static int edit_operations(xmlDocPtr orig_doc, xmlDocPtr edit_doc,
                 for (; orig_node != NULL; orig_node = find_element_equiv(orig_doc, edit_node)) {
                     /* remove the edit node's equivalent from the original document */
                     edit_delete(orig_node, running);
+                    edit_node = edit_node->next;
                 }
                 /* remove the node from the edit document */
                 edit_delete(edit_node, running);

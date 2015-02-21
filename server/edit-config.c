@@ -1019,10 +1019,10 @@ edit_delete(xmlNodePtr node, int running)
             txn_del_port_tunnel(value, node);
             xmlFree(value);
         }
-    } else {
-        xmlUnlinkNode(node);
-        xmlFreeNode(node);
     }
+
+    xmlUnlinkNode(node);
+    xmlFreeNode(node);
 
     return EXIT_SUCCESS;
 }
@@ -1076,6 +1076,7 @@ edit_replace(xmlDocPtr orig_doc, xmlNodePtr edit_node, int running,
     }
 
     if (edit_node == NULL) {
+        /* replace by empty data */
         if (orig_doc->children) {
             return (edit_delete(orig_doc->children, running));
         } else {
@@ -1096,8 +1097,7 @@ edit_replace(xmlDocPtr orig_doc, xmlNodePtr edit_node, int running,
          * "moving" of the instance of the list/leaf-list using YANG's insert
          * attribute
          */
-        xmlUnlinkNode(old);
-        xmlFreeNode(old);
+        edit_delete(old, running);
         return edit_create(orig_doc, edit_node, running, error);
     }
 }

@@ -1576,6 +1576,7 @@ txn_del_all(void)
     const struct ovsrec_qos *qos;
     const struct ovsrec_queue *queue;
     const struct ovsrec_port *port;
+    const struct ovsrec_ssl *ssl;
     nc_verb_verbose("Delete all (%s:%d)", __FILE__, __LINE__);
 
     /* remove all settings - we need only to remove two base tables
@@ -1584,6 +1585,7 @@ txn_del_all(void)
      */
     OVSREC_OPEN_VSWITCH_FOR_EACH(ovs, ovsdb_handler->idl) {
         ovsrec_open_vswitch_set_bridges(ovs, NULL, 0);
+        ovsrec_open_vswitch_set_ssl(ovs, NULL);
         ovsrec_open_vswitch_delete(ovs);
     }
 
@@ -1607,6 +1609,10 @@ txn_del_all(void)
     OVSREC_PORT_FOR_EACH(port, ovsdb_handler->idl) {
         ovsrec_port_set_qos(port, NULL);
         ovsrec_port_delete(port);
+    }
+
+    OVSREC_SSL_FOR_EACH(ssl, ovsdb_handler->idl) {
+        ovsrec_ssl_delete(ssl);
     }
 }
 
@@ -2145,11 +2151,11 @@ txn_del_owned_certificate(xmlNodePtr node)
         } else if (xmlStrEqual(aux->name, BAD_CAST "certificate")) {
             /* TODO error check */
             unlink(OFC_DATADIR "/cert.pem");
-            ovsrec_ssl_set_certificate(ssl, NULL);
+            ovsrec_ssl_set_certificate(ssl, "");
         } else if (xmlStrEqual(aux->name, BAD_CAST "private-key")) {
             /* TODO error check */
             unlink(OFC_DATADIR "/key.pem");
-            ovsrec_ssl_set_private_key(ssl, NULL);
+            ovsrec_ssl_set_private_key(ssl, "");
         }
     }
 
@@ -2205,7 +2211,7 @@ txn_del_external_certificate(xmlNodePtr node)
         } else if (xmlStrEqual(aux->name, BAD_CAST "certificate")) {
             /* TODO error check */
             unlink(OFC_DATADIR "/ca_cert.pem");
-            ovsrec_ssl_set_ca_cert(ssl, NULL);
+            ovsrec_ssl_set_ca_cert(ssl, "");
         }
     }
 

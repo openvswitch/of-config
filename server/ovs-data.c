@@ -57,7 +57,7 @@ typedef struct {
     unsigned int seqno;
     struct vconn *vconn;
     ofc_resmap_t *resource_map;
-	struct ofc_resmap_certificate *cert_map;
+    struct ofc_resmap_certificate *cert_map;
 } ovsdb_t;
 ovsdb_t *ovsdb_handler = NULL;
 

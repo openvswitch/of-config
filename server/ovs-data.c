@@ -1826,12 +1826,14 @@ txn_add_queue(xmlNodePtr node)
 void
 txn_add_flow_table(xmlNodePtr node)
 {
-    xmlNodePtr aux, prop;
-    xmlChar *port_name = NULL, *id = NULL, *min_rate = NULL, *max_rate = NULL;
+    xmlNodePtr aux;
     xmlChar *resource_id = NULL;
-    struct ovsrec_qos *qos;
-    struct ovsrec_queue *queue;
-    const struct ovsrec_port *port;
+    xmlChar *name = NULL;
+    xmlChar *table_id_txt;
+    int64_t table_id;
+    struct ovsrec_flow_table *flowtable;
+    const struct ovsrec_flow_table *flowtable_resid;
+    const struct ovsrec_bridge *bridge;
 
     if (!node) {
         return;
@@ -1844,50 +1846,31 @@ txn_add_flow_table(xmlNodePtr node)
 
         if (xmlStrEqual(aux->name, BAD_CAST "resource-id")) {
             resource_id = xmlNodeGetContent(aux);
-        } else if (xmlStrEqual(aux->name, BAD_CAST "id")) {
-            id = xmlNodeGetContent(aux);
-        } else if (xmlStrEqual(aux->name, BAD_CAST "port")) {
-            port_name = xmlNodeGetContent(aux);
-        } else if (xmlStrEqual(aux->name, BAD_CAST "properties")) {
-            for (prop = aux->children; prop; prop = prop->next) {
-                if (xmlStrEqual(prop->name, BAD_CAST "min-rate")) {
-                    min_rate = xmlNodeGetContent(prop);
-                } else if (xmlStrEqual(prop->name, BAD_CAST "max-rate")) {
-                    max_rate = xmlNodeGetContent(prop);
-                }
+        } else if (xmlStrEqual(aux->name, BAD_CAST "table-id")) {
+            table_id_txt = xmlNodeGetContent(aux);
+            if (sscanf((const char *) table_id_txt, "%"SCNi64, &table_id) != 1) {
+                /* parsing error, wrong number */
             }
+            xmlFree(table_id_txt);
+        } else if (xmlStrEqual(aux->name, BAD_CAST "name")) {
+            name = xmlNodeGetContent(aux);
         }
     }
-    nc_verb_verbose("Add queue %s to %s.", BAD_CAST resource_id, BAD_CAST port_name);
+    nc_verb_verbose("Add flow table %s with %s name.", BAD_CAST resource_id, BAD_CAST name);
+
+    flowtable = ovsrec_flow_table_insert(ovsdb_handler->txn);
+    flowtable_resid = ovsrec_flow_table_first(ovsdb_handler->idl);
+
+    ofc_resmap_insert(ovsdb_handler->resource_map, (const char *) resource_id,
+                      &flowtable_resid->header_.uuid,
+                      &flowtable_resid->header_);
+    xmlFree(resource_id);
+    ovsrec_flow_table_set_name(flowtable, (const char *) name);
+    xmlFree(name);
 
     /* TODO check if exists */
 
     /* create new */
-    qos = ovsrec_qos_insert(ovsdb_handler->txn);
-    queue = ovsrec_queue_insert(ovsdb_handler->txn);
-    int64_t key;
-    if (sscanf((char *) id, "%"SCNi64, &key) != 1) {
-        /* parsing error, wrong number */
-    }
-    ovsrec_qos_verify_queues(qos);
-    ovsrec_qos_set_queues(qos, (int64_t *) &key, (struct ovsrec_queue **) &queue, 1);
-    OVSREC_PORT_FOR_EACH(port, ovsdb_handler->idl) {
-        if (xmlStrEqual(port_name, BAD_CAST port->name)) {
-            ovsrec_port_verify_qos(port);
-            ovsrec_port_set_qos(port, qos);
-            break;
-        }
-    }
-    if (max_rate != NULL) {
-        smap_add_once(&queue->other_config, "max-rate", (char *) max_rate);
-        xmlFree(max_rate);
-    }
-    if (min_rate != NULL) {
-        smap_add_once(&queue->other_config, "min-rate", (char *) min_rate);
-        xmlFree(min_rate);
-    }
-    ovsrec_queue_verify_other_config(queue);
-    ovsrec_queue_set_other_config(queue, &queue->other_config);
 }
 
 void
@@ -2449,16 +2432,6 @@ txn_del_bridge_flow_table(const xmlChar *br_name, const xmlChar *resource_id)
         return;
     }
     nc_verb_verbose("Remove flow-table %s from %s bridge resource list.",
-                    BAD_CAST resource_id, BAD_CAST br_name);
-}
-
-void
-txn_add_bridge_flow_table(const xmlChar *br_name, const xmlChar *resource_id)
-{
-    if (!resource_id || !br_name) {
-        return;
-    }
-    nc_verb_verbose("Add flow-table %s to %s bridge resource list.",
                     BAD_CAST resource_id, BAD_CAST br_name);
 }
 

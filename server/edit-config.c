@@ -361,6 +361,7 @@ is_key(xmlNodePtr node)
 int
 matching_elements(xmlNodePtr node1, xmlNodePtr node2)
 {
+    xmlNodePtr key1, key2;
     char *aux1, *aux2;
     int ret;
 
@@ -418,27 +419,34 @@ matching_elements(xmlNodePtr node1, xmlNodePtr node2)
     }
 
     /* check keys in lists */
+    aux1 = NULL;
     if (xmlStrEqual(node2->name, BAD_CAST "controller") ||
                     xmlStrEqual(node2->name, BAD_CAST "switch")) {
-        return matching_elements(go2node(node1, BAD_CAST "id"),
-                        go2node(node2, BAD_CAST "id"));
+        aux1 = "id";
     } else if (xmlStrEqual(node2->name, BAD_CAST "port") &&
                     xmlStrEqual(node2->parent->parent->name, BAD_CAST "capable-switch")) {
-        return matching_elements(go2node(node1, BAD_CAST "name"),
-                        go2node(node2, BAD_CAST "name"));
+        aux1 = "name";
     } else if (xmlStrEqual(node2->name, BAD_CAST "flow-table") &&
                     xmlStrEqual(node2->parent->parent->name, BAD_CAST "capable-switch")) {
-        return matching_elements(go2node(node1, BAD_CAST "table-id"),
-                        go2node(node2, BAD_CAST "table-id"));
+        aux1 = "table-id";
     } else if ((xmlStrEqual(node2->name, BAD_CAST "queue") ||
                     xmlStrEqual(node2->name, BAD_CAST "owned-certificate") ||
                     xmlStrEqual(node2->name, BAD_CAST "external-certificate")) &&
                     xmlStrEqual(node2->parent->parent->name, BAD_CAST "capable-switch")) {
-        return matching_elements(go2node(node1, BAD_CAST "resource-id"),
-                        go2node(node2, BAD_CAST "resource-id"));
+        aux1 = "resource-id";
+    } else {
+        return 1;
     }
 
-    return 1;
+    /* evaluate keys */
+    key1 = go2node(node1, BAD_CAST aux1);
+    key2 = go2node(node2, BAD_CAST aux1);
+    if (!key1 || !key2) {
+        return 0;
+    } else {
+        /* compare key's text nodes, not the key elements itself */
+        return matching_elements(key1->children, key2->children);
+    }
 }
 
 /**
@@ -821,7 +829,6 @@ static int edit_operations(xmlDocPtr orig_doc, xmlDocPtr edit_doc,
                 for (; orig_node != NULL; orig_node = find_element_equiv(orig_doc, edit_node)) {
                     /* remove the edit node's equivalent from the original document */
                     edit_delete(orig_node, running);
-                    edit_node = edit_node->next;
                 }
                 /* remove the node from the edit document */
                 edit_delete(edit_node, running);
@@ -1012,10 +1019,10 @@ edit_delete(xmlNodePtr node, int running)
             txn_del_port_tunnel(value, node);
             xmlFree(value);
         }
-    } else {
-        xmlUnlinkNode(node);
-        xmlFreeNode(node);
     }
+
+    xmlUnlinkNode(node);
+    xmlFreeNode(node);
 
     return EXIT_SUCCESS;
 }
@@ -1069,6 +1076,7 @@ edit_replace(xmlDocPtr orig_doc, xmlNodePtr edit_node, int running,
     }
 
     if (edit_node == NULL) {
+        /* replace by empty data */
         if (orig_doc->children) {
             return (edit_delete(orig_doc->children, running));
         } else {
@@ -1089,8 +1097,7 @@ edit_replace(xmlDocPtr orig_doc, xmlNodePtr edit_node, int running,
          * "moving" of the instance of the list/leaf-list using YANG's insert
          * attribute
          */
-        xmlUnlinkNode(old);
-        xmlFreeNode(old);
+        edit_delete(old, running);
         return edit_create(orig_doc, edit_node, running, error);
     }
 }

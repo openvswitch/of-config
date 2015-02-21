@@ -24,6 +24,7 @@
  * tuple of resource-id string and UUID
  */
 typedef struct ofc_tuple {
+    const struct ovsdb_idl_row *header; /* idl row pointer */
     char *resource_id;  /* resource-id */
     struct uuid uuid;   /* UUID */
 } ofc_tuple_t;
@@ -50,7 +51,7 @@ ofc_resmap_t *ofc_resmap_init(size_t init_size);
  * \param[in,out] init_size  initial number of records, will be enlarged when needed
  * \return true on success
  */
-bool ofc_resmap_insert(ofc_resmap_t *rm, const char *resource_id, const struct uuid *uuid);
+bool ofc_resmap_insert(ofc_resmap_t *rm, const char *resource_id, const struct uuid *uuid, const struct ovsdb_idl_row *h);
 
 /*
  * Removes record by resource_id from the rm map.
@@ -89,6 +90,8 @@ ofc_tuple_t *ofc_resmap_find_u(ofc_resmap_t *rm, const struct uuid *uuid);
  * \param[in,out] rm  pointer to the resource map structure
  */
 void ofc_resmap_destroy(ofc_resmap_t **rm);
+
+void ofc_resmap_update_uuids(ofc_resmap_t *rm);
 
 
 /*

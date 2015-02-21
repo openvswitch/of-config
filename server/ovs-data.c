@@ -381,7 +381,7 @@ find_resid_generate(ofc_resmap_t *rm, const struct uuid *uuid)
         /* generate new resource-id (UUID string) */
         resource_id = print_uuid_ro(uuid);
         /* insert new record */
-        result = ofc_resmap_insert(rm, resource_id, uuid);
+        result = ofc_resmap_insert(rm, resource_id, uuid, NULL);
         if (result == true) {
             return resource_id;
         } else {
@@ -1523,6 +1523,7 @@ txn_commit(struct nc_err **e)
 
     switch (status) {
     case TXN_SUCCESS:
+        ofc_resmap_update_uuids(ovsdb_handler->resource_map);
         nc_verb_verbose("OVSDB transaction successful");
         break;
     case TXN_UNCHANGED:
@@ -1751,6 +1752,7 @@ txn_add_queue(xmlNodePtr node)
     xmlChar *resource_id = NULL;
     struct ovsrec_qos *qos;
     struct ovsrec_queue *queue;
+    const struct ovsrec_queue *queue_resid;
     const struct ovsrec_port *port;
 
     if (!node) {
@@ -1785,6 +1787,11 @@ txn_add_queue(xmlNodePtr node)
     /* create new */
     qos = ovsrec_qos_insert(ovsdb_handler->txn);
     queue = ovsrec_queue_insert(ovsdb_handler->txn);
+    queue_resid = ovsrec_queue_first(ovsdb_handler->idl);
+
+    ofc_resmap_insert(ovsdb_handler->resource_map, (const char *) resource_id,
+                      &queue_resid->header_.uuid,
+                      &queue_resid->header_);
     int64_t key;
     if (sscanf((char *) id, "%"SCNi64, &key) != 1) {
         /* parsing error, wrong number */

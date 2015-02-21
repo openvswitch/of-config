@@ -20,6 +20,20 @@
 
 #include "res-map.h"
 
+#include <ovsdb-idl-provider.h>
+#include <libnetconf.h>
+
+/* convert uuid to string, for debug/test purposes only */
+static const char *
+print_uuid_ro(const struct uuid *uuid)
+{
+    static char str[38];
+
+    snprintf(str, 37, UUID_FMT, UUID_ARGS(uuid));
+    str[37] = 0;
+    return str;
+}
+
 /*
  * Compare two elements from index array.
  * It is used for qsort() and bsearch() of index arrays index_r, index_u.
@@ -118,7 +132,7 @@ ofc_reindex(ofc_resmap_t *rm)
 
 bool
 ofc_resmap_insert(ofc_resmap_t *rm, const char *resource_id,
-                  const struct uuid *uuid)
+                  const struct uuid *uuid, const struct ovsdb_idl_row *h)
 {
     size_t new_size;
     if (rm->n_records == rm->records_length) {
@@ -139,6 +153,7 @@ ofc_resmap_insert(ofc_resmap_t *rm, const char *resource_id,
     /* append new record */
     rm->records[rm->n_records].resource_id = strdup(resource_id);
     rm->records[rm->n_records].uuid = *uuid;
+    rm->records[rm->n_records].header = h;
     rm->index_r[rm->n_records] = &rm->records[rm->n_records];
     rm->index_u[rm->n_records] = &rm->records[rm->n_records];
     rm->n_records++;
@@ -270,19 +285,30 @@ ofc_resmap_destroy(ofc_resmap_t **resmap)
     (*resmap) = NULL;
 }
 
+void
+ofc_resmap_update_uuids(ofc_resmap_t *rm)
+{
+    size_t i;
+    const struct ovsdb_idl_row *h;
+    bool changed = false;
+    for (i = 0; i < rm->n_records; i++) {
+        if (rm->records[i].header != NULL) {
+            h = rm->records[i].header;
+            rm->records[i].uuid = h->uuid;
+            rm->records[i].header = NULL;
+            nc_verb_verbose("Updated UUID %s for %s resource-id.",
+                            print_uuid_ro(&rm->records[i].uuid),
+                            rm->records[i].resource_id);
+            changed = true;
+        }
+    }
+    if (changed) {
+        ofc_reindex(rm);
+    }
+}
+
 
 #ifdef TEST_RESOURCE_MAP
-
-/* convert uuid to string, for debug/test purposes only */
-static const char *
-print_uuid_ro(const struct uuid *uuid)
-{
-    static char str[38];
-
-    snprintf(str, 37, UUID_FMT, UUID_ARGS(uuid));
-    str[37] = 0;
-    return str;
-}
 
 /*
  * Print content of the map sort by the uuid index.
@@ -346,7 +372,7 @@ int main(int argc, char **argv)
     puts("insert");
     for (i=0; i<=TEST_NUM_ELEMS; ++i) {
         uuid_generate(&u);
-        ofc_resmap_insert(rm, print_uuid_ro(&u), &u);
+        ofc_resmap_insert(rm, print_uuid_ro(&u), &u, NULL);
     }
     puts("sorted by resource-id");
     ofc_resmap_print_r(rm);

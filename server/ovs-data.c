@@ -1893,7 +1893,6 @@ txn_add_flow_table(xmlNodePtr node)
 void
 txn_del_port_tunnel(const xmlChar *port_name, xmlNodePtr tunnel_node)
 {
-    struct smap opt_cl;
     const struct ovsrec_interface *ifc, *next, *found = NULL;
     nc_verb_verbose("Removing tunnel (%s:%d)", __FILE__, __LINE__);
 
@@ -1908,13 +1907,11 @@ txn_del_port_tunnel(const xmlChar *port_name, xmlNodePtr tunnel_node)
         return;
     }
 
-    smap_clone(&opt_cl, &ifc->options);
-    smap_remove(&opt_cl, "local_ip");
-    smap_remove(&opt_cl, "remote_ip");
-    ovsrec_interface_verify_options(ifc);
-    ovsrec_interface_set_options(ifc, &opt_cl);
-    smap_destroy(&opt_cl);
+    ovsrec_interface_verify_options(found);
     ovsrec_interface_verify_type(found);
+    smap_remove((struct smap *) &found->options, "local_ip");
+    smap_remove((struct smap *) &found->options, "remote_ip");
+    ovsrec_interface_set_options(found, &found->options);
     ovsrec_interface_set_type(found, "");
 }
 

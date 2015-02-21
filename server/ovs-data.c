@@ -443,9 +443,9 @@ find_queue_id(const struct ovsrec_queue *queue, int64_t *id)
     int cmp;
     OVSREC_QOS_FOR_EACH(row, ovsdb_handler->idl) {
         for (i = 0; i < row->n_queues; i++) {
-            cmp = uuid_compare_3way(&queue->header_.uuid,
-                                    &row->value_queues[i]->header_.uuid);
-            if (cmp == 0) {
+            cmp = uuid_equals(&queue->header_.uuid,
+                              &row->value_queues[i]->header_.uuid);
+            if (cmp) {
                 /* found */
                 *id = row->key_queues[i];
                 return true;
@@ -469,9 +469,9 @@ find_queue_port(const struct ovsrec_queue *queue, const char **port_name)
         }
         for (q = 0; q < qos->n_queues; q++) {
             /* compare with resource-id */
-            cmp = uuid_compare_3way(&qos->value_queues[q]->header_.uuid,
-                                    &queue->header_.uuid);
-            if (cmp == 0) {
+            cmp = uuid_equals(&qos->value_queues[q]->header_.uuid,
+                              &queue->header_.uuid);
+            if (cmp) {
                 *port_name = row->name;
                 return true;
             }
@@ -1101,7 +1101,7 @@ get_owned_certificates_config(void)
     ssl = ovsrec_ssl_first(ovsdb_handler->idl);
     if (ssl != NULL && ovsdb_handler->cert_map->owned_resid != NULL &&
             ssl->certificate != NULL && ssl->private_key != NULL) {
-        if (memcmp(&ovsdb_handler->cert_map->uuid, &ssl->header_.uuid, sizeof(struct uuid))) {
+        if (uuid_equals(&ovsdb_handler->cert_map->uuid, &ssl->header_.uuid)) {
             ds_destroy(&str);
             return NULL;
         }
@@ -1211,7 +1211,7 @@ get_external_certificates_config(void)
     ssl = ovsrec_ssl_first(ovsdb_handler->idl);
     if (ssl != NULL && ovsdb_handler->cert_map->external_resid != NULL &&
             ssl->ca_cert != NULL) {
-        if (memcmp(&ovsdb_handler->cert_map->uuid, &ssl->header_.uuid, sizeof(struct uuid))) {
+        if (uuid_equals(&ovsdb_handler->cert_map->uuid, &ssl->header_.uuid)) {
             ds_destroy(&str);
             return NULL;
         }
@@ -2284,9 +2284,9 @@ txn_add_bridge_queue(const xmlChar *br_name, const xmlChar *resource_id)
         }
         for (q = 0; q < qos->n_queues; q++) {
             /* compare with resource-id */
-            cmp = uuid_compare_3way(&qos->value_queues[q]->header_.uuid,
-                                    &resid->uuid);
-            if (cmp == 0) {
+            cmp = uuid_equals(&qos->value_queues[q]->header_.uuid,
+                              &resid->uuid);
+            if (cmp) {
                 ovsrec_port_verify_qos(bridge->ports[i]);
                 ovsrec_port_set_qos(bridge->ports[i], NULL);
                 //ovsrec_qos_delete(qos);
@@ -2332,9 +2332,9 @@ txn_del_bridge_queue(const xmlChar *br_name, const xmlChar *resource_id)
         }
         for (q = 0; q < qos->n_queues; q++) {
             /* compare with resource-id */
-            cmp = uuid_compare_3way(&qos->value_queues[q]->header_.uuid,
-                                    &resid->uuid);
-            if (cmp == 0) {
+            cmp = uuid_equals(&qos->value_queues[q]->header_.uuid,
+                              &resid->uuid);
+            if (cmp) {
                 //ovsrec_port_verify_qos(bridge->ports[i]);
                 //ovsrec_port_set_qos(bridge->ports[i], NULL);
                 //for (q = 0; q < qos->n_queues; q++) {

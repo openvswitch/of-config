@@ -1099,8 +1099,11 @@ get_owned_certificates_config(void)
     ds_init(&str);
 
     ssl = ovsrec_ssl_first(ovsdb_handler->idl);
-    if (ssl != NULL && ovsdb_handler->cert_map->owned_resid != NULL &&
-            ssl->certificate != NULL && ssl->private_key != NULL) {
+    if (ssl != NULL && ssl->certificate != NULL && ssl->private_key != NULL) {
+        /* missing resource-id */
+        if (ovsdb_handler->cert_map->owned_resid == NULL) {
+            ovsdb_handler->cert_map->owned_resid = strdup(print_uuid_ro(&ssl->header_.uuid));
+        }
         if (uuid_equals(&ovsdb_handler->cert_map->uuid, &ssl->header_.uuid)) {
             ds_destroy(&str);
             return NULL;
@@ -1209,8 +1212,12 @@ get_external_certificates_config(void)
     ds_init(&str);
 
     ssl = ovsrec_ssl_first(ovsdb_handler->idl);
-    if (ssl != NULL && ovsdb_handler->cert_map->external_resid != NULL &&
+    if (ssl != NULL &&
             ssl->ca_cert != NULL) {
+        /* missing resource-id */
+        if (ovsdb_handler->cert_map->external_resid == NULL) {
+            ovsdb_handler->cert_map->external_resid = strdup(print_uuid_ro(&ssl->header_.uuid));
+        }
         if (uuid_equals(&ovsdb_handler->cert_map->uuid, &ssl->header_.uuid)) {
             ds_destroy(&str);
             return NULL;
@@ -1465,6 +1472,8 @@ ofc_destroy(void)
         ovsdb_idl_destroy(ovsdb_handler->idl);
 
         ofc_resmap_destroy(&ovsdb_handler->resource_map);
+        free(ovsdb_handler->cert_map->owned_resid);
+        free(ovsdb_handler->cert_map->external_resid);
         free(ovsdb_handler->cert_map);
 
         free(ovsdb_handler);

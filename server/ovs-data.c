@@ -2473,12 +2473,46 @@ txn_del_bridge(const xmlChar *br_name)
 void
 txn_del_queue(const xmlChar *resource_id)
 {
+    ofc_tuple_t *found;
+    const struct ovsrec_queue *queue;
+    size_t i, n_queues;
+    const struct ovsrec_qos *row;
+    bool cmp, changed = false;
 
     if (!resource_id) {
         return;
     }
     nc_verb_verbose("Delete queue %s.", BAD_CAST resource_id);
+    found = ofc_resmap_find_r(ovsdb_handler->resource_map, (const char *) resource_id);
+    if (found == NULL) {
+        nc_verb_error("Queue was not found.");
+        return;
+    }
+    queue = ovsrec_queue_get_for_uuid(ovsdb_handler->idl, &found->uuid);
 
+    /* remove queue reference from qos table */
+    OVSREC_QOS_FOR_EACH(row, ovsdb_handler->idl) {
+        for (i = 0; i < row->n_queues; i++) {
+            cmp = uuid_equals(&queue->header_.uuid,
+                                    &row->value_queues[i]->header_.uuid);
+            if (cmp) {
+                /* found */
+                row->value_queues[i] = row->value_queues[row->n_queues];
+                row->key_queues[i] = row->key_queues[row->n_queues];
+                n_queues = row->n_queues - 1;
+                ovsrec_qos_set_queues(row, row->key_queues, row->value_queues, n_queues);
+                changed = true;
+                break;
+            }
+        }
+    }
+
+    if (changed) {
+        /* remove queue itself */
+        ovsrec_queue_delete(queue);
+
+        ofc_resmap_remove_r(ovsdb_handler->resource_map, (const char *) resource_id);
+    }
 }
 
 /* /capable-switch/logical-switches/switch/datapath-id */

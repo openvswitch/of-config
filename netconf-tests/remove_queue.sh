@@ -1,11 +1,12 @@
 #!/bin/bash
 netopeer-cli <<KONEC
 connect localhost
-edit-config --config=remove_queue.xml running
+edit-config --test=set --config=remove_queue.xml running
 get-config --filter=ovs.xml running
 
 disconnect
 KONEC
+echo ""
 exit 0
 
-copy-config --source=candidate running
+

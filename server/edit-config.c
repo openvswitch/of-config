@@ -969,7 +969,10 @@ edit_delete(xmlNodePtr node, int running)
                     key = go2node(node, BAD_CAST "name");
                     txn_del_port(key->children->content);
                 } else if (xmlStrEqual(node->name, BAD_CAST "queue")) {
-                    /* TODO queue */
+                    key = go2node(node, BAD_CAST "resource-id");
+                    value = xmlNodeGetContent(key);
+                    txn_del_queue(value);
+                    xmlFree(value);
                 } else if (xmlStrEqual(node->name, BAD_CAST "owned-certificate")) {
                     txn_del_owned_certificate(node);
                 } else if (xmlStrEqual(node->name, BAD_CAST "external-certificate")) {

@@ -89,6 +89,7 @@ void txn_mod_port_add_tunnel(const xmlChar *port_name, xmlNodePtr tunnel_node);
 void txn_del_port_tunnel(const xmlChar *port_name, xmlNodePtr tunnel_node);
 
 void txn_add_queue(xmlNodePtr node);
+void txn_del_queue(const xmlChar *resource_id);
 void txn_add_flow_table(xmlNodePtr node);
 
 void txn_add_owned_certificate(xmlNodePtr node);

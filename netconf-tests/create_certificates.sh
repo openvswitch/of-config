@@ -6,7 +6,6 @@ copy-config --config=create_certificates.xml running
 get-config --filter=ovs.xml running
 disconnect
 KONEC
-
+echo ""
 exit 0
-copy-config --source=candidate running
-copy-config --source=startup running
+

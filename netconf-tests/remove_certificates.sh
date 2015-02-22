@@ -6,6 +6,5 @@ get-config --filter=ovs.xml running
 
 disconnect
 KONEC
+echo ""
 exit 0
-
-copy-config --source=candidate running

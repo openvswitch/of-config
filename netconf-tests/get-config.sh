@@ -5,5 +5,5 @@ connect localhost
 get-config --filter=ovs.xml running
 disconnect
 KONEC
-
+echo ""
 exit 0

@@ -14,5 +14,5 @@ copy-config --config=create_ipgre_tunnel_port.xml running
 get-config --filter=ovs.xml running
 disconnect
 KONEC
-#copy-config --source=startup running
+echo ""
 exit 0

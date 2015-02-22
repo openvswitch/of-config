@@ -412,16 +412,33 @@ get_flow_tables_state(void)
     return ds_steal_cstr(&string);
 }
 
+static bool
+find_flowtable_id(const struct ovsrec_flow_table *flowtable, int64_t *id)
+{
+    const struct ovsrec_bridge *row;
+    size_t i;
+    int cmp;
+    OVSREC_BRIDGE_FOR_EACH(row, ovsdb_handler->idl) {
+        for (i = 0; i < row->n_flow_tables; i++) {
+            cmp = uuid_equals(&flowtable->header_.uuid,
+                              &row->value_flow_tables[i]->header_.uuid);
+            if (cmp) {
+                /* found */
+                *id = row->key_flow_tables[i];
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 static char *
 get_flow_tables_config(void)
 {
-    /* TODO flow-table "<flow-table>"
-     * "<table-id>%s</table-id>"
-     "</flow-table>" */
-
     const struct ovsrec_flow_table *row, *next;
     const char *resource_id;
     struct ds string;
+    int64_t id;
 
     ds_init(&string);
     OVSREC_FLOW_TABLE_FOR_EACH_SAFE(row, next, ovsdb_handler->idl) {
@@ -429,7 +446,10 @@ get_flow_tables_config(void)
                                           &row->header_.uuid);
         ds_put_format(&string, "<flow-table><resource-id>%s</resource-id>",
                       resource_id);
-        ds_put_format(&string, "<name>%s</name", row->name);
+        if (find_flowtable_id(row, &id)) {
+            ds_put_format(&string, "<table-id>%"PRIi64"</table-id>", id);
+        }
+        ds_put_format(&string, "<name>%s</name>", row->name);
         ds_put_format(&string, "</flow-table>");
     }
     return ds_steal_cstr(&string);
@@ -1823,13 +1843,64 @@ txn_add_queue(xmlNodePtr node)
     ovsrec_queue_set_other_config(queue, &queue->other_config);
 }
 
+xmlChar *
+ofc_find_bridge_for_flowtable(xmlNodePtr root, xmlChar *flowtable)
+{
+    xmlXPathContextPtr xpathCtx;
+    xmlXPathObjectPtr xpathObj;
+    xmlDocPtr doc;
+    char *xpathexpr = NULL;
+    xmlChar *bridge_name = NULL;
+    int size;
+    if (root == NULL) {
+        return NULL;
+    }
+    doc = root->doc;
+    xpathexpr = xasprintf("//ofc:switch/ofc:resources/ofc:flow-table['%s']/../../ofc:id[1]",
+                          (const char *) flowtable);
+    /* Create xpath evaluation context */
+    xpathCtx = xmlXPathNewContext(doc);
+    if(xpathCtx == NULL) {
+        nc_verb_error("Unable to create new XPath context");
+        goto cleanup;
+    }
+
+    if (xmlXPathRegisterNs(xpathCtx, BAD_CAST "ofc", BAD_CAST "urn:onf:config:yang")) {
+        nc_verb_error("Registering a namespace for XPath failed (%s).", __func__);
+        goto cleanup;
+    }
+
+    /* Evaluate xpath expression */
+    xpathObj = xmlXPathEvalExpression(BAD_CAST xpathexpr, xpathCtx);
+    if(xpathObj == NULL) {
+        nc_verb_error("Unable to evaluate xpath expression \"%s\"", xpathexpr);
+        goto cleanup;
+    }
+
+    /* Print results */
+    size = (xpathObj->nodesetval) ? xpathObj->nodesetval->nodeNr : 0;
+    if (size == 1) {
+        if (xpathObj->nodesetval->nodeTab[0]
+            && xpathObj->nodesetval->nodeTab[0]->children
+            && xpathObj->nodesetval->nodeTab[0]->children->content) {
+            bridge_name = xmlNodeGetContent(xpathObj->nodesetval->nodeTab[0]);
+        }
+    }
+
+cleanup:
+    /* Cleanup, use bridge_name that was initialized or set */
+    xmlXPathFreeObject(xpathObj);
+    xmlXPathFreeContext(xpathCtx);
+    return bridge_name;
+}
+
 void
 txn_add_flow_table(xmlNodePtr node)
 {
     xmlNodePtr aux;
     xmlChar *resource_id = NULL;
     xmlChar *name = NULL;
-    xmlChar *table_id_txt;
+    xmlChar *table_id_txt, *bridge_name;
     int64_t table_id;
     struct ovsrec_flow_table *flowtable;
     const struct ovsrec_flow_table *flowtable_resid;
@@ -1864,13 +1935,24 @@ txn_add_flow_table(xmlNodePtr node)
     ofc_resmap_insert(ovsdb_handler->resource_map, (const char *) resource_id,
                       &flowtable_resid->header_.uuid,
                       &flowtable_resid->header_);
-    xmlFree(resource_id);
     ovsrec_flow_table_set_name(flowtable, (const char *) name);
     xmlFree(name);
 
     /* TODO check if exists */
 
-    /* create new */
+    bridge_name = ofc_find_bridge_for_flowtable(node, resource_id);
+    if (bridge_name == NULL) {
+        xmlFree(resource_id);
+        return;
+    }
+    xmlFree(resource_id);
+    OVSREC_BRIDGE_FOR_EACH(bridge, ovsdb_handler->idl) {
+        if (xmlStrEqual(bridge_name, BAD_CAST bridge->name)) {
+            /* TODO replace with append */
+            ovsrec_bridge_set_flow_tables(bridge, (const int64_t *) &table_id,
+                    (struct ovsrec_flow_table **) &flowtable, 1);
+        }
+    }
 }
 
 void

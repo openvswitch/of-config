@@ -334,10 +334,7 @@ is_key(xmlNodePtr node)
     } else if (xmlStrEqual(node->name, BAD_CAST "name") &&
             !xmlStrEqual(node->parent->name, BAD_CAST "flow-table")) {
         return 1;
-    } else if (xmlStrEqual(node->name, BAD_CAST "table-id")) {
-        return 1;
-    } else if (xmlStrEqual(node->name, BAD_CAST "resource-id") &&
-            !xmlStrEqual(node->parent->name, BAD_CAST "flow-table")) {
+    } else if (xmlStrEqual(node->name, BAD_CAST "resource-id")) {
         return 1;
     }
 
@@ -428,7 +425,7 @@ matching_elements(xmlNodePtr node1, xmlNodePtr node2)
         aux1 = "name";
     } else if (xmlStrEqual(node2->name, BAD_CAST "flow-table") &&
                     xmlStrEqual(node2->parent->parent->name, BAD_CAST "capable-switch")) {
-        aux1 = "table-id";
+        aux1 = "resource-id";
     } else if ((xmlStrEqual(node2->name, BAD_CAST "queue") ||
                     xmlStrEqual(node2->name, BAD_CAST "owned-certificate") ||
                     xmlStrEqual(node2->name, BAD_CAST "external-certificate")) &&
@@ -1198,9 +1195,6 @@ edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running,
                 /* create links in the bridge */
                 if (xmlStrEqual(edit->name, BAD_CAST "port")) {
                     txn_add_bridge_port(key->children->content,
-                                        edit->children->content);
-                } else if (xmlStrEqual(edit->name, BAD_CAST "flow-table")) {
-                    txn_add_bridge_flow_table(key->children->content,
                                         edit->children->content);
                 } else if (xmlStrEqual(edit->name, BAD_CAST "certificate")) {
                     txn_add_bridge_certificate(key->children->content,

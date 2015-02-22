@@ -1,9 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<module name="of-config"
-        xmlns="urn:ietf:params:xml:ns:yang:yin:1"
-        xmlns:of-config="urn:onf:config:yang"
-        xmlns:yang="urn:ietf:params:xml:ns:yang:ietf-yang-types"
-        xmlns:inet="urn:ietf:params:xml:ns:yang:ietf-inet-types">
+<module xmlns="urn:ietf:params:xml:ns:yang:yin:1" xmlns:of-config="urn:onf:config:yang" xmlns:yang="urn:ietf:params:xml:ns:yang:ietf-yang-types" xmlns:inet="urn:ietf:params:xml:ns:yang:ietf-inet-types" name="of-config">
   <namespace uri="urn:onf:config:yang"/>
   <prefix value="of-config"/>
   <import module="ietf-yang-types">
@@ -399,7 +395,7 @@ Logical Switch.</text>
       </leaf>
       <leaf-list name="flow-table">
         <type name="leafref">
-          <path value="/capable-switch/resources/flow-table/table-id"/>
+          <path value="/capable-switch/resources/flow-table/resource-id"/>
         </type>
         <description>
           <text>A resource identifier of a flow table of the OpenFlow Capable
@@ -1384,192 +1380,6 @@ certificate.</text>
         <text>Table name</text>
       </description>
     </leaf>
-    <leaf name="metadata-match">
-      <type name="hex-binary">
-        <length value="16"/>
-      </type>
-      <description>
-        <text>This element indicates the bits of the metadata field on which the flow
-       table can match on.  It is represented as a 64-bit integer in
-       hexadecimal digits([0-9a-fA-F]) format.</text>
-      </description>
-    </leaf>
-    <leaf name="metadata-write">
-      <type name="hex-binary">
-        <length value="16"/>
-      </type>
-      <description>
-        <text>This element indicates the bits of the metadata field on which flow
-       table can write using the 'write-metadata' instruction.  It is
-       represented as a 64-bit integer in hexadecimal digits([0-9a-fA-F])
-       format.</text>
-      </description>
-    </leaf>
-    <leaf name="max-entries">
-      <type name="uint32"/>
-      <config value="false"/>
-      <description>
-        <text>The maximum number of flow entries supported by the flow table.</text>
-      </description>
-    </leaf>
-    <container name="properties">
-      <presence value="This table exposes feature properties"/>
-      <description>
-        <text>Table feature properties representing all possible features of a
-       table. Each container represent a single table feature
-       property.
-
-       According to the specification, clients should understand that
-       the properties with the -miss suffix may be omitted if it is
-       the same as the corresponding property for regular flow
-       entries.</text>
-      </description>
-      <container name="instructions">
-        <leaf-list name="type">
-          <type name="OFInstructionType"/>
-          <description>
-            <text>The list of instruction types supported by this table for regular flow
-       entries</text>
-          </description>
-        </leaf-list>
-      </container>
-      <container name="instructions-miss">
-        <leaf-list name="type">
-          <type name="OFInstructionType"/>
-          <description>
-            <text>The list of all instruction types supported by this table for
-       table-miss flow entries</text>
-          </description>
-        </leaf-list>
-      </container>
-      <container name="next-tables">
-        <leaf-list name="table-id">
-          <type name="uint8"/>
-          <description>
-            <text>An array of resource-ids of all flow tables that can be directly reached
-       from this table using the 'goto-table' instruction for regular flow
-       entries.</text>
-          </description>
-        </leaf-list>
-      </container>
-      <container name="next-tables-miss">
-        <leaf-list name="table-id">
-          <type name="uint8"/>
-          <description>
-            <text>An array of resource-ids of all flow tables that can be directly reached
-       from this table using the 'goto-table' instruction for the table-miss flow
-       entry.</text>
-          </description>
-        </leaf-list>
-      </container>
-      <container name="write-actions">
-        <leaf-list name="type">
-          <type name="OFActionType"/>
-          <description>
-            <text>The list of all write action types supported by this table for regular
-       flow entries.</text>
-          </description>
-        </leaf-list>
-      </container>
-      <container name="write-actions-miss">
-        <leaf-list name="type">
-          <type name="OFActionType"/>
-          <description>
-            <text>The list of all write action types supported by this table for table-miss
-       flow entries.</text>
-          </description>
-        </leaf-list>
-      </container>
-      <container name="apply-actions">
-        <leaf-list name="type">
-          <type name="OFActionType"/>
-          <description>
-            <text>The list of all apply action types supported by the flow table for
-       regular flow entries.</text>
-          </description>
-        </leaf-list>
-      </container>
-      <container name="apply-actions-miss">
-        <leaf-list name="type">
-          <type name="OFActionType"/>
-          <description>
-            <text>The list of all apply action types supported by the flow table for
-       table-miss flow entries.</text>
-          </description>
-        </leaf-list>
-      </container>
-      <container name="matches">
-        <leaf-list name="type">
-          <type name="OFMatchFieldType"/>
-          <description>
-            <text>The list of all match types supported by this table for regular
-       flow entries.</text>
-          </description>
-        </leaf-list>
-      </container>
-      <container name="wildcards">
-        <leaf-list name="type">
-          <type name="OFMatchFieldType"/>
-          <description>
-            <text>The list of all fields for which the table supports wildcarding.</text>
-          </description>
-        </leaf-list>
-      </container>
-      <container name="write-setfields">
-        <leaf-list name="type">
-          <type name="OFMatchFieldType"/>
-          <description>
-            <text>The list of all 'set-field' action types supported by this table using
-       write actions for regular flow entries.</text>
-          </description>
-        </leaf-list>
-      </container>
-      <container name="write-setfields-miss">
-        <leaf-list name="type">
-          <type name="OFMatchFieldType"/>
-          <description>
-            <text>The list of all 'set-field' action types supported by this table using
-       write actions for table-miss flow entries.</text>
-          </description>
-        </leaf-list>
-      </container>
-      <container name="apply-setfields">
-        <leaf-list name="type">
-          <type name="OFMatchFieldType"/>
-          <description>
-            <text>The list of all 'set-field' action types supported by the table using
-       apply actions for regular flow entries.</text>
-          </description>
-        </leaf-list>
-      </container>
-      <container name="apply-setfields-miss">
-        <leaf-list name="type">
-          <type name="OFMatchFieldType"/>
-          <description>
-            <text>The list of all 'set-field' action types supported by the table using
-       apply actions for table-miss flow entries.</text>
-          </description>
-        </leaf-list>
-      </container>
-      <container name="experimenter">
-        <leaf-list name="experimenter-id">
-          <type name="OFExperimenterId"/>
-          <description>
-            <text>The list of all experimenters supported by the table for regular
-       flow entries.</text>
-          </description>
-        </leaf-list>
-      </container>
-      <container name="experimenter-miss">
-        <leaf-list name="experimenter-id">
-          <type name="OFExperimenterId"/>
-          <description>
-            <text>The list of all experimenters supported by the table for table-miss
-       flow entries.</text>
-          </description>
-        </leaf-list>
-      </container>
-    </container>
   </grouping>
   <container name="capable-switch">
     <description>
@@ -1658,7 +1468,7 @@ OpenFlow Configuration Points.</text>
         <uses name="OFExternalCertificateType"/>
       </list>
       <list name="flow-table">
-        <key value="table-id"/>
+        <key value="resource-id"/>
         <description>
           <text>The list contains all flow table resources of the OpenFlow Capable
        Switch.</text>

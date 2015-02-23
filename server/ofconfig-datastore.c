@@ -327,10 +327,12 @@ ofcds_editconfig(void *UNUSED(data), const nc_rpc * UNUSED(rpc),
     }
 
     /* check operations */
-    if (check_edit_ops(NC_EDIT_OP_DELETE, defop, cfgds, cfg, error) != EXIT_SUCCESS) {
+    ret = check_edit_ops(NC_EDIT_OP_DELETE, defop, cfgds, cfg, error);
+    if (ret != EXIT_SUCCESS) {
         goto error_cleanup;
     }
-    if (check_edit_ops(NC_EDIT_OP_CREATE, defop, cfgds, cfg, error) != EXIT_SUCCESS) {
+    ret = check_edit_ops(NC_EDIT_OP_CREATE, defop, cfgds, cfg, error);
+    if (ret != EXIT_SUCCESS) {
         goto error_cleanup;
     }
 
@@ -338,7 +340,8 @@ ofcds_editconfig(void *UNUSED(data), const nc_rpc * UNUSED(rpc),
         txn_init();
     }
 
-    if (compact_edit_operations(cfg, defop) != EXIT_SUCCESS) {
+    ret = compact_edit_operations(cfg, defop);
+    if (ret != EXIT_SUCCESS) {
         nc_verb_error("Compacting edit-config operations failed.");
         if (error != NULL) {
             *error = nc_err_new(NC_ERR_OP_FAILED);
@@ -347,7 +350,8 @@ ofcds_editconfig(void *UNUSED(data), const nc_rpc * UNUSED(rpc),
     }
 
     /* perform operations */
-    if (edit_operations(cfgds, cfg, defop, running, error) != EXIT_SUCCESS) {
+    ret = edit_operations(cfgds, cfg, defop, running, error);
+    if (ret != EXIT_SUCCESS) {
         goto error_cleanup;
     }
 
@@ -362,8 +366,6 @@ ofcds_editconfig(void *UNUSED(data), const nc_rpc * UNUSED(rpc),
     if (target == NC_DATASTORE_RUNNING) {
         ret = txn_commit(error);
         xmlFreeDoc(cfgds);
-    } else {
-        ret = EXIT_SUCCESS;
     }
     xmlFreeDoc(cfg);
 

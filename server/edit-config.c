@@ -1290,12 +1290,12 @@ edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running,
                  * and used in every bridge.
                  */
             }
-        } else if (xmlStrEqual(node->parent->name, BAD_CAST "private-key")) {
-            txn_add_owned_certificate(node->parent->parent);
-        } else if (xmlStrEqual(node->parent->name, BAD_CAST "owned-certificate")) {
-            txn_add_owned_certificate(node->parent);
-        } else if (xmlStrEqual(node->parent->name, BAD_CAST "external-certificate")) {
-            txn_add_external_certificate(node->parent);
+        } else if (xmlStrEqual(edit->parent->name, BAD_CAST "private-key")) {
+            txn_add_owned_certificate(edit->parent->parent);
+        } else if (xmlStrEqual(edit->parent->name, BAD_CAST "owned-certificate")) {
+            txn_add_owned_certificate(edit->parent);
+        } else if (xmlStrEqual(edit->parent->name, BAD_CAST "external-certificate")) {
+            txn_add_external_certificate(edit->parent);
         } else if (xmlStrEqual(edit->name, BAD_CAST "switch")) {
             /* create bridge */
             txn_add_bridge(edit);
@@ -1379,7 +1379,7 @@ edit_merge(xmlDocPtr orig_doc, xmlNodePtr edit_node, int running,
     }
 
     child = edit_node->children;
-    if (child->type == XML_TEXT_NODE) {
+    if (child && child->type == XML_TEXT_NODE) {
         /* we are in the leaf -> replace the previous value
          * leaf-lists are coverede in find_element_equiv() - if edit_node is a
          * new instance of the leaf-list, orig_node would be NULL

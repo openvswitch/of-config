@@ -992,7 +992,7 @@ error:
 static int
 edit_delete(xmlNodePtr node, int running)
 {
-    xmlNodePtr key;
+    xmlNodePtr key, key2;
     xmlChar *value;
     int ret;
 
@@ -1002,7 +1002,7 @@ edit_delete(xmlNodePtr node, int running)
 
     nc_verb_verbose("Deleting the node %s", (char*)node->name);
     if (running) {
-        if (node->parent->type == XML_DOCUMENT_NODE) {
+        if (node->parent->type == XML_DOCUMENT_NODE) { /* capable-switch node */
             /* removing root */
             txn_del_all();
             return EXIT_SUCCESS;
@@ -1046,6 +1046,8 @@ edit_delete(xmlNodePtr node, int running)
                 } else if (xmlStrEqual(node->name, BAD_CAST "queue")) {
                     txn_del_bridge_queue(key->children->content,
                                            node->children->content);
+                } else if (xmlStrEqual(node->name, BAD_CAST "flow-table")) {
+                    /* TODO flow-table */
                 }
                 /* certificate is ignored on purpose!
                  * Once defined, it is automatically referenced
@@ -1069,8 +1071,30 @@ edit_delete(xmlNodePtr node, int running)
             if (xmlStrEqual(node->name, BAD_CAST "datapath-id")) {
                 txn_mod_bridge_datapath(key->children->content,
                                         node->children->content);
+            } else if (xmlStrEqual(node->name, BAD_CAST "controllers")) {
+                while (node->children) { /* controller */
+                    ret = edit_delete(node->children, running);
+                    if (ret != EXIT_SUCCESS) {
+                        return EXIT_FAILURE;
+                    }
+                }
             }
-            /* TODO enabled, lost-connection-behavior, controllers, resources */
+            /* TODO enabled, lost-connection-behavior */
+        } else if (xmlStrEqual(node->name, BAD_CAST "controller")) {
+            key = go2node(node, BAD_CAST "id");
+            key2 = go2node(node->parent->parent, BAD_CAST "id");
+            txn_del_contr(key->children->content, key2->children->content);
+        } else if (xmlStrEqual(node->parent->name, BAD_CAST "controller")) {
+            key = go2node(node->parent, BAD_CAST "id");
+            /* key 'id' cannot be deleted */
+            if (xmlStrEqual(node->name, BAD_CAST "local-ip-address")) {
+                txn_mod_contr_lip(key->children->content,NULL);
+            } else if (xmlStrEqual(node->name, BAD_CAST "ip-address") ||
+                            xmlStrEqual(node->name, BAD_CAST "port") ||
+                            xmlStrEqual(node->name, BAD_CAST "protocol")) {
+                txn_mod_contr_target(key->children->content, node->name,
+                                     node->children->content);
+            }
         } else if (xmlStrEqual(node->name, BAD_CAST "requested-number")) {
             key = go2node(node->parent, BAD_CAST "name");
             txn_mod_port_reqnumber(key->children->content,
@@ -1269,12 +1293,12 @@ edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running,
                     txn_add_port(edit);
                 } else if (xmlStrEqual(edit->name, BAD_CAST "queue")) {
                     txn_add_queue(edit);
-                } else if (xmlStrEqual(edit->name, BAD_CAST "flow-table")) {
-                    txn_add_flow_table(edit);
                 } else if (xmlStrEqual(edit->name, BAD_CAST "owned-certificate")) {
                     txn_add_owned_certificate(edit);
-                } else { /* external-certificate */
+                } else if (xmlStrEqual(edit->name, BAD_CAST "external-certificate")) {
                     txn_add_external_certificate(edit);
+                } else  { /* flow_table */
+                    txn_add_flow_table(edit);
                 }
             } else { /* logical-switch */
                 /* get bridge name */
@@ -1284,6 +1308,11 @@ edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running,
                 if (xmlStrEqual(edit->name, BAD_CAST "port")) {
                     txn_add_bridge_port(key->children->content,
                                         edit->children->content);
+                } else if (xmlStrEqual(edit->name, BAD_CAST "queue")) {
+                    txn_add_bridge_queue(key->children->content,
+                                         edit->children->content);
+                } else if (xmlStrEqual(edit->name, BAD_CAST "flow-table")) {
+                    /* TODO flow-table */
                 }
                 /* certificate is ignored on purpose!
                  * Once defined, it is automatically referenced
@@ -1306,8 +1335,29 @@ edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running,
             if (xmlStrEqual(edit->name, BAD_CAST "datapath-id")) {
                 txn_mod_bridge_datapath(key->children->content,
                                         edit->children->content);
+            } else if (xmlStrEqual(edit->name, BAD_CAST "controllers")) {
+                while (edit->children) { /* controller */
+                    ret = edit_create(orig_doc, edit->children, running, error);
+                    if (ret != EXIT_SUCCESS) {
+                        return EXIT_FAILURE;
+                    }
+                }
             }
             /* TODO enabled, lost-connection-behavior, controllers, resources */
+        } else if (xmlStrEqual(edit->name, BAD_CAST "controller")) {
+            key = go2node(edit->parent->parent, BAD_CAST "id");
+            txn_add_contr(edit, key->children->content);
+        } else if (xmlStrEqual(edit->parent->name, BAD_CAST "controller")) {
+            key = go2node(edit->parent, BAD_CAST "id");
+            /* key 'id' cannot be deleted */
+            if (xmlStrEqual(edit->name, BAD_CAST "local-ip-address")) {
+                txn_mod_contr_lip(key->children->content, NULL);
+            } else if (xmlStrEqual(edit->name, BAD_CAST "ip-address") ||
+                            xmlStrEqual(edit->name, BAD_CAST "port") ||
+                            xmlStrEqual(edit->name, BAD_CAST "protocol")) {
+                txn_mod_contr_target(key->children->content, edit->name,
+                                edit->children->content);
+            }
         } else if (xmlStrEqual(edit->name, BAD_CAST "requested-number")) {
             key = go2node(edit->parent, BAD_CAST "name");
             txn_mod_port_reqnumber(key->children->content,

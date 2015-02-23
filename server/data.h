@@ -78,6 +78,12 @@ void txn_del_bridge(const xmlChar *br_name);
 void txn_add_bridge(xmlNodePtr node);
 void txn_mod_bridge_datapath(const xmlChar *br_name, const xmlChar* value);
 
+void txn_del_contr(const xmlChar *contr_id, const xmlChar *br_name);
+void txn_add_contr(xmlNodePtr node, const xmlChar *br_name);
+void txn_mod_contr_lip(const xmlChar *contr_id, const xmlChar* value);
+void txn_mod_contr_target(const xmlChar *contr_id, const xmlChar *name,
+                          const xmlChar *value);
+
 void txn_del_port(const xmlChar *port_name);
 void txn_add_port(xmlNodePtr node);
 void txn_mod_port_reqnumber(const xmlChar *port_name, const xmlChar* value);

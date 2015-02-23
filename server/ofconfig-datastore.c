@@ -119,6 +119,7 @@ ofcds_changed(void *UNUSED(data))
 int
 ofcds_rollback(void *UNUSED(data))
 {
+    /* TODO */
     return EXIT_SUCCESS;
 }
 

@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#define _GNU_SOURCE
 #include <config.h>
 
 #define _GNU_SOURCE
@@ -24,6 +25,7 @@
 #include <linux/if.h>
 #include <linux/sockios.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <sys/ioctl.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -946,24 +948,25 @@ static void
 get_controller_config(struct ds *string, const struct ovsrec_controller *row)
 {
     char *protocol, *address, *port;
+    const char *id;
     char *target = strdup(row->target);
-    const char *resource_id;
 
     parse_target_to_addr(target, &protocol, &address, &port);
-    resource_id = find_resid_generate(ovsdb_handler->resource_map,
-                                      &row->header_.uuid);
+    id = smap_get(&(row->external_ids), "ofconfig-id");
 
     ds_put_format(string, "<controller>");
-    ds_put_format(string, "<id>%s</id>", resource_id);
+    ds_put_format(string, "<id>%s</id>", id);
     ds_put_format(string, "<ip-address>%s</ip-address>", address);
-    ds_put_format(string, "<port>%s</port>", port);
+    if (port) {
+        ds_put_format(string, "<port>%s</port>", port);
+    }
     ds_put_format(string, "<protocol>%s</protocol>", protocol);
-
-    if (!strcmp(row->connection_mode, "in-band")) {
+    if (row->local_ip) {
         ds_put_format(string, "<local-ip-address>%s</local-ip-address>",
                       row->local_ip);
     }
     ds_put_format(string, "</controller>");
+    free(target);
 }
 
 static char *
@@ -2544,6 +2547,200 @@ txn_del_queue(const xmlChar *resource_id)
         ovsrec_queue_delete(queue);
 
         ofc_resmap_remove_r(ovsdb_handler->resource_map, (const char *) resource_id);
+    }
+}
+
+/* /capable-switch/logical-switches/switch/controllers/controller/local-ip-address */
+void
+txn_mod_contr_lip(const xmlChar *contr_id, const xmlChar* value)
+{
+    const struct ovsrec_controller *contr;
+    const char *aux;
+
+    OVSREC_CONTROLLER_FOR_EACH(contr, ovsdb_handler->idl) {
+        aux = smap_get(&(contr->external_ids), "ofconfig-id");
+        if (aux && xmlStrEqual(contr_id, BAD_CAST aux)) {
+            break;
+        }
+    }
+    if (!contr) {
+        return;
+    }
+
+    ovsrec_controller_set_local_ip(contr, (char*)value);
+}
+
+/* /capable-switch/logical-switches/switch/controllers/controller */
+void
+txn_add_contr(xmlNodePtr node, const xmlChar *br_name)
+{
+    struct ovsrec_controller *contr;
+    struct ovsrec_controller **contrs;
+    const struct ovsrec_bridge *br;
+    xmlNodePtr aux;
+    const char *proto = "ssl", *ip, *port = NULL;
+    char *target = NULL;
+    int i;
+
+    contr = ovsrec_controller_insert(ovsdb_handler->txn);
+    ovsrec_controller_set_connection_mode(contr, "in-band");
+
+    for (aux = node->children; aux; aux = aux->next) {
+        if (aux->type != XML_ELEMENT_NODE) {
+            continue;
+        }
+
+        if (xmlStrEqual(aux->name, BAD_CAST "id")) {
+            smap_replace(&(contr->external_ids), "ofconfig-id",
+                         (char*)aux->children->content);
+            ovsrec_controller_set_external_ids(contr, &(contr->external_ids));
+        } else if (xmlStrEqual(aux->name, BAD_CAST "ip-address")) {
+            ip = (const char*)aux->children->content;
+        } else if (xmlStrEqual(aux->name, BAD_CAST "port")) {
+            port = (const char*)aux->children->content;
+        } else if (xmlStrEqual(aux->name, BAD_CAST "protocol")) {
+            if (xmlStrEqual(aux->children->content, BAD_CAST "tcp")) {
+                proto = "tcp";
+            }
+        } else if (xmlStrEqual(aux->name, BAD_CAST "local-ip-address")) {
+            ovsrec_controller_set_local_ip(contr,
+                                           (char*) aux->children->content);
+        }
+    }
+
+    asprintf(&target, "%s:%s%s%s", proto, ip, port ? ":" : "", port ? port : "");
+    ovsrec_controller_set_target(contr, target);
+    free(target);
+
+    /* add controller into the bridge */
+    OVSREC_BRIDGE_FOR_EACH(br, ovsdb_handler->idl) {
+        if (xmlStrEqual(br_name, BAD_CAST br->name)) {
+            break;
+        }
+    }
+    if (!br) {
+        return;
+    }
+
+    contrs = malloc(sizeof *br->controller * (br->n_controller + 1));
+    for (i = 0; i < br->n_controller; i++) {
+        contrs[i] = br->controller[i];
+    }
+    contrs[i] = contr;
+
+    ovsrec_bridge_set_controller(br, contrs, br->n_controller + 1);
+    free(contrs);
+}
+
+/* /capable-switch/logical-switches/switch/controllers/controller */
+void
+txn_del_contr(const xmlChar *contr_id, const xmlChar *br_name)
+{
+    const struct ovsrec_bridge *br;
+    const struct ovsrec_controller *contr;
+    struct ovsrec_controller **contrs;
+    const char *aux;
+    int i, j;
+
+    OVSREC_CONTROLLER_FOR_EACH(contr, ovsdb_handler->idl) {
+        aux = smap_get(&(contr->external_ids), "ofconfig-id");
+        if (aux && xmlStrEqual(contr_id, BAD_CAST aux)) {
+            break;
+        }
+    }
+    if (!contr) {
+        return;
+    }
+
+    /* remove controller from the bridge */
+    OVSREC_BRIDGE_FOR_EACH(br, ovsdb_handler->idl) {
+        if (xmlStrEqual(br_name, BAD_CAST br->name)) {
+            break;
+        }
+    }
+    if (!br) {
+        return;
+    }
+
+    contrs = malloc(sizeof *br->controller * (br->n_controller - 1));
+    for (i = j = 0; i < br->n_controller; i++) {
+        if (br->controller[i] != contr) {
+            contrs[j] = br->controller[i];
+            j++;
+        }
+    }
+    ovsrec_bridge_set_controller(br, contrs, br->n_controller - 1);
+
+    /* remove the controller itself */
+    ovsrec_controller_delete(contr);
+}
+
+/* /capable-switch/logical-switches/switch/controllers/controller/--
+ * -- ip-address, port, protocol
+ */
+void
+txn_mod_contr_target(const xmlChar *contr_id, const xmlChar *name,
+                     const xmlChar *value)
+{
+    const struct ovsrec_controller *contr;
+    char *aux;
+    const char *p;
+
+    OVSREC_CONTROLLER_FOR_EACH(contr, ovsdb_handler->idl) {
+        p = smap_get(&(contr->external_ids), "ofconfig-id");
+        if (p && xmlStrEqual(contr_id, BAD_CAST p)) {
+            break;
+        }
+    }
+    if (!contr) {
+        return;
+    }
+
+    if (!contr->target) {
+        /* prepare empty template */
+        ovsrec_controller_set_target(contr, "ssl:");
+    }
+
+    if (xmlStrEqual(name, BAD_CAST "port")) {
+        /* hide the port from the current value in controller structure */
+        aux = index(contr->target, ':'); /* protocol_:_ip */
+        aux = index(aux, ':'); /* ip_:_port */
+        if (aux != NULL) {
+            aux = '\0';
+        }
+        if (value) {
+            asprintf(&aux, "%s:%s", contr->target, value);
+            ovsrec_controller_set_target(contr, aux);
+            free(aux);
+        } /* else delete - keep the value with hidden port */
+    } else if (xmlStrEqual(name, BAD_CAST "protocol")) {
+        if (value && xmlStrEqual(value, BAD_CAST "tcp")) {
+            contr->target[0] = 't';
+            contr->target[1] = 'c';
+            contr->target[2] = 'p';
+        } else {
+            /* covers also delete, when we use the default value - tls (ssl) */
+            contr->target[0] = 's';
+            contr->target[1] = 's';
+            contr->target[2] = 'l';
+        }
+    } else if (xmlStrEqual(name, BAD_CAST "ip-address")) {
+        if (value) {
+            p = index(contr->target, ':'); /* protocol_:_ip */
+            p = index(p, ':'); /* ip_:_port */
+            if (p) {
+                asprintf(&aux, "xxx:%s:%s", value, p + 1);
+            } else {
+                asprintf(&aux, "xxx:%s", value);
+            }
+            /* copy protocol from the current value */
+            memcpy(aux, contr->target, 3);
+            ovsrec_controller_set_target(contr, aux);
+            free(aux);
+        } else {
+            /* delete whole target */
+            ovsrec_controller_set_target(contr, NULL);
+        }
     }
 }
 

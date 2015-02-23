@@ -2069,6 +2069,7 @@ txn_add_owned_certificate(xmlNodePtr node)
             xmlFree(xmlval);
             write(fd, "\n-----END CERTIFICATE-----", 26);
             close(fd);
+            ovsrec_ssl_verify_certificate(ssl);
             ovsrec_ssl_set_certificate(ssl, OFC_DATADIR "/cert.pem");
         } else if (xmlStrEqual(aux->name, BAD_CAST "private-key")) {
             for (leaf = aux->children; leaf; leaf = leaf->next) {
@@ -2091,6 +2092,7 @@ txn_add_owned_certificate(xmlNodePtr node)
             close(fd);
             free(key_type);
             free(key_data);
+            ovsrec_ssl_verify_private_key(ssl);
             ovsrec_ssl_set_private_key(ssl, OFC_DATADIR "/key.pem");
         }
     }
@@ -2101,6 +2103,7 @@ txn_add_owned_certificate(xmlNodePtr node)
         if (!ovs) {
             ovs = ovsrec_open_vswitch_insert(ovsdb_handler->txn);
         }
+        ovsrec_open_vswitch_verify_ssl(ovs);
         ovsrec_open_vswitch_set_ssl(ovs, ssl);
     }
 }
@@ -2160,6 +2163,7 @@ txn_add_external_certificate(xmlNodePtr node)
             xmlFree(xmlval);
             write(fd, "\n-----END CERTIFICATE-----", 26);
             close(fd);
+            ovsrec_ssl_verify_ca_cert(ssl);
             ovsrec_ssl_set_ca_cert(ssl, OFC_DATADIR "/ca_cert.pem");
         }
     }
@@ -2170,6 +2174,7 @@ txn_add_external_certificate(xmlNodePtr node)
         if (!ovs) {
             ovs = ovsrec_open_vswitch_insert(ovsdb_handler->txn);
         }
+        ovsrec_open_vswitch_verify_ssl(ovs);
         ovsrec_open_vswitch_set_ssl(ovs, ssl);
     }
 }

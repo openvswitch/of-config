@@ -938,6 +938,7 @@ edit_delete(xmlNodePtr node, int running)
 {
     xmlNodePtr key;
     xmlChar *value;
+    int ret;
 
     if (!node) {
         return EXIT_SUCCESS;
@@ -953,12 +954,13 @@ edit_delete(xmlNodePtr node, int running)
         if (xmlStrEqual(node->parent->name, BAD_CAST "capable-switch")) {
             if (xmlStrEqual(node->name, BAD_CAST "id")) {
                 ofc_set_switchid(NULL);
-            } else if (xmlStrEqual(node->name, BAD_CAST "resources")) {
-                /* remove all resources */
-                /* TODO */
-            } else if (xmlStrEqual(node->name, BAD_CAST "local-switches")) {
-                /* remove all bridges */
-                /* TODO */
+            } else { /* resources, logical-switches */
+                while (node->children) {
+                    ret = edit_delete(node->children, running);
+                    if (ret != EXIT_SUCCESS) {
+                        return EXIT_FAILURE;
+                    }
+                }
             }
         } else if (xmlStrEqual(node->parent->name, BAD_CAST "resources")) {
             if (xmlStrEqual(node->parent->parent->name, BAD_CAST "capable-switch")) {
@@ -1145,6 +1147,7 @@ edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running,
 {
     xmlNodePtr key, parent;
     xmlChar *bridge_name;
+    int ret;
 
     /* remove operation attribute */
     xmlRemoveProp(xmlHasNsProp(edit, BAD_CAST "operation",
@@ -1170,7 +1173,8 @@ edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running,
             } else { /* resources and local-switches */
                 /* nothing to do on this level, continue with creating children */
                 while (edit->children) {
-                    if (edit_create(orig_doc, edit->children, running, error) != EXIT_SUCCESS) {
+                    ret = edit_create(orig_doc, edit->children, running, error);
+                    if (ret != EXIT_SUCCESS) {
                         return EXIT_FAILURE;
                     }
                 }

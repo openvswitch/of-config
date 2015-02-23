@@ -35,8 +35,16 @@ static int edit_remove(xmlDocPtr, xmlNodePtr, int, struct nc_err**);
 static int edit_create(xmlDocPtr, xmlNodePtr, int, struct nc_err**);
 static int edit_merge(xmlDocPtr, xmlNodePtr, int, struct nc_err**);
 
+/*
+ * Remove leading and trailing whitespaces from the string.
+ *
+ * @param[in] in Input string to clear.
+ * @return copy of the input string without leading/trailing whitespaces,
+ * NULL on memory allocation error. Caller is supposed to free the returned
+ * string.
+ */
 static char *
-nc_clrwspace (const char* in)
+clrwspace (const char* in)
 {
     int i, j = 0, len = strlen(in);
     char* retval = strdup(in);
@@ -64,7 +72,18 @@ nc_clrwspace (const char* in)
     return (retval);
 }
 
-int nc_nscmp(xmlNodePtr reference, xmlNodePtr node)
+/*
+ * Compare namespaces of the 2 nodes. The function includes XML namespace
+ * wildcard mechanism defined by RFC 6241. It means, that if the client does
+ * not specify the namespace of the (edit-config) data, the namespaces always
+ * match.
+ *
+ * @param[in] reference XML element node to compare (the one from edit-config)
+ * @param[in] node XML element node to compare
+ * @return 0 for the case that namespaces match, 1 otherwise.
+ */
+static int
+nscmp(xmlNodePtr reference, xmlNodePtr node)
 {
     int in_ns = 1;
     char* s = NULL;
@@ -77,7 +96,7 @@ int nc_nscmp(xmlNodePtr reference, xmlNodePtr node)
          * 2) namespace is empty: xmlns=""
          */
         if (!strcmp((char *)reference->ns->href, NC_NS_BASE10) ||
-                strlen(s = nc_clrwspace((char*)(reference->ns->href))) == 0) {
+                strlen(s = clrwspace((char*)(reference->ns->href))) == 0) {
             free(s);
             return 0;
         }
@@ -98,9 +117,10 @@ int nc_nscmp(xmlNodePtr reference, xmlNodePtr node)
  * subtree.
  * @param[in] node Node where to start checking.
  * @param[in] ns Namespace to find.
- * @return 0 if the namespace is not used, 1 if the usage of the namespace was found
+ * @return 0 if the namespace is not used, 1 if the usage of the ns was found
  */
-static int nc_find_namespace_usage(xmlNodePtr node, xmlNsPtr ns)
+static int
+find_namespace_usage(xmlNodePtr node, xmlNsPtr ns)
 {
     xmlNodePtr child;
     xmlAttrPtr prop;
@@ -118,7 +138,8 @@ static int nc_find_namespace_usage(xmlNodePtr node, xmlNsPtr ns)
 
         /* go recursive into children */
         for (child = node->children; child != NULL; child = child->next) {
-            if (child->type == XML_ELEMENT_NODE && nc_find_namespace_usage(child, ns) == 1) {
+            if (child->type == XML_ELEMENT_NODE &&
+                            find_namespace_usage(child, ns) == 1) {
                 return 1;
             }
         }
@@ -131,7 +152,8 @@ static int nc_find_namespace_usage(xmlNodePtr node, xmlNsPtr ns)
  * @brief Remove namespace definition from the node which are no longer used.
  * @param[in] node XML element node where to check for namespace definitions
  */
-static void nc_clear_namespaces(xmlNodePtr node)
+static void
+clrns(xmlNodePtr node)
 {
     xmlNsPtr ns, prev = NULL;
 
@@ -140,7 +162,7 @@ static void nc_clear_namespaces(xmlNodePtr node)
     }
 
     for (ns = node->nsDef; ns != NULL; ) {
-        if (nc_find_namespace_usage(node, ns) == 0) {
+        if (find_namespace_usage(node, ns) == 0) {
             /* no one use the namespace - remove it */
             if (prev == NULL) {
                 node->nsDef = ns->next;
@@ -181,13 +203,12 @@ go2node(xmlNodePtr parent, xmlChar *name)
 }
 
 /**
- * @brief Get the default value of the node if a default value is defined in the model
+ * @brief Get the default value of the node
  * @param[in] node XML element whose default value we want to get
- * @param[in] model Configuration data model for the document of the given node.
- * @return Default value of the node, NULL if no default value is defined or found.
+ * @return Default value of the node, NULL if no default value is defined
  */
 static xmlChar *
-get_default_value(xmlNodePtr node)
+get_defval(xmlNodePtr node)
 {
     if (!node) {
         return NULL;
@@ -216,7 +237,8 @@ get_default_value(xmlNodePtr node)
 }
 
 /**
- * \brief Get the list of elements with the specified selected edit-config's operation.
+ * \brief Get the list of elements with the specified selected edit-config's
+ * operation.
  *
  * \param[in] op edit-config's operation type to search for.
  * \param[in] edit XML document covering edit-config's \<config\> element. The
@@ -228,7 +250,7 @@ get_operation_elements(NC_EDIT_OP_TYPE op, xmlDocPtr edit)
 {
     xmlXPathContextPtr edit_ctxt = NULL;
     xmlXPathObjectPtr operation_nodes = NULL;
-    xmlChar xpath[XPATH_BUFFER];
+    char xpath[XPATH_BUFFER];
     char *opstring;
 
     switch (op) {
@@ -258,17 +280,19 @@ get_operation_elements(NC_EDIT_OP_TYPE op, xmlDocPtr edit)
         if (edit_ctxt != NULL) {
             xmlXPathFreeContext(edit_ctxt);
         }
-        nc_verb_error("Creating the XPath evaluation context failed (%s).", __func__);
+        nc_verb_error("Creating the XPath evaluation context failed (%s).",
+                      __func__);
         return (NULL);
     }
 
     if (xmlXPathRegisterNs(edit_ctxt, BAD_CAST "nc", BAD_CAST NC_NS_BASE10)) {
         xmlXPathFreeContext(edit_ctxt);
-        nc_verb_error("Registering a namespace for XPath failed (%s).", __func__);
+        nc_verb_error("Registering a namespace for XPath failed (%s).",
+                      __func__);
         return (NULL);
     }
 
-    if (snprintf((char*)xpath, XPATH_BUFFER, "//*[@nc:operation='%s']", opstring) <= 0) {
+    if (snprintf(xpath, XPATH_BUFFER, "//*[@nc:operation='%s']", opstring) <= 0) {
         xmlXPathFreeContext(edit_ctxt);
         nc_verb_error("Preparing the XPath query failed (%s).", __func__);
         return (NULL);
@@ -285,7 +309,7 @@ get_operation_elements(NC_EDIT_OP_TYPE op, xmlDocPtr edit)
  * \brief Get value of the operation attribute of the \<node\> element.
  * If no such attribute is present, defop parameter is used and returned.
  *
- * \param[in] node XML element to analyse
+ * \param[in] node XML element to analyze
  * \param[in] defop Default operation to use if no specific operation is present
  * \param[out] err NETCONF error structure to store the error description in
  *
@@ -323,7 +347,13 @@ get_operation(xmlNodePtr node, NC_EDIT_DEFOP_TYPE defop, struct nc_err** error)
     return op;
 }
 
-int
+/*
+ * Tell if the specified node is a key of a list instance
+ *
+ * @param[in] node XML element to analyze
+ * @return 0 as false, 1 as true
+ */
+static int
 is_key(xmlNodePtr node)
 {
     if (xmlStrEqual(node->name, BAD_CAST "id")) {
@@ -344,18 +374,17 @@ is_key(xmlNodePtr node)
 /**
  * \brief Compare 2 elements and decide if they are equal for NETCONF.
  *
- * Matching does not include attributes and children match (only key children are
- * checked). Furthemore, XML node types and namespaces are also checked.
+ * Matching does not include attributes and children match (only key children
+ * are checked). Furthermore, XML node types and namespaces are also checked.
  *
  * Supported XML node types are XML_TEXT_NODE and XML_ELEMENT_NODE.
  *
- * \param[in] node1 First node to compare.
+ * \param[in] node1 First node to compare (from edit-config data).
  * \param[in] node2 Second node to compare.
- * \param[in] keys List of key elements from configuration data model.
  *
  * \return 0 - false, 1 - true (matching elements), -1 - error.
  */
-int
+static int
 matching_elements(xmlNodePtr node1, xmlNodePtr node2)
 {
     xmlNodePtr key1, key2;
@@ -368,8 +397,8 @@ matching_elements(xmlNodePtr node1, xmlNodePtr node2)
 
     /* compare text nodes */
     if (node1->type == XML_TEXT_NODE && node2->type == XML_TEXT_NODE) {
-        aux1 = nc_clrwspace((char*)(node1->content));
-        aux2 = nc_clrwspace((char*)(node2->content));
+        aux1 = clrwspace((char*)(node1->content));
+        aux2 = clrwspace((char*)(node2->content));
 
         if (strcmp(aux1, aux2) == 0) {
             ret = 1;
@@ -382,7 +411,8 @@ matching_elements(xmlNodePtr node1, xmlNodePtr node2)
     }
 
     /* check element types - only element nodes are processed */
-    if ((node1->type != XML_ELEMENT_NODE) || (node2->type != XML_ELEMENT_NODE)) {
+    if ((node1->type != XML_ELEMENT_NODE) ||
+                    (node2->type != XML_ELEMENT_NODE)) {
         return 0;
     }
     /* check element names */
@@ -391,7 +421,7 @@ matching_elements(xmlNodePtr node1, xmlNodePtr node2)
     }
 
     /* check element namespace */
-    if (nc_nscmp(node1, node2) != 0) {
+    if (nscmp(node1, node2) != 0) {
         return 0;
     }
 
@@ -447,15 +477,14 @@ matching_elements(xmlNodePtr node1, xmlNodePtr node2)
 }
 
 /**
- * \brief Find an equivalent of the given edit node on orig_doc document.
+ * \brief Find an equivalent of the given edit node in the orig_doc document.
  *
  * \param[in] orig_doc Original configuration document to edit.
  * \param[in] edit Element from the edit-config's \<config\>. Its equivalent in
  *                 orig_doc should be found.
- * \param[in] keys List of the key elements from the configuration data model.
  * \return Found equivalent element, NULL if no such element exists.
  */
-xmlNodePtr
+static xmlNodePtr
 find_element_equiv(xmlDocPtr orig_doc, xmlNodePtr edit)
 {
     xmlNodePtr orig_parent, node;
@@ -499,9 +528,9 @@ find_element_equiv(xmlDocPtr orig_doc, xmlNodePtr edit)
 /**
  * \brief Check edit-config's node operations hierarchy.
  *
- * In case of the removal ("remove" and "delete") operations, the supreme operation
- * (including the default operation) cannot be the creation ("create or "replace")
- * operation.
+ * In case of the removal ("remove" and "delete") operations, the supreme
+ * operation (including the default operation) cannot be the creation ("create
+ * or "replace") operation.
  *
  * In case of the creation operations, the supreme operation cannot be a removal
  * operation.
@@ -514,7 +543,8 @@ find_element_equiv(xmlDocPtr orig_doc, xmlNodePtr edit)
  * returned on success.
  */
 static int
-check_edit_ops_hierarchy(xmlNodePtr edit, NC_EDIT_DEFOP_TYPE defop, struct nc_err **error)
+check_edit_ops_hierarchy(xmlNodePtr edit, NC_EDIT_DEFOP_TYPE defop,
+                         struct nc_err **error)
 {
     xmlNodePtr parent;
     NC_EDIT_OP_TYPE op, parent_op;
@@ -541,7 +571,8 @@ check_edit_ops_hierarchy(xmlNodePtr edit, NC_EDIT_DEFOP_TYPE defop, struct nc_er
             parent_op = get_operation(parent, NC_EDIT_DEFOP_NOTSET, error);
             if (parent_op == NC_EDIT_OP_ERROR) {
                 return EXIT_FAILURE;
-            } else if (parent_op == NC_EDIT_OP_CREATE || parent_op == NC_EDIT_OP_REPLACE) {
+            } else if (parent_op == NC_EDIT_OP_CREATE ||
+                            parent_op == NC_EDIT_OP_REPLACE) {
                 if (error != NULL) {
                     *error = nc_err_new(NC_ERR_OP_FAILED);
                 }
@@ -556,7 +587,8 @@ check_edit_ops_hierarchy(xmlNodePtr edit, NC_EDIT_DEFOP_TYPE defop, struct nc_er
             parent_op = get_operation(parent, NC_EDIT_DEFOP_NOTSET, error);
             if (parent_op == NC_EDIT_OP_ERROR) {
                 return EXIT_FAILURE;
-            } else if (parent_op == NC_EDIT_OP_DELETE || parent_op == NC_EDIT_OP_REMOVE) {
+            } else if (parent_op == NC_EDIT_OP_DELETE ||
+                            parent_op == NC_EDIT_OP_REMOVE) {
                 if (error != NULL) {
                     *error = nc_err_new(NC_ERR_OP_FAILED);
                 }
@@ -575,30 +607,29 @@ check_edit_ops_hierarchy(xmlNodePtr edit, NC_EDIT_DEFOP_TYPE defop, struct nc_er
  * In case of the "create" operation, if the configuration data exists, the
  * "data-exists" error is generated.
  *
- * In case of the "delete" operation, if the configuration data does not exist, the
- * "data-missing" error is generated.
+ * In case of the "delete" operation, if the configuration data does not exist,
+ * the "data-missing" error is generated.
  *
  * Operation hierarchy check check_edit_ops_hierarchy() is also applied.
  *
- * \param[in] op Operation type to check (only the "delete" and "create" operation
- * types are valid).
+ * \param[in] op Operation type to check (only the "delete" and "create"
+ * operation types are valid).
  * \param[in] defop Default edit-config's operation for this edit-config call.
  * \param[in] orig Original configuration document to edit.
  * \param[in] edit XML document covering edit-config's \<config\> element
  * supposed to edit the orig configuration data.
- * \param[in] model XML form (YIN) of the configuration data model appropriate
- * to the given repo.
  * \param[out] err NETCONF error structure.
- * \return On error, non-zero is returned and an err structure is filled. Zero is
- * returned on success.
+ * \return On error, non-zero is returned and an err structure is filled.
+ * 0 is returned on success.
  */
-static int
-check_edit_ops(NC_EDIT_OP_TYPE op, NC_EDIT_DEFOP_TYPE defop, xmlDocPtr orig, xmlDocPtr edit, struct nc_err **error)
+int
+check_edit_ops(NC_EDIT_OP_TYPE op, NC_EDIT_DEFOP_TYPE defop, xmlDocPtr orig,
+               xmlDocPtr edit, struct nc_err **error)
 {
     xmlXPathObjectPtr operation_nodes = NULL;
     xmlNodePtr node_to_process = NULL, n;
     xmlChar *defval = NULL, *value = NULL;
-    int i;
+    int i, r;
 
     operation_nodes = get_operation_elements(op, edit);
     if (operation_nodes == NULL) {
@@ -615,12 +646,13 @@ check_edit_ops(NC_EDIT_OP_TYPE op, NC_EDIT_DEFOP_TYPE defop, xmlDocPtr orig, xml
     for (i = 0; i < operation_nodes->nodesetval->nodeNr; i++) {
         node_to_process = operation_nodes->nodesetval->nodeTab[i];
 
-        if (check_edit_ops_hierarchy(node_to_process, defop, error) != EXIT_SUCCESS) {
+        r = check_edit_ops_hierarchy(node_to_process, defop, error);
+        if (r != EXIT_SUCCESS) {
             xmlXPathFreeObject(operation_nodes);
             return EXIT_FAILURE;
         }
 
-        /* \todo namespace handlings */
+        /* TODO namespace handlings */
         n = find_element_equiv(orig, node_to_process);
         if (op == NC_EDIT_OP_DELETE && n == NULL) {
             if (ncdflt_get_basic_mode() == NCWD_MODE_ALL) {
@@ -630,7 +662,7 @@ check_edit_ops(NC_EDIT_OP_TYPE op, NC_EDIT_DEFOP_TYPE defop, xmlDocPtr orig, xml
                  * is immediately replaced by the server with
                  * the default value.
                  */
-                defval = get_default_value(node_to_process);
+                defval = get_defval(node_to_process);
                 if (defval == NULL) {
                     /* no default value for this node */
                     *error = nc_err_new(NC_ERR_DATA_MISSING);
@@ -667,7 +699,7 @@ check_edit_ops(NC_EDIT_OP_TYPE op, NC_EDIT_DEFOP_TYPE defop, xmlDocPtr orig, xml
                  * data node that has a schema default value
                  * defined MUST succeed.
                  */
-                defval = get_default_value(node_to_process);
+                defval = get_defval(node_to_process);
                 if (defval == NULL) {
                     /* no default value for this node */
                     *error = nc_err_new(NC_ERR_DATA_EXISTS);
@@ -716,7 +748,17 @@ check_edit_ops(NC_EDIT_OP_TYPE op, NC_EDIT_DEFOP_TYPE defop, xmlDocPtr orig, xml
     }
 }
 
-static int compact_edit_operations_recursively(xmlNodePtr node, NC_EDIT_OP_TYPE supreme_op)
+/*
+ * Recursive follow-up of the compact_edit_operations()
+ *
+ * @param[in] node XML element to process (recursively)
+ * @param[in] supreme_op The operation type somehow (explicitelly or as a
+ * default operation) inherited from the parent node.
+ *
+ * @return EXIT_SUCCESS or EXIT_FAILURE
+ */
+static int
+compact_edit_operations_r(xmlNodePtr node, NC_EDIT_OP_TYPE supreme_op)
 {
     NC_EDIT_OP_TYPE op;
     xmlNodePtr children;
@@ -740,14 +782,14 @@ static int compact_edit_operations_recursively(xmlNodePtr node, NC_EDIT_OP_TYPE 
             /* remove operation attribute */
             xmlRemoveProp(xmlHasNsProp(node, BAD_CAST "operation",
                           BAD_CAST NC_NS_BASE10));
-            nc_clear_namespaces(node);
+            clrns(node);
         }
         break;
     }
 
     /* go recursive */
     for (children = node->children; children != NULL; children = children->next) {
-        ret = compact_edit_operations_recursively(children, op);
+        ret = compact_edit_operations_r(children, op);
         if (ret == EXIT_FAILURE) {
             return EXIT_FAILURE;
         }
@@ -755,9 +797,21 @@ static int compact_edit_operations_recursively(xmlNodePtr node, NC_EDIT_OP_TYPE 
     return EXIT_SUCCESS;
 }
 
-static int compact_edit_operations(xmlDocPtr edit_doc, NC_EDIT_DEFOP_TYPE defop)
+/*
+ * Keep as a few explicit operations in edit-config as possible. It avoids a
+ * duplication of the same operation in a subtree.
+ *
+ * @param[in] edit_doc XML doc to process
+ * @param[in] def_op The default operation type to inherit in case no operation
+ * is explicitely specified.
+ *
+ * @return EXIT_SUCCESS or EXIT_FAILURE
+ */
+int
+compact_edit_operations(xmlDocPtr edit_doc, NC_EDIT_DEFOP_TYPE defop)
 {
     xmlNodePtr root;
+    int r;
 
     if (edit_doc == NULL) {
         return EXIT_FAILURE;
@@ -769,7 +823,8 @@ static int compact_edit_operations(xmlDocPtr edit_doc, NC_EDIT_DEFOP_TYPE defop)
             continue;
         }
 
-        if (compact_edit_operations_recursively(root, (NC_EDIT_OP_TYPE)defop) != EXIT_SUCCESS) {
+        r = compact_edit_operations_r(root, (NC_EDIT_OP_TYPE)defop);
+        if (r != EXIT_SUCCESS) {
             return (EXIT_FAILURE);
         }
     }
@@ -777,22 +832,20 @@ static int compact_edit_operations(xmlDocPtr edit_doc, NC_EDIT_DEFOP_TYPE defop)
 }
 
 /**
- * \brief Perform all the edit-config's operations specified in the edit_doc document.
+ * \brief Perform all the edit-config's operations specified in the edit_doc.
  *
  * \param[in] orig_doc Original configuration document to edit.
  * \param[in] edit_doc XML document covering edit-config's \<config\> element
  *                     supposed to edit orig_doc configuration data.
  * \param[in] defop Default edit-config's operation for this edit-config call.
- * \param[in] model XML form (YIN) of the configuration data model appropriate
- * to the given configuration data.
  * \param[out] err NETCONF error structure.
  *
  * \return On error, non-zero is returned and err structure is filled. Zero is
  *         returned on success.
  */
-static int edit_operations(xmlDocPtr orig_doc, xmlDocPtr edit_doc,
-                           NC_EDIT_DEFOP_TYPE defop, int running,
-                           struct nc_err **error)
+int
+edit_operations(xmlDocPtr orig_doc, xmlDocPtr edit_doc,
+                NC_EDIT_DEFOP_TYPE defop, int running, struct nc_err **error)
 {
     xmlXPathObjectPtr nodes;
     int i;
@@ -803,7 +856,8 @@ static int edit_operations(xmlDocPtr orig_doc, xmlDocPtr edit_doc,
     /* default replace */
     if (defop == NC_EDIT_DEFOP_REPLACE) {
         /* replace whole document */
-        for (edit_node = edit_doc->children; edit_node != NULL; edit_node = edit_doc->children) {
+        for (edit_node = edit_doc->children; edit_node != NULL;
+                        edit_node = edit_doc->children) {
             edit_replace(orig_doc, edit_node, running, error);
         }
     }
@@ -907,7 +961,8 @@ static int edit_operations(xmlDocPtr orig_doc, xmlDocPtr edit_doc,
     if (defop == NC_EDIT_DEFOP_MERGE || defop == NC_EDIT_DEFOP_NOTSET) {
         /* replace whole document */
         if (edit_doc->children != NULL) {
-            for (edit_node = edit_doc->children; edit_node != NULL; edit_node = edit_doc->children) {
+            for (edit_node = edit_doc->children; edit_node != NULL;
+                            edit_node = edit_doc->children) {
                 if (edit_merge(orig_doc, edit_doc->children,
                                running, error) != EXIT_SUCCESS) {
                     goto error;
@@ -930,8 +985,9 @@ error:
 /**
  * \brief Perform edit-config's "delete" operation on the selected node.
  *
- * \param[in] node XML node from the configuration data to delete.
- * \return Zero on success, non-zero otherwise.
+ * @param[in] node XML node from the configuration data to delete.
+ * @param[in] running Flag for applying changes to the OVSDB
+ * @return Zero on success, non-zero otherwise.
  */
 static int
 edit_delete(xmlNodePtr node, int running)
@@ -1041,7 +1097,7 @@ edit_delete(xmlNodePtr node, int running)
  * \param[in] orig_doc Original configuration document to edit.
  * \param[in] edit_node Node from the edit-config's \<config\> element with
  * the specified "remove" operation.
- * \param[in] keys  List of the key elements from the configuration data model.
+ * @param[in] running Flag for applying changes to the OVSDB
  *
  * \return Zero on success, non-zero otherwise.
  */
@@ -1069,7 +1125,7 @@ edit_remove(xmlDocPtr orig_doc, xmlNodePtr edit_node, int running,
  * \param[in] orig_doc Original configuration document to edit.
  * \param[in] edit_node Node from the edit-config's \<config\> element with
  * the specified "replace" operation.
- * \param[in] keys  List of the key elements from the configuration data model.
+ * @param[in] running Flag for applying changes to the OVSDB
  *
  * \return Zero on success, non-zero otherwise.
  */
@@ -1110,6 +1166,18 @@ edit_replace(xmlDocPtr orig_doc, xmlNodePtr edit_node, int running,
     }
 }
 
+/**
+ * \brief Recursive follow-up of the edit_create()
+ *
+ * The recursion is needed only in case the data are not applied to OVSDB, but
+ * only to the XML tree.
+ *
+ * \param[in] orig_doc Original configuration document to edit.
+ * \param[in] edit_node Node from the edit-config's \<config\> element with
+ * the specified "replace" operation.
+ *
+ * \return Zero on success, non-zero otherwise.
+ */
 static xmlNodePtr
 edit_create_r(xmlDocPtr orig_doc, xmlNodePtr edit, struct nc_err** error)
 {
@@ -1147,6 +1215,16 @@ edit_create_r(xmlDocPtr orig_doc, xmlNodePtr edit, struct nc_err** error)
     return retval;
 }
 
+/**
+ * \brief Perform edit-config's "create" operation on the selected node.
+ *
+ * \param[in] orig_doc Original configuration document to edit.
+ * \param[in] edit Node from the edit-config's \<config\> element with
+ * the specified "create" operation.
+ * @param[in] running Flag for applying changes to the OVSDB
+ *
+ * \return Zero on success, non-zero otherwise.
+ */
 static int
 edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running,
             struct nc_err** error)
@@ -1158,7 +1236,7 @@ edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running,
     /* remove operation attribute */
     xmlRemoveProp(xmlHasNsProp(edit, BAD_CAST "operation",
                   BAD_CAST NC_NS_BASE10));
-    nc_clear_namespaces(edit);
+    clrns(edit);
 
     /* TODO: follow edit-delete structure */
     nc_verb_verbose("Creating the node %s", (char*)edit->name);
@@ -1273,6 +1351,16 @@ edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running,
     return EXIT_SUCCESS;
 }
 
+/**
+ * \brief Perform edit-config's "merge" operation on the selected node.
+ *
+ * \param[in] orig_doc Original configuration document to edit.
+ * \param[in] edit_node Node from the edit-config's \<config\> element where
+ * to apply merge
+ * @param[in] running Flag for applying changes to the OVSDB
+ *
+ * \return Zero on success, non-zero otherwise.
+ */
 static int
 edit_merge(xmlDocPtr orig_doc, xmlNodePtr edit_node, int running,
            struct nc_err** error)

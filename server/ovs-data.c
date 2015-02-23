@@ -2097,7 +2097,9 @@ txn_add_owned_certificate(xmlNodePtr node)
         }
     }
 
-    /* get the Open_vSwitch table for linking the SSL structure into */
+    /* Get the Open_vSwitch table for linking the SSL structure into and
+     * thus force all the bridges to use it.
+     */
     if (!mod) {
         ovs = ovsrec_open_vswitch_first(ovsdb_handler->idl);
         if (!ovs) {
@@ -2168,7 +2170,9 @@ txn_add_external_certificate(xmlNodePtr node)
         }
     }
 
-    /* get the Open_vSwitch table for linking the SSL structure into */
+    /* Get the Open_vSwitch table for linking the SSL structure into and
+     * thus force all the bridges to use it.
+     */
     if (!mod) {
         ovs = ovsrec_open_vswitch_first(ovsdb_handler->idl);
         if (!ovs) {
@@ -2436,81 +2440,6 @@ txn_del_bridge_queue(const xmlChar *br_name, const xmlChar *resource_id)
         }
     }
 }
-
-void
-txn_add_bridge_certificate(const xmlChar *br_name, const xmlChar *resource_id)
-{
-    const struct ovsrec_bridge *bridge;
-    const struct ovsrec_ssl *ssl;
-
-    if (!resource_id || !br_name) {
-        return;
-    }
-
-    nc_verb_verbose("Add certificate %s to %s bridge resource list.",
-                    BAD_CAST resource_id, BAD_CAST br_name);
-    OVSREC_BRIDGE_FOR_EACH(bridge, ovsdb_handler->idl) {
-        if (xmlStrEqual(br_name, BAD_CAST bridge->name)) {
-            break;
-        }
-    }
-    if (bridge == NULL) {
-        /* not found */
-        return;
-    }
-
-    if (ovsdb_handler->cert_map->owned_resid == NULL || strcmp(ovsdb_handler->cert_map->owned_resid, (const char *) resource_id)) {
-        /* not found */
-        return;
-    }
-    ssl = ovsrec_ssl_first(ovsdb_handler->idl);
-    if (ssl == NULL || memcmp(&ssl->header_.uuid, &ovsdb_handler->cert_map->uuid, sizeof(struct uuid))) {
-        /* something wrong */
-        return;
-    }
-
-    /* TODO make the bridge use the ssl somehow */
-    //ovsrec_bridge_set_ssl(bridge, ssl);
-}
-
-void
-txn_del_bridge_certificate(const xmlChar *br_name, const xmlChar *resource_id)
-{
-    const struct ovsrec_bridge *bridge;
-    //struct ovsrec_ssl *ssl;
-
-    if (!resource_id || !br_name) {
-        return;
-    }
-
-    nc_verb_verbose("Delete certificate %s from %s bridge resource list.",
-                    BAD_CAST resource_id, BAD_CAST br_name);
-    OVSREC_BRIDGE_FOR_EACH(bridge, ovsdb_handler->idl) {
-        if (xmlStrEqual(br_name, BAD_CAST bridge->name)) {
-            break;
-        }
-    }
-    if (bridge == NULL) {
-        /* not found */
-        return;
-    }
-
-    /* The owned-certificate node could have been already removed,
-     * before getting here, so there is nothing for me to check. */
-    /*if (ovsdb_handler->cert_map->owned_resid == NULL || strcmp(ovsdb_handler->cert_map->owned_resid, (const char *) resource_id)) {
-        * not found *
-        return;
-    }
-    ssl = ovsrec_ssl_first(ovsdb_handler->idl);
-    if (ssl == NULL) { || memcmp(&ssl->header_.uuid, &ovsdb_handler->cert_map->uuid, sizeof(struct uuid))) {
-        * something wrong *
-        return;
-    }*/
-
-    /* TODO make the bridge use the ssl somehow */
-    //ovsrec_bridge_set_ssl(bridge, NULL);
-}
-
 
 void
 txn_del_bridge_flow_table(const xmlChar *br_name, const xmlChar *resource_id)

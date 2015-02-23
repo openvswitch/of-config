@@ -1,0 +1,13 @@
+This file contains notes regarding some nodes in
+the of-config model, which are used differently
+compared to how the model describes them.
+
+
+/capable-switch/logical-switches/switch/resources/certificate
+
+In configuration modification these nodes are
+ignored. Once the user sets /capable-switch/
+/resources/(owned and external)-certificate,
+these are automatically used by every logical-
+-switch defined. get-config operation retrieves
+the correct and actual configuration.

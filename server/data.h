@@ -74,8 +74,6 @@ void txn_del_bridge_queue(const xmlChar *br_name, const xmlChar *resource_id);
 void txn_add_bridge_queue(const xmlChar *br_name, const xmlChar *resource_id);
 void txn_del_bridge_flow_table(const xmlChar *br_name, const xmlChar *resource_id);
 void txn_add_bridge_flow_table(const xmlChar *br_name, const xmlChar *resource_id);
-void txn_del_bridge_certificate(const xmlChar *br_name, const xmlChar *resource_id);
-void txn_add_bridge_certificate(const xmlChar *br_name, const xmlChar *resource_id);
 void txn_del_bridge(const xmlChar *br_name);
 void txn_add_bridge(xmlNodePtr node);
 void txn_mod_bridge_datapath(const xmlChar *br_name, const xmlChar* value);

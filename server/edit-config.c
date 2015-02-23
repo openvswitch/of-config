@@ -988,11 +988,11 @@ edit_delete(xmlNodePtr node, int running)
                 } else if (xmlStrEqual(node->name, BAD_CAST "queue")) {
                     txn_del_bridge_queue(key->children->content,
                                            node->children->content);
-                } else if (xmlStrEqual(node->name, BAD_CAST "certificate")) {
-                    txn_del_bridge_certificate(key->children->content,
-                                           node->children->content);
                 }
-                /* TODO queue, flow-table */
+                /* certificate is ignored on purpose!
+                 * Once defined, it is automatically referenced
+                 * and used in every bridge.
+                 */
             }
         } else if (xmlStrEqual(node->name, BAD_CAST "switch")) {
             /* remove bridge */
@@ -1196,11 +1196,11 @@ edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running,
                 if (xmlStrEqual(edit->name, BAD_CAST "port")) {
                     txn_add_bridge_port(key->children->content,
                                         edit->children->content);
-                } else if (xmlStrEqual(edit->name, BAD_CAST "certificate")) {
-                    txn_add_bridge_certificate(key->children->content,
-                                        edit->children->content);
                 }
-                /* TODO queue (it is added to port), flow-table */
+                /* certificate is ignored on purpose!
+                 * Once defined, it is automatically referenced
+                 * and used in every bridge.
+                 */
             }
         } else if (xmlStrEqual(edit->name, BAD_CAST "switch")) {
             /* create bridge */

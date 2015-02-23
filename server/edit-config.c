@@ -996,6 +996,12 @@ edit_delete(xmlNodePtr node, int running)
                  * and used in every bridge.
                  */
             }
+        } else if (xmlStrEqual(node->parent->name, BAD_CAST "private-key")) {
+            txn_del_owned_certificate(node->parent->parent);
+        } else if (xmlStrEqual(node->parent->name, BAD_CAST "owned-certificate")) {
+            txn_del_owned_certificate(node->parent);
+        } else if (xmlStrEqual(node->parent->name, BAD_CAST "external-certificate")) {
+            txn_del_external_certificate(node->parent);
         } else if (xmlStrEqual(node->name, BAD_CAST "switch")) {
             /* remove bridge */
             key = go2node(node, BAD_CAST "id");
@@ -1206,6 +1212,12 @@ edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running,
                  * and used in every bridge.
                  */
             }
+        } else if (xmlStrEqual(node->parent->name, BAD_CAST "private-key")) {
+            txn_add_owned_certificate(node->parent->parent);
+        } else if (xmlStrEqual(node->parent->name, BAD_CAST "owned-certificate")) {
+            txn_add_owned_certificate(node->parent);
+        } else if (xmlStrEqual(node->parent->name, BAD_CAST "external-certificate")) {
+            txn_add_external_certificate(node->parent);
         } else if (xmlStrEqual(edit->name, BAD_CAST "switch")) {
             /* create bridge */
             txn_add_bridge(edit);

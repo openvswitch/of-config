@@ -362,6 +362,8 @@ ofcds_editconfig(void *UNUSED(data), const nc_rpc * UNUSED(rpc),
     if (target == NC_DATASTORE_RUNNING) {
         ret = txn_commit(error);
         xmlFreeDoc(cfgds);
+    } else {
+        ret = EXIT_SUCCESS;
     }
     xmlFreeDoc(cfg);
 

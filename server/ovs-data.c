@@ -2036,7 +2036,7 @@ txn_add_owned_certificate(xmlNodePtr node)
         ssl = ovsrec_ssl_insert(ovsdb_handler->txn);
     } else {
         mod = 1;
-        if (memcmp(&ovsdb_handler->cert_map->uuid, &ssl->header_.uuid, sizeof(struct uuid))) {
+        if (uuid_equals(&ovsdb_handler->cert_map->uuid, &ssl->header_.uuid)) {
             /* TODO error, this SSL table UUID does not match the saved one */
         }
     }
@@ -2132,7 +2132,7 @@ txn_add_external_certificate(xmlNodePtr node)
         ssl = ovsrec_ssl_insert(ovsdb_handler->txn);
     } else {
         mod = 1;
-        if (memcmp(&ovsdb_handler->cert_map->uuid, &ssl->header_.uuid, sizeof(struct uuid))) {
+        if (uuid_equals(&ovsdb_handler->cert_map->uuid, &ssl->header_.uuid)) {
             /* TODO error, this SSL table UUID does not match the saved one */
         }
     }
@@ -2201,7 +2201,7 @@ txn_del_owned_certificate(xmlNodePtr node)
     if (!ssl) {
         /* TODO error, cannot delete, no SSL table */
     }
-    if (memcmp(&ovsdb_handler->cert_map->uuid, &ssl->header_.uuid, sizeof(struct uuid))) {
+    if (uuid_equals(&ovsdb_handler->cert_map->uuid, &ssl->header_.uuid)) {
         /* TODO error, this SSL table UUID does not match the saved one */
     }
 
@@ -2264,7 +2264,7 @@ txn_del_external_certificate(xmlNodePtr node)
     if (!ssl) {
         /* TODO error, cannot delete, no SSL table */
     }
-    if (memcmp(&ovsdb_handler->cert_map->uuid, &ssl->header_.uuid, sizeof(struct uuid))) {
+    if (uuid_equals(&ovsdb_handler->cert_map->uuid, &ssl->header_.uuid)) {
         /* TODO error, this SSL table UUID does not match the saved one */
     }
 

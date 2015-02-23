@@ -16,6 +16,8 @@
 
 #include <config.h>
 
+#define _GNU_SOURCE
+
 #include <assert.h>
 #include <sys/socket.h>
 #include <linux/ethtool.h>
@@ -27,6 +29,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <stdio.h>
 
 /* libovs */
 #include <dynamic-string.h>
@@ -94,7 +97,10 @@ static int
 open_vconn_socket(const char *name, struct vconn **vconnp)
 {
     int error;
-    char *vconn_name = xasprintf("unix:%s", name);
+    char *vconn_name;
+    if (asprintf(&vconn_name, "unix:%s", name) == -1) {
+        return ENOMEM;
+    }
 
     error = vconn_open(vconn_name, OFPUTIL_DEFAULT_VERSIONS, DSCP_DEFAULT,
                        vconnp);
@@ -122,12 +128,18 @@ ofc_of_open_vconn(const char *name, struct vconn **vconnp)
     int ofp_version;
     int error;
 
-    bridge_path = xasprintf("%s/%s.mgmt", OFC_OVS_OFSOCKET_DIR, name);
+    if (asprintf(&bridge_path, "%s/%s.mgmt", OFC_OVS_OFSOCKET_DIR, name) == -1) {
+        return false;
+    }
 
     /* changed to called function */
     dp_parse_name(name, &datapath_name, &datapath_type);
 
-    socket_name = xasprintf("%s/%s.mgmt", OFC_OVS_OFSOCKET_DIR, datapath_name);
+    if (asprintf(&socket_name, "%s/%s.mgmt", OFC_OVS_OFSOCKET_DIR, datapath_name) == -1) {
+        free(datapath_name);
+        free(datapath_type);
+        return false;
+    }
     free(datapath_name);
     free(datapath_type);
 
@@ -1851,15 +1863,20 @@ ofc_find_bridge_for_flowtable(xmlNodePtr root, xmlChar *flowtable)
     xmlXPathContextPtr xpathCtx;
     xmlXPathObjectPtr xpathObj;
     xmlDocPtr doc;
+    int ret;
     char *xpathexpr = NULL;
     xmlChar *bridge_name = NULL;
     int size;
     if (root == NULL) {
         return NULL;
     }
+    ret = asprintf(&xpathexpr,
+                 "//ofc:switch/ofc:resources/ofc:flow-table['%s']/../../ofc:id[1]",
+                 (const char *) flowtable);
+    if (ret == -1) {
+        return NULL;
+    }
     doc = root->doc;
-    xpathexpr = xasprintf("//ofc:switch/ofc:resources/ofc:flow-table['%s']/../../ofc:id[1]",
-                          (const char *) flowtable);
     /* Create xpath evaluation context */
     xpathCtx = xmlXPathNewContext(doc);
     if(xpathCtx == NULL) {
@@ -1874,6 +1891,7 @@ ofc_find_bridge_for_flowtable(xmlNodePtr root, xmlChar *flowtable)
 
     /* Evaluate xpath expression */
     xpathObj = xmlXPathEvalExpression(BAD_CAST xpathexpr, xpathCtx);
+    free(xpathexpr);
     if(xpathObj == NULL) {
         nc_verb_error("Unable to evaluate xpath expression \"%s\"", xpathexpr);
         goto cleanup;
@@ -2736,13 +2754,17 @@ ofc_find_bridge_for_port(xmlNodePtr root, xmlChar *port_name)
     xmlDocPtr doc;
     char *xpathexpr = NULL;
     xmlChar *bridge_name = NULL;
-    int size;
+    int size, ret;
     if (root == NULL) {
         return NULL;
     }
+    ret = asprintf(&xpathexpr,
+                 "//ofc:switch/ofc:resources/ofc:port['%s']/../../ofc:id[1]",
+                 (char *) port_name);
+    if (ret == -1) {
+        return NULL;
+    }
     doc = root->doc;
-    xpathexpr = xasprintf("//ofc:switch/ofc:resources/ofc:port['%s']/../../ofc:id[1]",
-                          (char *) port_name);
     /* Create xpath evaluation context */
     xpathCtx = xmlXPathNewContext(doc);
     if(xpathCtx == NULL) {
@@ -2774,6 +2796,7 @@ ofc_find_bridge_for_port(xmlNodePtr root, xmlChar *port_name)
 
 cleanup:
     /* Cleanup, use bridge_name that was initialized or set */
+    free(xpathexpr);
     xmlXPathFreeObject(xpathObj);
     xmlXPathFreeContext(xpathCtx);
     return bridge_name;

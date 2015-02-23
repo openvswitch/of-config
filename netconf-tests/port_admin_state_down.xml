@@ -1,0 +1,15 @@
+<capable-switch xmlns="urn:onf:config:yang">
+  <id>openvswitch</id>
+  <resources>
+    <port>
+      <name>ofc-bridge</name>
+      <configuration>
+        <admin-state>down</admin-state>
+        <no-receive>false</no-receive>
+        <no-forward>false</no-forward>
+        <no-packet-in>false</no-packet-in>
+      </configuration>
+    </port>
+  </resources>
+</capable-switch>
+

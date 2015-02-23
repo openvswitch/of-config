@@ -310,6 +310,7 @@ ofcds_editconfig(void *UNUSED(data), const nc_rpc * UNUSED(rpc),
             goto error_cleanup;
         }
         cfgds = xmlReadMemory(aux, strlen(aux), NULL, NULL, XML_READ_OPT);
+        free(aux);
         running = 1;
         break;
     case NC_DATASTORE_STARTUP:
@@ -360,6 +361,7 @@ ofcds_editconfig(void *UNUSED(data), const nc_rpc * UNUSED(rpc),
 
     if (target == NC_DATASTORE_RUNNING) {
         ret = txn_commit(error);
+        xmlFreeDoc(cfgds);
     }
     xmlFreeDoc(cfg);
 
@@ -369,6 +371,7 @@ error_cleanup:
 
     if (target == NC_DATASTORE_RUNNING) {
         txn_abort();
+        xmlFreeDoc(cfgds);
     }
     xmlFreeDoc(cfg);
 

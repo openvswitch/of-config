@@ -938,6 +938,7 @@ edit_delete(xmlNodePtr node, int running)
 {
     xmlNodePtr key;
     xmlChar *value;
+    int ret;
 
     if (!node) {
         return EXIT_SUCCESS;
@@ -953,12 +954,13 @@ edit_delete(xmlNodePtr node, int running)
         if (xmlStrEqual(node->parent->name, BAD_CAST "capable-switch")) {
             if (xmlStrEqual(node->name, BAD_CAST "id")) {
                 ofc_set_switchid(NULL);
-            } else if (xmlStrEqual(node->name, BAD_CAST "resources")) {
-                /* remove all resources */
-                /* TODO */
-            } else if (xmlStrEqual(node->name, BAD_CAST "local-switches")) {
-                /* remove all bridges */
-                /* TODO */
+            } else { /* resources, logical-switches */
+                while (node->children) {
+                    ret = edit_delete(node->children, running);
+                    if (ret != EXIT_SUCCESS) {
+                        return EXIT_FAILURE;
+                    }
+                }
             }
         } else if (xmlStrEqual(node->parent->name, BAD_CAST "resources")) {
             if (xmlStrEqual(node->parent->parent->name, BAD_CAST "capable-switch")) {
@@ -1145,6 +1147,7 @@ edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running,
 {
     xmlNodePtr key, parent;
     xmlChar *bridge_name;
+    int ret;
 
     /* remove operation attribute */
     xmlRemoveProp(xmlHasNsProp(edit, BAD_CAST "operation",
@@ -1170,7 +1173,8 @@ edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running,
             } else { /* resources and local-switches */
                 /* nothing to do on this level, continue with creating children */
                 while (edit->children) {
-                    if (edit_create(orig_doc, edit->children, running, error) != EXIT_SUCCESS) {
+                    ret = edit_create(orig_doc, edit->children, running, error);
+                    if (ret != EXIT_SUCCESS) {
                         return EXIT_FAILURE;
                     }
                 }
@@ -1262,41 +1266,37 @@ edit_merge(xmlDocPtr orig_doc, xmlNodePtr edit_node, int running,
            struct nc_err** error)
 {
     xmlNodePtr orig_node;
-    xmlNodePtr aux, children;
+    xmlNodePtr aux, child;
 
     orig_node = find_element_equiv(orig_doc, edit_node);
     if (orig_node == NULL) {
         return edit_create(orig_doc, edit_node, running, error);
     }
 
-    children = edit_node->children;
-    while (children != NULL) {
-        if (is_key(children)) {
-            /* skip key elements from merging */
-            children = children->next;
-            continue;
-        }
+    if (is_key(edit_node)) {
+        /* skip key elements from merging */
+        return EXIT_SUCCESS;
+    }
 
-        aux = find_element_equiv(orig_doc, children);
-        if (aux == NULL) {
-            /*
-             * there is no equivalent element of the children in the
-             * original configuration data, so create it as new
-             */
-            if (running) {
-                /* TODO */
+    child = edit_node->children;
+    if (child->type == XML_TEXT_NODE) {
+        /* we are in the leaf -> replace the previous value
+         * leaf-lists are coverede in find_element_equiv() - if edit_node is a
+         * new instance of the leaf-list, orig_node would be NULL
+         */
+        return edit_replace(orig_doc, edit_node, running, error);
+    } else {
+        /* we can go recursive */
+        while (child) {
+            if (is_key(edit_node)) {
+                /* skip keys */
+                child = child->next;
             } else {
-                aux = xmlAddChild(orig_node, xmlCopyNode(children, 1));
-                if (!aux) {
-                    nc_verb_error("Adding missing nodes when merging failed");
-                    return EXIT_FAILURE;
-                }
+                aux = child->next;
+                edit_merge(orig_doc, child, running, error);
+                child = aux;
             }
-        } else {
-            /* TODO: go recursive */
         }
-
-        children = children->next;
     }
 
     /* remove the node from the edit document */

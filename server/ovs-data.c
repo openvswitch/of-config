@@ -141,6 +141,8 @@ ofc_of_open_vconn(const char *name, struct vconn **vconnp)
         /* Fall Through. */
     } else {
         nc_verb_error("OpenFlow: %s is not a bridge or a socket.", name);
+        free(bridge_path);
+        free(socket_name);
         return false;
     }
 

@@ -1379,7 +1379,7 @@ edit_merge(xmlDocPtr orig_doc, xmlNodePtr edit_node, int running,
     }
 
     child = edit_node->children;
-    if (child->type == XML_TEXT_NODE) {
+    if (child && child->type == XML_TEXT_NODE) {
         /* we are in the leaf -> replace the previous value
          * leaf-lists are coverede in find_element_equiv() - if edit_node is a
          * new instance of the leaf-list, orig_node would be NULL

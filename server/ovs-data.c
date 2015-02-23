@@ -2240,11 +2240,6 @@ txn_del_owned_certificate(xmlNodePtr node)
     if (ovsdb_handler->cert_map->external_resid == NULL && ssl->ca_cert == NULL) {
         ovsrec_open_vswitch_set_ssl(ovs, NULL);
         ovsrec_ssl_delete(ssl);
-    } else {
-        /* TODO this is possibly redundant, since we already set this SSL table
-         * and now only modified, so the changes should already be reflected
-         */
-        ovsrec_open_vswitch_set_ssl(ovs, ssl);
     }
 }
 
@@ -2300,11 +2295,6 @@ txn_del_external_certificate(xmlNodePtr node)
             ssl->certificate == NULL && ssl->private_key == NULL) {
         ovsrec_open_vswitch_set_ssl(ovs, NULL);
         ovsrec_ssl_delete(ssl);
-    } else {
-        /* TODO this is possibly redundant, since we already set this SSL table
-         * and now only modified, so the changes should already be reflected
-         */
-        ovsrec_open_vswitch_set_ssl(ovs, ssl);
     }
 }
 

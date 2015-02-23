@@ -1032,8 +1032,8 @@ edit_delete(xmlNodePtr node, int running)
                     txn_del_owned_certificate(node);
                 } else if (xmlStrEqual(node->name, BAD_CAST "external-certificate")) {
                     txn_del_external_certificate(node);
-                } else { /* flow-table */
-                    /* TODO flow-table */
+                } else if (xmlStrEqual(node->name, BAD_CAST "flow-table")) { /* flow-table */
+                    txn_del_flow_table(node);
                 }
             } else { /* logical-switch */
                 /* get bridge name */

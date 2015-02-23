@@ -2003,6 +2003,42 @@ txn_del_port_tunnel(const xmlChar *port_name, xmlNodePtr tunnel_node)
     ovsrec_interface_set_type(found, "");
 }
 
+void
+txn_del_flow_table(xmlNodePtr node)
+{
+    xmlChar *res_id;
+    ofc_tuple_t *fl_tuple;
+    const struct ovsrec_bridge *row;
+    size_t i, n_flow_tables;
+    res_id = xmlNodeGetContent(go2node(node, BAD_CAST "resource-id"));
+    fl_tuple = ofc_resmap_find_r(ovsdb_handler->resource_map, (const char *) res_id);
+    nc_verb_verbose("Deleting flow-table %s", (const char *) res_id);
+
+    if (fl_tuple == NULL) {
+        nc_verb_error("resource-id of flow-table was not found");
+        return;
+    }
+    OVSREC_BRIDGE_FOR_EACH(row, ovsdb_handler->idl) {
+        for (i = 0; i < row->n_flow_tables; i++) {
+            if (uuid_equals(&fl_tuple->uuid, &row->value_flow_tables[i]->header_.uuid)) {
+                row->key_flow_tables[i] = row->key_flow_tables[row->n_flow_tables-1];
+                row->value_flow_tables[i] = row->value_flow_tables[row->n_flow_tables-1];
+                n_flow_tables = row->n_flow_tables - 1;
+                ovsrec_bridge_verify_flow_tables(row);
+                ovsrec_bridge_set_flow_tables(row, row->key_flow_tables, row->value_flow_tables, n_flow_tables);
+                goto success;
+            }
+        }
+    }
+    xmlFree(res_id);
+    return;
+success:
+    nc_verb_verbose("Deletion was added into transaction, removing from resource-map");
+    ofc_resmap_remove_r(ovsdb_handler->resource_map, (const char *) res_id);
+    xmlFree(res_id);
+    return;
+}
+
 /* Remove port reference from the Bridge table */
 void
 txn_del_bridge_port(const xmlChar *br_name, const xmlChar *port_name)

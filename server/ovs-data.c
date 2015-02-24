@@ -1082,9 +1082,15 @@ get_bridges_config(void)
            */
         find_and_append_smap_val(&row->other_config, "datapath-id",
                                  "datapath-id", &string);
-        if (row->fail_mode != NULL) {
-            ds_put_format(&string, "<lost-connection-behavior>%s"
-                    "</lost-connection-behavior>", row->fail_mode);
+        if (row->fail_mode) {
+            if (strcmp(row->fail_mode, "standalone")) {
+                ds_put_format(&string, "<lost-connection-behavior>"
+                              "failStandaloneMode</lost-connection-behavior>");
+            } else {
+                /* default secure mode */
+                ds_put_format(&string, "<lost-connection-behavior>"
+                              "failSecureMode</lost-connection-behavior>");
+            }
         }
         if (row->n_controller > 0) {
             ds_put_format(&string, "<controllers>");
@@ -2888,6 +2894,33 @@ txn_mod_bridge_datapath(const xmlChar *br_name, const xmlChar* value)
     smap_destroy(&othcfg);
 }
 
+/* /capable-switch/logical-switches/switch/lost-connection-behavior */
+void
+txn_mod_bridge_failmode(const xmlChar *br_name, const xmlChar* value)
+{
+    const struct ovsrec_bridge *bridge;
+
+    if (!br_name) {
+        return;
+    }
+
+    OVSREC_BRIDGE_FOR_EACH(bridge, ovsdb_handler->idl) {
+        if (xmlStrEqual(br_name, BAD_CAST bridge->name)) {
+            break;
+        }
+    }
+    if (!bridge) {
+        return;
+    }
+
+    if (value && xmlStrEqual(value, BAD_CAST "failStandaloneMode")) {
+        ovsrec_bridge_set_fail_mode(bridge, "standalone");
+    } else {
+        /* default mode */
+        ovsrec_bridge_set_fail_mode(bridge, "secure");
+    }
+}
+
 /* Insert bridge reference into the Open_vSwitch table */
 static void
 txn_ovs_insert_bridge(const struct ovsrec_open_vswitch *ovs,
@@ -2941,6 +2974,7 @@ txn_add_bridge(xmlNodePtr node)
     const struct ovsrec_port *port;
     xmlNodePtr aux, leaf;
     xmlChar *xmlval, *bridge_id = NULL;
+    int failmode_flag = 0;
 
     if (!node) {
         return;
@@ -3001,16 +3035,25 @@ txn_add_bridge(xmlNodePtr node)
                     txn_bridge_insert_port(bridge, (struct ovsrec_port *)port);
                     xmlFree(xmlval);
                 }
-                ///* TODO no-receive, no-forward, no-packet-in */
-                //nc_verb_verbose("no-receive, no-forward, no-packet-in");
-                //port_name = xmlNodeGetContent(go2node(leaf->parent->parent, BAD_CAST "name"));
-                //bridge_name = ofc_find_bridge_for_port(orig_doc, port_name);
-                //if (bridge_name != NULL) {
-                //    ofc_of_mod_port(bridge_name, port_name, leaf->name, xmlNodeGetContent(leaf));
-                //}
+                /* TODO: queue, flow-table
+                 * certificate is already set, there is no explicit link to it
+                 * in OVSDB
+                 */
             }
+        } else if (xmlStrEqual(aux->name, BAD_CAST "controllers")) {
+            for (leaf = aux->children; leaf; leaf = leaf->next) {
+                txn_add_contr(leaf, BAD_CAST bridge->name);
+            }
+        } else if (xmlStrEqual(aux->name, BAD_CAST "lost-connection-behavior")) {
+            txn_mod_bridge_failmode(BAD_CAST bridge->name, aux->children->content);
+            failmode_flag = 1;
         }
-        /* TODO controllers, enabled, lost-connection-behavior */
+        /* TODO enabled */
+    }
+
+    if (!failmode_flag) {
+        /* set default value for fail_mode */
+        txn_mod_bridge_failmode(BAD_CAST bridge->name, NULL);
     }
 }
 

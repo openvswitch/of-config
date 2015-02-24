@@ -77,6 +77,7 @@ void txn_add_bridge_flow_table(const xmlChar *br_name, const xmlChar *resource_i
 void txn_del_bridge(const xmlChar *br_name);
 void txn_add_bridge(xmlNodePtr node);
 void txn_mod_bridge_datapath(const xmlChar *br_name, const xmlChar* value);
+void txn_mod_bridge_failmode(const xmlChar *br_name, const xmlChar* value);
 
 void txn_del_contr(const xmlChar *contr_id, const xmlChar *br_name);
 void txn_add_contr(xmlNodePtr node, const xmlChar *br_name);

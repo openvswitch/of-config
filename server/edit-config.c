@@ -1077,8 +1077,10 @@ edit_delete(xmlNodePtr node, int running)
                         return EXIT_FAILURE;
                     }
                 }
+            } else if (xmlStrEqual(node->name, BAD_CAST "lost-connection-behavior")) {
+                txn_mod_bridge_failmode(key->children->content, NULL);
             }
-            /* TODO enabled, lost-connection-behavior */
+            /* TODO enabled */
         } else if (xmlStrEqual(node->name, BAD_CAST "controller")) {
             key = go2node(node, BAD_CAST "id");
             key2 = go2node(node->parent->parent, BAD_CAST "id");
@@ -1339,8 +1341,11 @@ edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running,
                         return EXIT_FAILURE;
                     }
                 }
+            } else if (xmlStrEqual(edit->name, BAD_CAST "lost-connection-behavior")) {
+                txn_mod_bridge_failmode(key->children->content,
+                                        edit->children->content);
             }
-            /* TODO enabled, lost-connection-behavior, controllers, resources */
+            /* TODO enabled */
         } else if (xmlStrEqual(edit->name, BAD_CAST "controller")) {
             key = go2node(edit->parent->parent, BAD_CAST "id");
             txn_add_contr(edit, key->children->content);

@@ -1033,8 +1033,12 @@ edit_delete(xmlNodePtr node, int running)
                     txn_del_owned_certificate(node);
                 } else if (xmlStrEqual(node->name, BAD_CAST "external-certificate")) {
                     txn_del_external_certificate(node);
-                } else if (xmlStrEqual(node->name, BAD_CAST "flow-table")) { /* flow-table */
+                } else if (xmlStrEqual(node->name, BAD_CAST "flow-table")) {
                     txn_del_flow_table(node);
+                } else {
+                    /* TODO is everything covered? */
+                    nc_verb_error("Element %s is not covered in edit_delete()!!! (parent: %s)",
+                                  (const char *) node->name, (const char *) node->parent->name);
                 }
             } else { /* logical-switch */
                 /* get bridge name */
@@ -1048,7 +1052,11 @@ edit_delete(xmlNodePtr node, int running)
                     txn_del_bridge_queue(key->children->content,
                                            node->children->content);
                 } else if (xmlStrEqual(node->name, BAD_CAST "flow-table")) {
-                    /* TODO flow-table */
+                    /* TODO TC: flow-table delete from bridge */
+                } else {
+                    /* TODO is everything covered? */
+                    nc_verb_error("Element %s is not covered in edit_delete()!!! (parent: %s)",
+                                  (const char *) node->name, (const char *) node->parent->name);
                 }
                 /* certificate is ignored on purpose!
                  * Once defined, it is automatically referenced
@@ -1081,6 +1089,10 @@ edit_delete(xmlNodePtr node, int running)
                 }
             }
             /* TODO enabled, lost-connection-behavior */
+        } else if (xmlStrEqual(node->parent->name, BAD_CAST "queue")) {
+            /* TODO TC: queue/resource-id, id, port, properties/ * */
+        } else if (xmlStrEqual(node->parent->name, BAD_CAST "flow-table")) {
+            /* TODO TC: flow-table/resource-id, table-id, name  */
         } else if (xmlStrEqual(node->name, BAD_CAST "controller")) {
             key = go2node(node, BAD_CAST "id");
             key2 = go2node(node->parent->parent, BAD_CAST "id");
@@ -1118,6 +1130,14 @@ edit_delete(xmlNodePtr node, int running)
 
             /* delete -> set to default */
             ofc_of_mod_port(bridge_name, xmlNodeGetContent(key), node->name, BAD_CAST "");
+        } else if (xmlStrEqual(node->name, BAD_CAST "local-endpoint-ipv4-adress")) {
+            /* TODO TC */
+        } else if (xmlStrEqual(node->name, BAD_CAST "remote-endpoint-ipv4-adress")) {
+            /* TODO TC */
+        } else {
+            /* TODO is everything covered? */
+            nc_verb_error("Element %s is not covered in edit_create()!!! (parent: %s)",
+                    (const char *) node->name, (const char *) node->parent->name);
         }
     }
 
@@ -1309,8 +1329,12 @@ edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running,
                     txn_add_owned_certificate(edit);
                 } else if (xmlStrEqual(edit->name, BAD_CAST "external-certificate")) {
                     txn_add_external_certificate(edit);
-                } else  { /* flow_table */
+                } else if (xmlStrEqual(edit->name, BAD_CAST "flow-table")) {
                     txn_add_flow_table(edit);
+                } else {
+                    /* TODO is everything covered? */
+                    nc_verb_error("Element %s is not covered in edit_create()!!! (parent: %s)",
+                                  (const char *) edit->name, (const char *) edit->parent->name);
                 }
             } else { /* logical-switch */
                 /* get bridge name */
@@ -1324,7 +1348,11 @@ edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running,
                     txn_add_bridge_queue(key->children->content,
                                          edit->children->content);
                 } else if (xmlStrEqual(edit->name, BAD_CAST "flow-table")) {
-                    /* TODO flow-table */
+                    /* TODO TC: flow-table: add link, do nothing if flow-table does not exist */
+                } else {
+                    /* TODO is everything covered? */
+                    nc_verb_error("Element %s is not covered in edit_create()!!! (parent: %s)",
+                                  (const char *) edit->name, (const char *) edit->parent->name);
                 }
                 /* certificate is ignored on purpose!
                  * Once defined, it is automatically referenced
@@ -1356,6 +1384,10 @@ edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running,
                 }
             }
             /* TODO enabled, lost-connection-behavior, controllers, resources */
+        } else if (xmlStrEqual(edit->parent->name, BAD_CAST "queue")) {
+            /* TODO TC: resource-id, id, port, properties/ * */
+        } else if (xmlStrEqual(edit->parent->name, BAD_CAST "flow-table")) {
+            /* TODO TC: resource-id, table-id, name  */
         } else if (xmlStrEqual(edit->name, BAD_CAST "controller")) {
             key = go2node(edit->parent->parent, BAD_CAST "id");
             txn_add_contr(edit, key->children->content);
@@ -1384,6 +1416,14 @@ edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running,
             bridge_name = ofc_find_bridge_for_port_iterative(xmlNodeGetContent(key));
 
             ofc_of_mod_port(bridge_name, xmlNodeGetContent(key), edit->name, edit->children->content);
+        } else if (xmlStrEqual(edit->name, BAD_CAST "local-endpoint-ipv4-adress")) {
+            /* TODO TC */
+        } else if (xmlStrEqual(edit->name, BAD_CAST "remote-endpoint-ipv4-adress")) {
+            /* TODO TC */
+        } else {
+            /* TODO is everything covered? */
+            nc_verb_error("Element %s is not covered in edit_create()!!! (parent: %s)",
+                    (const char *) edit->name, (const char *) edit->parent->name);
         }
     } else {
         /* XML */

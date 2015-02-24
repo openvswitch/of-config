@@ -84,6 +84,30 @@ print_uuid_ro(const struct uuid *uuid)
     return str;
 }
 
+static const struct u32_str_map rates[] = {
+    { ADVERTISED_10baseT_Half,       "10Mb-HD" },
+    { ADVERTISED_10baseT_Full,       "10Mb-FD" },
+    { ADVERTISED_100baseT_Half,      "100Mb-HD" },
+    { ADVERTISED_100baseT_Full,      "100Mb-FD" },
+    { ADVERTISED_1000baseT_Half,     "1Gb-HD" },
+    { ADVERTISED_1000baseT_Full,     "1Gb-FD" },
+    { ADVERTISED_1000baseKX_Full,    "1Gb-FD" },
+//      { ADVERTISED_2500baseX_Full,     "2500baseX/Full" },
+    { ADVERTISED_10000baseT_Full,    "10Gb" },
+    { ADVERTISED_10000baseKX4_Full,  "10Gb" },
+    { ADVERTISED_10000baseKR_Full,   "10Gb" },
+//      { ADVERTISED_20000baseMLD2_Full, "20000baseMLD2/Full" },
+//      { ADVERTISED_20000baseKR2_Full,  "20000baseKR2/Full" },
+    { ADVERTISED_40000baseKR4_Full,  "40Gb" },
+    { ADVERTISED_40000baseCR4_Full,  "40Gb" },
+    { ADVERTISED_40000baseSR4_Full,  "40Gb" },
+    { ADVERTISED_40000baseLR4_Full,  "40Gb" },
+};
+static const struct u32_str_map medium[] = {
+    { ADVERTISED_TP,    "copper" },
+    { ADVERTISED_FIBRE, "fiber" },
+};
+
 
 /* OpenFlow helpers to get information about interfaces */
 
@@ -567,29 +591,6 @@ static void
 dump_port_features(struct ds *s, uint32_t mask)
 {
     int i;
-    static const struct u32_str_map rates[] = {
-        { ADVERTISED_10baseT_Half,       "10Mb-HD" },
-        { ADVERTISED_10baseT_Full,       "10Mb-FD" },
-        { ADVERTISED_100baseT_Half,      "100Mb-HD" },
-        { ADVERTISED_100baseT_Full,      "100Mb-FD" },
-        { ADVERTISED_1000baseT_Half,     "1Gb-HD" },
-        { ADVERTISED_1000baseT_Full,     "1Gb-FD" },
-        { ADVERTISED_1000baseKX_Full,    "1Gb-FD" },
-//      { ADVERTISED_2500baseX_Full,     "2500baseX/Full" },
-        { ADVERTISED_10000baseT_Full,    "10Gb" },
-        { ADVERTISED_10000baseKX4_Full,  "10Gb" },
-        { ADVERTISED_10000baseKR_Full,   "10Gb" },
-//      { ADVERTISED_20000baseMLD2_Full, "20000baseMLD2/Full" },
-//      { ADVERTISED_20000baseKR2_Full,  "20000baseKR2/Full" },
-        { ADVERTISED_40000baseKR4_Full,  "40Gb" },
-        { ADVERTISED_40000baseCR4_Full,  "40Gb" },
-        { ADVERTISED_40000baseSR4_Full,  "40Gb" },
-        { ADVERTISED_40000baseLR4_Full,  "40Gb" },
-    };
-    static const struct u32_str_map medium[] = {
-        { ADVERTISED_TP,    "copper" },
-        { ADVERTISED_FIBRE, "fiber" },
-    };
 
     assert(s);
 
@@ -652,6 +653,34 @@ dev_set_flags(const char* ifname, unsigned int flags)
     return EXIT_SUCCESS;
 }
 
+static struct ethtool_cmd *
+dev_get_ethtool(const char* ifname)
+{
+    static struct ethtool_cmd ecmd;
+    struct ifreq ethreq;
+
+    memset(&ethreq, 0, sizeof ethreq);
+    memset(&ecmd, 0, sizeof ecmd);
+
+    strncpy(ethreq.ifr_name, ifname, sizeof ethreq.ifr_name);
+    ecmd.cmd = ETHTOOL_GSET;
+    ethreq.ifr_data = &ecmd;
+
+    ioctl(ioctlfd, SIOCETHTOOL, &ethreq);
+
+    return &ecmd;
+}
+
+static int
+dev_set_ethtool(const char* ifname, struct ethtool_cmd *ecmd)
+{
+    struct ifreq ethreq;
+    strncpy(ethreq.ifr_name, ifname, sizeof ethreq.ifr_name);
+    ethreq.ifr_data = ecmd;
+    ecmd->cmd = ETHTOOL_SSET;
+
+    return ioctl(ioctlfd, SIOCETHTOOL, &ethreq);
+}
 
 static char *
 get_ports_config(const struct ovsrec_bridge *bridge)
@@ -704,16 +733,11 @@ get_ports_config(const struct ovsrec_bridge *bridge)
             ds_put_format(&string, "</configuration>");
 
             /* get interface features via ioctl() */
-            struct ifreq ethreq;
-            struct ethtool_cmd ecmd;
-            memset(&ethreq, 0, sizeof ethreq);
-            strncpy(ethreq.ifr_name, row->name, sizeof ethreq.ifr_name);
-            memset(&ecmd, 0, sizeof ecmd);
-            ecmd.cmd = ETHTOOL_GSET;
-            ethreq.ifr_data = &ecmd;
-            ioctl(ioctlfd, SIOCETHTOOL, &ethreq);
+            struct ethtool_cmd *ecmd;
+            ecmd = dev_get_ethtool(row->name);
+
             ds_put_format(&string, "<features><advertised>");
-            dump_port_features(&string, ecmd.advertising);
+            dump_port_features(&string, ecmd->advertising);
             ds_put_format(&string, "</advertised></features>");
 
             if (!strcmp(row->type, "gre")) {
@@ -782,14 +806,8 @@ get_ports_state(const struct ovsrec_bridge *bridge)
             row = bridge->ports[port_it]->interfaces[ifc];
 
             /* get interface status via ioctl() */
-            struct ifreq ethreq;
-            struct ethtool_cmd ecmd;
-            memset(&ethreq, 0, sizeof ethreq);
-            memset(&ecmd, 0, sizeof ecmd);
-            strncpy(ethreq.ifr_name, row->name, sizeof ethreq.ifr_name);
-            ecmd.cmd = ETHTOOL_GSET;
-            ethreq.ifr_data = &ecmd;
-            ioctl(ioctlfd, SIOCETHTOOL, &ethreq);
+            struct ethtool_cmd *ecmd;
+            ecmd = dev_get_ethtool(row->name);
 
             ds_put_format(&string, "<port>");
             ds_put_format(&string, "<name>%s</name>", row->name);
@@ -818,7 +836,7 @@ get_ports_state(const struct ovsrec_bridge *bridge)
             /* rate
              * - get speed and convert it with duplex value to OFPortRateType
              */
-            switch ((ecmd.speed_hi << 16) | ecmd.speed) {
+            switch ((ecmd->speed_hi << 16) | ecmd->speed) {
                 case 10:
                     ds_put_format(&string, "<rate>10Mb");
                     break;
@@ -830,17 +848,17 @@ get_ports_state(const struct ovsrec_bridge *bridge)
                     break;
                 case 10000:
                     ds_put_format(&string, "<rate>10Gb");
-                    ecmd.duplex = DUPLEX_FULL + 1; /* do not print duplex suffix */
+                    ecmd->duplex = DUPLEX_FULL + 1; /* do not print duplex suffix */
                     break;
                 case 40000:
                     ds_put_format(&string, "<rate>40Gb");
-                    ecmd.duplex = DUPLEX_FULL + 1; /* do not print duplex suffix */
+                    ecmd->duplex = DUPLEX_FULL + 1; /* do not print duplex suffix */
                     break;
                 default:
                     ds_put_format(&string, "<rate>");
-                    ecmd.duplex = DUPLEX_FULL + 1; /* do not print duplex suffix */
+                    ecmd->duplex = DUPLEX_FULL + 1; /* do not print duplex suffix */
             }
-            switch (ecmd.duplex) {
+            switch (ecmd->duplex) {
                 case DUPLEX_HALF:
                     ds_put_format(&string, "-HD</rate>");
                     break;
@@ -854,9 +872,9 @@ get_ports_state(const struct ovsrec_bridge *bridge)
 
             /* auto-negotiation */
             ds_put_format(&string, "<auto-negotiate>%s</auto-negotiate>",
-                    ecmd.autoneg ? "true" : "false");
+                    ecmd->autoneg ? "true" : "false");
             /* medium */
-            switch(ecmd.port) {
+            switch(ecmd->port) {
                 case PORT_TP:
                     ds_put_format(&string, "<medium>copper</medium>");
                     break;
@@ -866,18 +884,18 @@ get_ports_state(const struct ovsrec_bridge *bridge)
             }
 
             /* pause is filled with the same value as in advertised */
-            if (ADVERTISED_Asym_Pause & ecmd.advertising) {
+            if (ADVERTISED_Asym_Pause & ecmd->advertising) {
                 ds_put_format(&string, "<pause>asymmetric</pause>");
-            } else if (ADVERTISED_Pause & ecmd.advertising) {
+            } else if (ADVERTISED_Pause & ecmd->advertising) {
                 ds_put_format(&string, "<pause>symmetric</pause>");
             } else {
                 ds_put_format(&string, "<pause>unsupported</pause>");
             }
 
             ds_put_format(&string, "</current><supported>");
-            dump_port_features(&string, ecmd.supported);
+            dump_port_features(&string, ecmd->supported);
             ds_put_format(&string, "</supported><advertised-peer>");
-            dump_port_features(&string, ecmd.lp_advertising);
+            dump_port_features(&string, ecmd->lp_advertising);
             ds_put_format(&string, "</advertised-peer></features>");
 
             ds_put_format(&string, "</port>");
@@ -1809,10 +1827,12 @@ cleanup:
 void
 txn_add_port(xmlNodePtr node)
 {
-    xmlNodePtr aux;
+    xmlNodePtr aux, aux2, advert;
     xmlChar *xmlval, *port_name;
     struct ovsrec_port *port;
     struct ovsrec_interface *iface;
+    struct ethtool_cmd *ecmd;
+    int i;
 
     if (!node) {
         return;
@@ -1848,10 +1868,125 @@ txn_add_port(xmlNodePtr node)
             port_name = xmlNodeGetContent(go2node(aux->parent, BAD_CAST "name"));
             txn_mod_port_add_tunnel(port_name, aux);
             xmlFree(port_name);
+        } else if (xmlStrEqual(aux->name, BAD_CAST "features")) {
+            advert = go2node(aux, BAD_CAST "advertised");
+            if (!advert) {
+                continue;
+            }
+
+            ecmd = dev_get_ethtool(iface->name);
+            /* prepare default values */
+            ecmd->advertising = ADVERTISED_Autoneg;
+
+            for (aux2 = advert->children; aux2; aux2 = aux2->next) {
+                if (aux2->type != XML_ELEMENT_NODE) {
+                    continue;
+                }
+                if (xmlStrEqual(aux2->name, BAD_CAST "rate")) {
+                    for (i = 0; i < (sizeof rates) / (sizeof rates[0]); i++) {
+                        if (xmlStrEqual(aux2->children->content,
+                                        BAD_CAST rates[i].str)) {
+                            ecmd->advertising |= rates[i].value;
+                            break;
+                        }
+                    }
+                } else if (xmlStrEqual(aux2->name, BAD_CAST "medium")) {
+                    for (i = 0; i < (sizeof medium) / (sizeof medium[0]); i++) {
+                        if (xmlStrEqual(aux2->children->content,
+                                        BAD_CAST medium[i].str)) {
+                            ecmd->advertising |= medium[i].value;
+                            break;
+                        }
+                    }
+                } else if (xmlStrEqual(aux2->name, BAD_CAST "auto-negotiate")) {
+                    if (xmlStrEqual(aux2->children->content,
+                                    BAD_CAST "false")) {
+                        ecmd->advertising &= ~ADVERTISED_Autoneg;
+                    }
+                } else if (xmlStrEqual(aux2->name, BAD_CAST "pause")) {
+                    if (xmlStrEqual(aux2->children->content,
+                                    BAD_CAST "symetric")) {
+                        ecmd->advertising |= ADVERTISED_Pause;
+                    } else if (xmlStrEqual(aux2->children->content,
+                                    BAD_CAST "asymetric")) {
+                        ecmd->advertising |= ADVERTISED_Asym_Pause;
+                    }
+                }
+            }
+            dev_set_ethtool(iface->name, ecmd);
         }
-        /* TODO features */
     }
     ovsdb_handler->added_interface = true;
+}
+
+void
+txn_add_port_advert(const xmlChar *port_name, xmlNodePtr node)
+{
+    int i;
+    struct ethtool_cmd *ecmd;
+    ecmd = dev_get_ethtool((char*)port_name);
+
+    if (xmlStrEqual(node->name, BAD_CAST "rate")) {
+        for (i = 0; i < (sizeof rates) / (sizeof rates[0]); i++) {
+            if (xmlStrEqual(node->children->content, BAD_CAST rates[i].str)) {
+                ecmd->advertising |= rates[i].value;
+                break;
+            }
+        }
+    } else if (xmlStrEqual(node->name, BAD_CAST "medium")) {
+        for (i = 0; i < (sizeof medium) / (sizeof medium[0]); i++) {
+            if (xmlStrEqual(node->children->content, BAD_CAST medium[i].str)) {
+                ecmd->advertising |= medium[i].value;
+                break;
+            }
+        }
+    } else if (xmlStrEqual(node->name, BAD_CAST "auto-negotiate")) {
+        if (xmlStrEqual(node->children->content, BAD_CAST "false")) {
+            ecmd->advertising &= ~ADVERTISED_Autoneg;
+        } else if (xmlStrEqual(node->children->content, BAD_CAST "true")) {
+            ecmd->advertising |= ADVERTISED_Autoneg;
+        }
+    } else if (xmlStrEqual(node->name, BAD_CAST "pause")) {
+        if (xmlStrEqual(node->children->content, BAD_CAST "asymetric")) {
+            ecmd->advertising &= ~ADVERTISED_Pause;
+            ecmd->advertising |= ADVERTISED_Asym_Pause;
+        } else if (xmlStrEqual(node->children->content, BAD_CAST "symetric")) {
+            ecmd->advertising &= ~ADVERTISED_Asym_Pause;
+            ecmd->advertising |= ADVERTISED_Pause;
+        }
+    }
+    dev_set_ethtool((char*)port_name, ecmd);
+}
+
+void
+txn_del_port_advert(const xmlChar *port_name, xmlNodePtr node)
+{
+    int i;
+    struct ethtool_cmd *ecmd;
+    ecmd = dev_get_ethtool((char*)port_name);
+
+    if (xmlStrEqual(node->name, BAD_CAST "rate")) {
+        for (i = 0; i < (sizeof rates) / (sizeof rates[0]); i++) {
+            if (xmlStrEqual(node->children->content, BAD_CAST rates[i].str)) {
+                ecmd->advertising &= ~rates[i].value;
+                break;
+            }
+        }
+    } else if (xmlStrEqual(node->name, BAD_CAST "medium")) {
+        for (i = 0; i < (sizeof medium) / (sizeof medium[0]); i++) {
+            if (xmlStrEqual(node->children->content, BAD_CAST medium[i].str)) {
+                ecmd->advertising &= ~medium[i].value;
+                break;
+            }
+        }
+    } else if (xmlStrEqual(node->name, BAD_CAST "auto-negotiate")) {
+        /* default is true */
+        ecmd->advertising |= ADVERTISED_Autoneg;
+    } else if (xmlStrEqual(node->name, BAD_CAST "pause")) {
+        ecmd->advertising &= ~ADVERTISED_Pause;
+        ecmd->advertising &= ~ADVERTISED_Asym_Pause;
+    }
+    dev_set_ethtool((char*)port_name, ecmd);
 }
 
 void

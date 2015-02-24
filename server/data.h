@@ -87,6 +87,8 @@ void txn_mod_contr_target(const xmlChar *contr_id, const xmlChar *name,
 
 void txn_del_port(const xmlChar *port_name);
 void txn_add_port(xmlNodePtr node);
+void txn_add_port_advert(const xmlChar *port_name, xmlNodePtr node);
+void txn_del_port_advert(const xmlChar *port_name, xmlNodePtr node);
 void txn_mod_port_reqnumber(const xmlChar *port_name, const xmlChar* value);
 void txn_mod_port_admin_state(const xmlChar *port_name, const xmlChar* value);
 int txn_mod_port_configuration(xmlNodePtr cfg, struct nc_err **error);

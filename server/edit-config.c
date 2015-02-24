@@ -992,7 +992,7 @@ error:
 static int
 edit_delete(xmlNodePtr node, int running)
 {
-    xmlNodePtr key, key2;
+    xmlNodePtr key, aux;
     xmlChar *value;
     const xmlChar *bridge_name;
     int ret;
@@ -1099,8 +1099,8 @@ edit_delete(xmlNodePtr node, int running)
             /* TODO TC: flow-table/resource-id, table-id, name  */
         } else if (xmlStrEqual(node->name, BAD_CAST "controller")) {
             key = go2node(node, BAD_CAST "id");
-            key2 = go2node(node->parent->parent, BAD_CAST "id");
-            txn_del_contr(key->children->content, key2->children->content);
+            aux = go2node(node->parent->parent, BAD_CAST "id");
+            txn_del_contr(key->children->content, aux->children->content);
         } else if (xmlStrEqual(node->parent->name, BAD_CAST "controller")) {
             key = go2node(node->parent, BAD_CAST "id");
             /* key 'id' cannot be deleted */
@@ -1132,6 +1132,16 @@ edit_delete(xmlNodePtr node, int running)
 
             /* delete -> set to default */
             ofc_of_mod_port(bridge_name, xmlNodeGetContent(key), node->name, BAD_CAST "");
+        } else if (xmlStrEqual(node->name, BAD_CAST "features")) {
+            edit_delete(go2node(node, BAD_CAST "advertised"), running);
+        } else if (xmlStrEqual(node->name, BAD_CAST "advertised")) {
+            key = go2node(node->parent->parent, BAD_CAST "name");
+            for (aux = node->children; aux; aux = aux->next) {
+                txn_del_port_advert(key->children->content, aux);
+            }
+        } else if (xmlStrEqual(node->parent->name, BAD_CAST "advertised")) {
+            key = go2node(node->parent->parent->parent, BAD_CAST "name");
+            txn_del_port_advert(key->children->content, node);
         } else if (xmlStrEqual(node->name, BAD_CAST "local-endpoint-ipv4-adress")) {
             /* TODO TC */
         } else if (xmlStrEqual(node->name, BAD_CAST "remote-endpoint-ipv4-adress")) {
@@ -1287,7 +1297,7 @@ static int
 edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running,
             struct nc_err** error)
 {
-    xmlNodePtr key, parent;
+    xmlNodePtr key, parent, aux;
     const xmlChar *bridge_name;
     int ret;
 
@@ -1424,6 +1434,20 @@ edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running,
             bridge_name = ofc_find_bridge_for_port_iterative(xmlNodeGetContent(key));
 
             ofc_of_mod_port(bridge_name, xmlNodeGetContent(key), edit->name, edit->children->content);
+        } else if (xmlStrEqual(edit->name, BAD_CAST "features")) {
+            ret = edit_create(orig_doc, go2node(edit, BAD_CAST "advertised"),
+                              running, error);
+            if (ret != EXIT_SUCCESS) {
+                return EXIT_FAILURE;
+            }
+        } else if (xmlStrEqual(edit->name, BAD_CAST "advertised")) {
+            key = go2node(edit->parent->parent, BAD_CAST "name");
+            for (aux = edit->children; aux; aux = aux->next) {
+                txn_add_port_advert(key->children->content, aux);
+            }
+        } else if (xmlStrEqual(edit->parent->name, BAD_CAST "advertised")) {
+            key = go2node(edit->parent->parent->parent, BAD_CAST "name");
+            txn_add_port_advert(key->children->content, edit);
         } else if (xmlStrEqual(edit->name, BAD_CAST "local-endpoint-ipv4-adress")) {
             /* TODO TC */
         } else if (xmlStrEqual(edit->name, BAD_CAST "remote-endpoint-ipv4-adress")) {

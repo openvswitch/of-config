@@ -138,6 +138,7 @@ ofc_of_open_vconn(const char *name, struct vconn **vconnp)
     dp_parse_name(name, &datapath_name, &datapath_type);
 
     if (asprintf(&socket_name, "%s/%s.mgmt", OFC_OVS_OFSOCKET_DIR, datapath_name) == -1) {
+        free(bridge_path);
         free(datapath_name);
         free(datapath_type);
         return false;

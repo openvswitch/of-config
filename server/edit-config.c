@@ -1078,8 +1078,7 @@ edit_delete(xmlNodePtr node, int running)
 
             /* key (id) cannot be deleted */
             if (xmlStrEqual(node->name, BAD_CAST "datapath-id")) {
-                txn_mod_bridge_datapath(key->children->content,
-                                        node->children->content);
+                txn_mod_bridge_datapath(key->children->content, NULL);
             } else if (xmlStrEqual(node->name, BAD_CAST "controllers")) {
                 while (node->children) { /* controller */
                     ret = edit_delete(node->children, running);
@@ -1087,8 +1086,13 @@ edit_delete(xmlNodePtr node, int running)
                         return EXIT_FAILURE;
                     }
                 }
+            } else if (xmlStrEqual(node->name, BAD_CAST "lost-connection-behavior")) {
+                txn_mod_bridge_failmode(key->children->content, NULL);
             }
-            /* TODO enabled, lost-connection-behavior */
+            /* enabled is not handled:
+             * it is too complicated to handle it in combination with the
+             * OVSDB's garbage collection.
+             */
         } else if (xmlStrEqual(node->parent->name, BAD_CAST "queue")) {
             /* TODO TC: queue/resource-id, id, port, properties/ * */
         } else if (xmlStrEqual(node->parent->name, BAD_CAST "flow-table")) {
@@ -1101,17 +1105,15 @@ edit_delete(xmlNodePtr node, int running)
             key = go2node(node->parent, BAD_CAST "id");
             /* key 'id' cannot be deleted */
             if (xmlStrEqual(node->name, BAD_CAST "local-ip-address")) {
-                txn_mod_contr_lip(key->children->content,NULL);
+                txn_mod_contr_lip(key->children->content, NULL);
             } else if (xmlStrEqual(node->name, BAD_CAST "ip-address") ||
                             xmlStrEqual(node->name, BAD_CAST "port") ||
                             xmlStrEqual(node->name, BAD_CAST "protocol")) {
-                txn_mod_contr_target(key->children->content, node->name,
-                                     node->children->content);
+                txn_mod_contr_target(key->children->content, node->name, NULL);
             }
         } else if (xmlStrEqual(node->name, BAD_CAST "requested-number")) {
             key = go2node(node->parent, BAD_CAST "name");
-            txn_mod_port_reqnumber(key->children->content,
-                                   node->children->content);
+            txn_mod_port_reqnumber(key->children->content, NULL);
         } else if (xmlStrEqual(node->name, BAD_CAST "ipgre-tunnel")
                    || xmlStrEqual(node->name, BAD_CAST "vxlan-tunnel")
                    || xmlStrEqual(node->name, BAD_CAST "tunnel")) {
@@ -1382,8 +1384,14 @@ edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running,
                         return EXIT_FAILURE;
                     }
                 }
+            } else if (xmlStrEqual(edit->name, BAD_CAST "lost-connection-behavior")) {
+                txn_mod_bridge_failmode(key->children->content,
+                                        edit->children->content);
             }
-            /* TODO enabled, lost-connection-behavior, controllers, resources */
+            /* enabled is not handled:
+             * it is too complicated to handle it in combination with the
+             * OVSDB's garbage collection.
+             */
         } else if (xmlStrEqual(edit->parent->name, BAD_CAST "queue")) {
             /* TODO TC: resource-id, id, port, properties/ * */
         } else if (xmlStrEqual(edit->parent->name, BAD_CAST "flow-table")) {

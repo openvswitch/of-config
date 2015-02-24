@@ -257,18 +257,6 @@ Logical Switch.</text>
        ignored.</text>
       </description>
     </leaf>
-    <leaf name="enabled">
-      <type name="boolean"/>
-      <default value="false"/>
-      <description>
-        <text>This element indicates the administrative state
-       of the OpenFlow Logical Switch.  A value of 'false' means
-       the OpenFlow Logical Switch MUST NOT communicate with any
-       OpenFlow Controllers, MUST NOT conduct any OpenFlow
-       processing, and SHOULD NOT be utilizing computational or
-       network resources of the underlying platform.</text>
-      </description>
-    </leaf>
     <leaf name="check-controller-certificate">
       <type name="boolean"/>
       <default value="false"/>

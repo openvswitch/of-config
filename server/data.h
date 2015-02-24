@@ -136,6 +136,6 @@ const xmlChar *ofc_get_switchid(void);
 
 xmlChar *ofc_find_bridge_for_port(xmlNodePtr root, xmlChar *port_name);
 
-xmlChar *ofc_find_bridge_for_port_iterative(xmlChar *port_name);
+const xmlChar *ofc_find_bridge_for_port_iterative(xmlChar *port_name);
 
 #endif /* data.h */

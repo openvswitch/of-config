@@ -1730,7 +1730,8 @@ void
 txn_add_port(xmlNodePtr node)
 {
     xmlNodePtr aux, leaf;
-    xmlChar *xmlval, *port_name, *bridge_name;
+    xmlChar *xmlval, *port_name;
+    const xmlChar *bridge_name;
     struct ovsrec_port *port;
     struct ovsrec_interface *iface;
 
@@ -2957,7 +2958,7 @@ txn_add_bridge(xmlNodePtr node)
     }
 }
 
-xmlChar *
+const xmlChar *
 ofc_find_bridge_for_port_iterative(xmlChar *port_name)
 {
     const struct ovsrec_bridge *bridge, *next;

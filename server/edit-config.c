@@ -1254,7 +1254,7 @@ edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running,
             struct nc_err** error)
 {
     xmlNodePtr key, parent;
-    xmlChar *bridge_name;
+    const xmlChar *bridge_name;
     int ret;
 
     /* remove operation attribute */

@@ -260,6 +260,8 @@ module of-config {
          ignored.";
     }
 
+/* not handled by current implementation
+
     leaf enabled {
       type boolean;
       default false;
@@ -271,6 +273,7 @@ module of-config {
          processing, and SHOULD NOT be utilizing computational or
          network resources of the underlying platform.";
      }
+*/
 
    leaf check-controller-certificate {
       type boolean;

@@ -1077,9 +1077,10 @@ get_bridges_config(void)
          * free(uuid); */
         ds_put_format(&string, "<switch>");
         ds_put_format(&string, "<id>%s</id>", row->name);
-        /* TODO
-           "<enabled>%s</enabled>"
-           */
+        /* enabled is not handled:
+         * it is too complicated to handle it in combination with the
+         * OVSDB's garbage collection.
+         */
         find_and_append_smap_val(&row->other_config, "datapath-id",
                                  "datapath-id", &string);
         if (row->fail_mode) {
@@ -3048,7 +3049,10 @@ txn_add_bridge(xmlNodePtr node)
             txn_mod_bridge_failmode(BAD_CAST bridge->name, aux->children->content);
             failmode_flag = 1;
         }
-        /* TODO enabled */
+        /* enabled is not handled:
+         * it is too complicated to handle it in combination with the
+         * OVSDB's garbage collection.
+         */
     }
 
     if (!failmode_flag) {

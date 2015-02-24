@@ -41,7 +41,7 @@
 <axsl:template match="/"><svrl:schematron-output xmlns:svrl="http://purl.oclc.org/dsdl/svrl" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:schold="http://www.ascc.net/xml/schematron" title="" schemaVersion=""><axsl:comment><axsl:value-of select="$archiveDirParameter"/>   
 		 <axsl:value-of select="$archiveNameParameter"/>  
 		 <axsl:value-of select="$fileNameParameter"/>  
-		 <axsl:value-of select="$fileDirParameter"/></axsl:comment><svrl:ns-prefix-in-attribute-values uri="http://exslt.org/dynamic" prefix="dyn"/><svrl:ns-prefix-in-attribute-values uri="urn:onf:config:yang" prefix="of-config"/><svrl:ns-prefix-in-attribute-values uri="urn:ietf:params:xml:ns:netconf:base:1.0" prefix="nc"/><svrl:active-pattern><axsl:attribute name="id">of-config</axsl:attribute><axsl:attribute name="name">of-config</axsl:attribute><axsl:apply-templates/></svrl:active-pattern><axsl:apply-templates select="/" mode="M4"/><svrl:active-pattern><axsl:attribute name="id">idm213008781008</axsl:attribute><axsl:attribute name="name">idm213008781008</axsl:attribute><axsl:apply-templates/></svrl:active-pattern><axsl:apply-templates select="/" mode="M5"/><svrl:active-pattern><axsl:attribute name="id">idm213008779920</axsl:attribute><axsl:attribute name="name">idm213008779920</axsl:attribute><axsl:apply-templates/></svrl:active-pattern><axsl:apply-templates select="/" mode="M6"/><svrl:active-pattern><axsl:attribute name="id">idm213008778816</axsl:attribute><axsl:attribute name="name">idm213008778816</axsl:attribute><axsl:apply-templates/></svrl:active-pattern><axsl:apply-templates select="/" mode="M7"/><svrl:active-pattern><axsl:attribute name="id">idm213008777472</axsl:attribute><axsl:attribute name="name">idm213008777472</axsl:attribute><axsl:apply-templates/></svrl:active-pattern><axsl:apply-templates select="/" mode="M8"/><svrl:active-pattern><axsl:attribute name="id">idm213008776656</axsl:attribute><axsl:attribute name="name">idm213008776656</axsl:attribute><axsl:apply-templates/></svrl:active-pattern><axsl:apply-templates select="/" mode="M9"/><svrl:active-pattern><axsl:attribute name="id">idm213008712032</axsl:attribute><axsl:attribute name="name">idm213008712032</axsl:attribute><axsl:apply-templates/></svrl:active-pattern><axsl:apply-templates select="/" mode="M10"/><svrl:active-pattern><axsl:attribute name="id">idm213008704064</axsl:attribute><axsl:attribute name="name">idm213008704064</axsl:attribute><axsl:apply-templates/></svrl:active-pattern><axsl:apply-templates select="/" mode="M11"/><svrl:active-pattern><axsl:attribute name="id">idm213008753728</axsl:attribute><axsl:attribute name="name">idm213008753728</axsl:attribute><axsl:apply-templates/></svrl:active-pattern><axsl:apply-templates select="/" mode="M12"/></svrl:schematron-output></axsl:template>
+		 <axsl:value-of select="$fileDirParameter"/></axsl:comment><svrl:ns-prefix-in-attribute-values uri="http://exslt.org/dynamic" prefix="dyn"/><svrl:ns-prefix-in-attribute-values uri="urn:onf:config:yang" prefix="of-config"/><svrl:ns-prefix-in-attribute-values uri="urn:ietf:params:xml:ns:netconf:base:1.0" prefix="nc"/><svrl:active-pattern><axsl:attribute name="id">of-config</axsl:attribute><axsl:attribute name="name">of-config</axsl:attribute><axsl:apply-templates/></svrl:active-pattern><axsl:apply-templates select="/" mode="M4"/><svrl:active-pattern><axsl:attribute name="id">idm140214656138656</axsl:attribute><axsl:attribute name="name">idm140214656138656</axsl:attribute><axsl:apply-templates/></svrl:active-pattern><axsl:apply-templates select="/" mode="M5"/><svrl:active-pattern><axsl:attribute name="id">idm140214656137568</axsl:attribute><axsl:attribute name="name">idm140214656137568</axsl:attribute><axsl:apply-templates/></svrl:active-pattern><axsl:apply-templates select="/" mode="M6"/><svrl:active-pattern><axsl:attribute name="id">idm140214656136464</axsl:attribute><axsl:attribute name="name">idm140214656136464</axsl:attribute><axsl:apply-templates/></svrl:active-pattern><axsl:apply-templates select="/" mode="M7"/><svrl:active-pattern><axsl:attribute name="id">idm140214656135120</axsl:attribute><axsl:attribute name="name">idm140214656135120</axsl:attribute><axsl:apply-templates/></svrl:active-pattern><axsl:apply-templates select="/" mode="M8"/><svrl:active-pattern><axsl:attribute name="id">idm140214656134304</axsl:attribute><axsl:attribute name="name">idm140214656134304</axsl:attribute><axsl:apply-templates/></svrl:active-pattern><axsl:apply-templates select="/" mode="M9"/><svrl:active-pattern><axsl:attribute name="id">idm140214656071200</axsl:attribute><axsl:attribute name="name">idm140214656071200</axsl:attribute><axsl:apply-templates/></svrl:active-pattern><axsl:apply-templates select="/" mode="M10"/><svrl:active-pattern><axsl:attribute name="id">idm140214656063232</axsl:attribute><axsl:attribute name="name">idm140214656063232</axsl:attribute><axsl:apply-templates/></svrl:active-pattern><axsl:apply-templates select="/" mode="M11"/><svrl:active-pattern><axsl:attribute name="id">idm140214656111376</axsl:attribute><axsl:attribute name="name">idm140214656111376</axsl:attribute><axsl:apply-templates/></svrl:active-pattern><axsl:apply-templates select="/" mode="M12"/></svrl:schematron-output></axsl:template>
 
 <!--SCHEMATRON PATTERNS-->
 <axsl:param name="root" select="/nc:data"/>
@@ -152,7 +152,7 @@
 		<!--REPORT -->
 <axsl:if test="not($root/of-config:capable-switch/of-config:resources/of-config:flow-table/of-config:resource-id=.)"><svrl:successful-report xmlns:svrl="http://purl.oclc.org/dsdl/svrl" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:schold="http://www.ascc.net/xml/schematron" test="not($root/of-config:capable-switch/of-config:resources/of-config:flow-table/of-config:resource-id=.)"><axsl:attribute name="location"><axsl:apply-templates select="." mode="schematron-get-full-path"/></axsl:attribute><svrl:text>Leaf "/nc:data/of-config:capable-switch/of-config:resources/of-config:flow-table/of-config:resource-id" does not exist for leafref value "<axsl:text/><axsl:value-of select="."/><axsl:text/>"</svrl:text></svrl:successful-report></axsl:if><axsl:apply-templates select="*|comment()|processing-instruction()" mode="M4"/></axsl:template><axsl:template match="text()" priority="-1" mode="M4"/><axsl:template match="@*|node()" priority="-2" mode="M4"><axsl:apply-templates select="*|comment()|processing-instruction()" mode="M4"/></axsl:template>
 
-<!--PATTERN idm213008781008-->
+<!--PATTERN idm140214656138656-->
 
 
 	<!--RULE -->
@@ -167,7 +167,7 @@
 		<!--REPORT -->
 <axsl:if test=". = preceding-sibling::of-config:medium"><svrl:successful-report xmlns:svrl="http://purl.oclc.org/dsdl/svrl" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:schold="http://www.ascc.net/xml/schematron" test=". = preceding-sibling::of-config:medium"><axsl:attribute name="location"><axsl:apply-templates select="." mode="schematron-get-full-path"/></axsl:attribute><svrl:text>Duplicate leaf-list entry "<axsl:text/><axsl:value-of select="."/><axsl:text/>".</svrl:text></svrl:successful-report></axsl:if><axsl:apply-templates select="*|comment()|processing-instruction()" mode="M5"/></axsl:template><axsl:template match="text()" priority="-1" mode="M5"/><axsl:template match="@*|node()" priority="-2" mode="M5"><axsl:apply-templates select="*|comment()|processing-instruction()" mode="M5"/></axsl:template>
 
-<!--PATTERN idm213008779920-->
+<!--PATTERN idm140214656137568-->
 
 
 	<!--RULE -->
@@ -182,7 +182,7 @@
 		<!--REPORT -->
 <axsl:if test=". = preceding-sibling::of-config:medium"><svrl:successful-report xmlns:svrl="http://purl.oclc.org/dsdl/svrl" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:schold="http://www.ascc.net/xml/schematron" test=". = preceding-sibling::of-config:medium"><axsl:attribute name="location"><axsl:apply-templates select="." mode="schematron-get-full-path"/></axsl:attribute><svrl:text>Duplicate leaf-list entry "<axsl:text/><axsl:value-of select="."/><axsl:text/>".</svrl:text></svrl:successful-report></axsl:if><axsl:apply-templates select="*|comment()|processing-instruction()" mode="M6"/></axsl:template><axsl:template match="text()" priority="-1" mode="M6"/><axsl:template match="@*|node()" priority="-2" mode="M6"><axsl:apply-templates select="*|comment()|processing-instruction()" mode="M6"/></axsl:template>
 
-<!--PATTERN idm213008778816-->
+<!--PATTERN idm140214656136464-->
 
 
 	<!--RULE -->
@@ -197,7 +197,7 @@
 		<!--REPORT -->
 <axsl:if test=". = preceding-sibling::of-config:medium"><svrl:successful-report xmlns:svrl="http://purl.oclc.org/dsdl/svrl" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:schold="http://www.ascc.net/xml/schematron" test=". = preceding-sibling::of-config:medium"><axsl:attribute name="location"><axsl:apply-templates select="." mode="schematron-get-full-path"/></axsl:attribute><svrl:text>Duplicate leaf-list entry "<axsl:text/><axsl:value-of select="."/><axsl:text/>".</svrl:text></svrl:successful-report></axsl:if><axsl:apply-templates select="*|comment()|processing-instruction()" mode="M7"/></axsl:template><axsl:template match="text()" priority="-1" mode="M7"/><axsl:template match="@*|node()" priority="-2" mode="M7"><axsl:apply-templates select="*|comment()|processing-instruction()" mode="M7"/></axsl:template>
 
-<!--PATTERN idm213008777472-->
+<!--PATTERN idm140214656135120-->
 
 
 	<!--RULE -->
@@ -206,7 +206,7 @@
 		<!--ASSERT -->
 <axsl:choose><axsl:when test="of-config:local-endpoint-ipv4-adress[not(processing-instruction('dsrl'))] or of-config:remote-endpoint-ipv4-adress[not(processing-instruction('dsrl'))] or of-config:local-endpoint-ipv6-adress[not(processing-instruction('dsrl'))] or of-config:remote-endpoint-ipv6-adress[not(processing-instruction('dsrl'))] or of-config:local-endpoint-mac-adress[not(processing-instruction('dsrl'))] or of-config:remote-endpoint-mac-adress[not(processing-instruction('dsrl'))] or false()"/><axsl:otherwise><svrl:failed-assert xmlns:svrl="http://purl.oclc.org/dsdl/svrl" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:schold="http://www.ascc.net/xml/schematron" test="of-config:local-endpoint-ipv4-adress[not(processing-instruction('dsrl'))] or of-config:remote-endpoint-ipv4-adress[not(processing-instruction('dsrl'))] or of-config:local-endpoint-ipv6-adress[not(processing-instruction('dsrl'))] or of-config:remote-endpoint-ipv6-adress[not(processing-instruction('dsrl'))] or of-config:local-endpoint-mac-adress[not(processing-instruction('dsrl'))] or of-config:remote-endpoint-mac-adress[not(processing-instruction('dsrl'))] or false()"><axsl:attribute name="location"><axsl:apply-templates select="." mode="schematron-get-full-path"/></axsl:attribute><svrl:text>Node(s) from one case of mandatory choice "endpoints" must exist</svrl:text></svrl:failed-assert></axsl:otherwise></axsl:choose><axsl:apply-templates select="*|comment()|processing-instruction()" mode="M8"/></axsl:template><axsl:template match="text()" priority="-1" mode="M8"/><axsl:template match="@*|node()" priority="-2" mode="M8"><axsl:apply-templates select="*|comment()|processing-instruction()" mode="M8"/></axsl:template>
 
-<!--PATTERN idm213008776656-->
+<!--PATTERN idm140214656134304-->
 
 
 	<!--RULE -->
@@ -215,7 +215,7 @@
 		<!--ASSERT -->
 <axsl:choose><axsl:when test="ancestor-or-self::*[processing-instruction('dsrl')] or (../of-config:key-present='true')"/><axsl:otherwise><svrl:failed-assert xmlns:svrl="http://purl.oclc.org/dsdl/svrl" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:schold="http://www.ascc.net/xml/schematron" test="ancestor-or-self::*[processing-instruction('dsrl')] or (../of-config:key-present='true')"><axsl:attribute name="location"><axsl:apply-templates select="." mode="schematron-get-full-path"/></axsl:attribute><svrl:text>Node "key" is only valid when "../of-config:key-present='true'"</svrl:text></svrl:failed-assert></axsl:otherwise></axsl:choose><axsl:apply-templates select="*|comment()|processing-instruction()" mode="M9"/></axsl:template><axsl:template match="text()" priority="-1" mode="M9"/><axsl:template match="@*|node()" priority="-2" mode="M9"><axsl:apply-templates select="*|comment()|processing-instruction()" mode="M9"/></axsl:template>
 
-<!--PATTERN idm213008712032-->
+<!--PATTERN idm140214656071200-->
 
 
 	<!--RULE -->
@@ -224,7 +224,7 @@
 		<!--ASSERT -->
 <axsl:choose><axsl:when test="of-config:local-endpoint-ipv4-adress[not(processing-instruction('dsrl'))] or of-config:remote-endpoint-ipv4-adress[not(processing-instruction('dsrl'))] or of-config:local-endpoint-ipv6-adress[not(processing-instruction('dsrl'))] or of-config:remote-endpoint-ipv6-adress[not(processing-instruction('dsrl'))] or of-config:local-endpoint-mac-adress[not(processing-instruction('dsrl'))] or of-config:remote-endpoint-mac-adress[not(processing-instruction('dsrl'))] or false()"/><axsl:otherwise><svrl:failed-assert xmlns:svrl="http://purl.oclc.org/dsdl/svrl" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:schold="http://www.ascc.net/xml/schematron" test="of-config:local-endpoint-ipv4-adress[not(processing-instruction('dsrl'))] or of-config:remote-endpoint-ipv4-adress[not(processing-instruction('dsrl'))] or of-config:local-endpoint-ipv6-adress[not(processing-instruction('dsrl'))] or of-config:remote-endpoint-ipv6-adress[not(processing-instruction('dsrl'))] or of-config:local-endpoint-mac-adress[not(processing-instruction('dsrl'))] or of-config:remote-endpoint-mac-adress[not(processing-instruction('dsrl'))] or false()"><axsl:attribute name="location"><axsl:apply-templates select="." mode="schematron-get-full-path"/></axsl:attribute><svrl:text>Node(s) from one case of mandatory choice "endpoints" must exist</svrl:text></svrl:failed-assert></axsl:otherwise></axsl:choose><axsl:apply-templates select="*|comment()|processing-instruction()" mode="M10"/></axsl:template><axsl:template match="text()" priority="-1" mode="M10"/><axsl:template match="@*|node()" priority="-2" mode="M10"><axsl:apply-templates select="*|comment()|processing-instruction()" mode="M10"/></axsl:template>
 
-<!--PATTERN idm213008704064-->
+<!--PATTERN idm140214656063232-->
 
 
 	<!--RULE -->
@@ -233,7 +233,7 @@
 		<!--ASSERT -->
 <axsl:choose><axsl:when test="of-config:local-endpoint-ipv4-adress[not(processing-instruction('dsrl'))] or of-config:remote-endpoint-ipv4-adress[not(processing-instruction('dsrl'))] or of-config:local-endpoint-ipv6-adress[not(processing-instruction('dsrl'))] or of-config:remote-endpoint-ipv6-adress[not(processing-instruction('dsrl'))] or of-config:local-endpoint-mac-adress[not(processing-instruction('dsrl'))] or of-config:remote-endpoint-mac-adress[not(processing-instruction('dsrl'))] or false()"/><axsl:otherwise><svrl:failed-assert xmlns:svrl="http://purl.oclc.org/dsdl/svrl" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:schold="http://www.ascc.net/xml/schematron" test="of-config:local-endpoint-ipv4-adress[not(processing-instruction('dsrl'))] or of-config:remote-endpoint-ipv4-adress[not(processing-instruction('dsrl'))] or of-config:local-endpoint-ipv6-adress[not(processing-instruction('dsrl'))] or of-config:remote-endpoint-ipv6-adress[not(processing-instruction('dsrl'))] or of-config:local-endpoint-mac-adress[not(processing-instruction('dsrl'))] or of-config:remote-endpoint-mac-adress[not(processing-instruction('dsrl'))] or false()"><axsl:attribute name="location"><axsl:apply-templates select="." mode="schematron-get-full-path"/></axsl:attribute><svrl:text>Node(s) from one case of mandatory choice "endpoints" must exist</svrl:text></svrl:failed-assert></axsl:otherwise></axsl:choose><axsl:apply-templates select="*|comment()|processing-instruction()" mode="M11"/></axsl:template><axsl:template match="text()" priority="-1" mode="M11"/><axsl:template match="@*|node()" priority="-2" mode="M11"><axsl:apply-templates select="*|comment()|processing-instruction()" mode="M11"/></axsl:template>
 
-<!--PATTERN idm213008753728-->
+<!--PATTERN idm140214656111376-->
 
 
 	<!--RULE -->

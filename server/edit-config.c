@@ -1080,7 +1080,10 @@ edit_delete(xmlNodePtr node, int running)
             } else if (xmlStrEqual(node->name, BAD_CAST "lost-connection-behavior")) {
                 txn_mod_bridge_failmode(key->children->content, NULL);
             }
-            /* TODO enabled */
+            /* enabled is not handled:
+             * it is too complicated to handle it in combination with the
+             * OVSDB's garbage collection.
+             */
         } else if (xmlStrEqual(node->name, BAD_CAST "controller")) {
             key = go2node(node, BAD_CAST "id");
             key2 = go2node(node->parent->parent, BAD_CAST "id");
@@ -1345,7 +1348,10 @@ edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running,
                 txn_mod_bridge_failmode(key->children->content,
                                         edit->children->content);
             }
-            /* TODO enabled */
+            /* enabled is not handled:
+             * it is too complicated to handle it in combination with the
+             * OVSDB's garbage collection.
+             */
         } else if (xmlStrEqual(edit->name, BAD_CAST "controller")) {
             key = go2node(edit->parent->parent, BAD_CAST "id");
             txn_add_contr(edit, key->children->content);

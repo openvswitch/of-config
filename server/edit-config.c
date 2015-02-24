@@ -994,6 +994,7 @@ edit_delete(xmlNodePtr node, int running)
 {
     xmlNodePtr key, key2;
     xmlChar *value;
+    const xmlChar *bridge_name;
     int ret;
 
     if (!node) {
@@ -1106,6 +1107,17 @@ edit_delete(xmlNodePtr node, int running)
             value = xmlNodeGetContent(key);
             txn_del_port_tunnel(value, node);
             xmlFree(value);
+        } else if (xmlStrEqual(node->name, BAD_CAST "no-receive")
+                   || xmlStrEqual(node->name, BAD_CAST "no-forward")
+                   || xmlStrEqual(node->name, BAD_CAST "no-packet-in")
+                   || xmlStrEqual(node->name, BAD_CAST "admin-state")) {
+
+            nc_verb_verbose("Modify port configuration (%s:%d)", __FILE__, __LINE__);
+            key = go2node(node->parent->parent, BAD_CAST "name");
+            bridge_name = ofc_find_bridge_for_port_iterative(xmlNodeGetContent(key));
+
+            /* delete -> set to default */
+            ofc_of_mod_port(bridge_name, xmlNodeGetContent(key), node->name, BAD_CAST "");
         }
     }
 

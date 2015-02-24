@@ -280,6 +280,9 @@ ofc_of_mod_port(const xmlChar *bridge_name, const xmlChar *port_name, const xmlC
         val = 1; /* inverse logic for admin-state */
     } else if (xmlStrEqual(value, BAD_CAST "up")) {
         val = 0; /* inverse logic for admin-state */
+    } else if (xmlStrEqual(value, BAD_CAST "")) {
+        /* delete -> change to default */
+        val = 0;
     } else {
         return;
     }

@@ -60,6 +60,7 @@ typedef struct {
     struct ovsdb_idl *idl;
     struct ovsdb_idl_txn *txn;
     unsigned int seqno;
+    bool added_interface;
     struct vconn *vconn;
     ofc_resmap_t *resource_map;
     struct ofc_resmap_certificate *cert_map;
@@ -1476,6 +1477,7 @@ ofc_init(const char *ovs_db_path)
         /* failed */
         return false;
     }
+    p->added_interface = false;
     /* create new resource-id map of 1024 elements, it will grow when needed */
     p->resource_map = ofc_resmap_init(1024);
     if (p->resource_map == NULL) {
@@ -1532,6 +1534,7 @@ void
 txn_init(void)
 {
     ovsdb_handler->txn = ovsdb_idl_txn_create(ovsdb_handler->idl);
+    ovsdb_handler->added_interface = false;
 }
 
 /*
@@ -1727,12 +1730,77 @@ txn_mod_port_admin_state(const xmlChar *port_name, const xmlChar* value)
     }
 }
 
+int
+txn_mod_port_configuration(xmlNodePtr cfg, struct nc_err **error)
+{
+    xmlXPathContextPtr xpathCtx;
+    xmlXPathObjectPtr xpathObj;
+    xmlDocPtr doc;
+    const xmlChar *bridge_name = NULL;
+    xmlChar *port_name, *value;
+    xmlNodePtr port, aux;
+    const char *xpathexpr = "//ofc:port/ofc:configuration/..";
+    size_t size, i;
+    if (cfg == NULL) {
+        return EXIT_SUCCESS;
+    }
+    if (ovsdb_handler->added_interface == false) {
+        return EXIT_SUCCESS;
+    }
+
+    txn_init();
+
+    doc = cfg->doc;
+
+    /* Create xpath evaluation context */
+    xpathCtx = xmlXPathNewContext(doc);
+    if(xpathCtx == NULL) {
+        nc_verb_error("Unable to create new XPath context");
+        goto cleanup;
+    }
+
+    if (xmlXPathRegisterNs(xpathCtx, BAD_CAST "ofc", BAD_CAST "urn:onf:config:yang")) {
+        nc_verb_error("Registering a namespace for XPath failed (%s).", __func__);
+        goto cleanup;
+    }
+
+    /* Evaluate xpath expression */
+    xpathObj = xmlXPathEvalExpression(BAD_CAST xpathexpr, xpathCtx);
+    if(xpathObj == NULL) {
+        nc_verb_error("Unable to evaluate xpath expression \"%s\"", xpathexpr);
+        goto cleanup;
+    }
+
+    /* Print results */
+    size = (xpathObj->nodesetval) ? xpathObj->nodesetval->nodeNr : 0;
+    for (i = 0; i < size; i++) {
+        if (xpathObj->nodesetval->nodeTab[i]) {
+            port = xpathObj->nodesetval->nodeTab[i];
+            port_name = xmlNodeGetContent(go2node(port, BAD_CAST "name"));
+            bridge_name = ofc_find_bridge_for_port_iterative(port_name);
+            aux = go2node(port, BAD_CAST "configuration");
+            for (aux = aux->children; aux; aux = aux->next) {
+                value = xmlNodeGetContent(aux);
+                ofc_of_mod_port(bridge_name, port_name, aux->name, value);
+                xmlFree(value);
+            }
+
+            xmlFree(port_name);
+        }
+    }
+
+cleanup:
+    /* Cleanup, use bridge_name that was initialized or set */
+    xmlXPathFreeObject(xpathObj);
+    xmlXPathFreeContext(xpathCtx);
+    return txn_commit(error);
+}
+
 void
 txn_add_port(xmlNodePtr node)
 {
-    xmlNodePtr aux, leaf;
+    xmlNodePtr aux;
     xmlChar *xmlval, *port_name;
-    const xmlChar *bridge_name;
     struct ovsrec_port *port;
     struct ovsrec_interface *iface;
 
@@ -1762,22 +1830,8 @@ txn_add_port(xmlNodePtr node)
             txn_mod_port_reqnumber(BAD_CAST iface->name, xmlval);
             xmlFree(xmlval);
         } else if (xmlStrEqual(aux->name, BAD_CAST "configuration")) {
-            for (leaf = aux->children; leaf; leaf = leaf->next) {
-                if (xmlStrEqual(leaf->name, BAD_CAST "no-receive")
-                           || xmlStrEqual(leaf->name, BAD_CAST "no-packet-in")
-                           || xmlStrEqual(leaf->name, BAD_CAST "no-forward")
-                           || xmlStrEqual(leaf->name, BAD_CAST "admin-state")) {
-                    nc_verb_verbose("txn_add_port: no-receive, no-forward, no-packet-in");
-                    port_name = xmlNodeGetContent(go2node(leaf->parent->parent, BAD_CAST "name"));
-                    bridge_name = ofc_find_bridge_for_port_iterative(port_name);
-                    if (bridge_name != NULL) {
-                        ofc_of_mod_port(bridge_name, port_name, leaf->name, xmlNodeGetContent(leaf));
-                    }
-                    xmlFree(port_name);
-                } else {
-                    nc_verb_error("unexpected element '%s'", leaf->name);
-                }
-            }
+            /* can't be set before commit, it will be set later */
+            ovsdb_handler->added_interface = true;
         } else if (xmlStrEqual(aux->name, BAD_CAST "ipgre-tunnel")
                    || xmlStrEqual(aux->name, BAD_CAST "vxlan-tunnel")
                    || xmlStrEqual(aux->name, BAD_CAST "tunnel")) {
@@ -1787,6 +1841,7 @@ txn_add_port(xmlNodePtr node)
         }
         /* TODO features */
     }
+    ovsdb_handler->added_interface = true;
 }
 
 void

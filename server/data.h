@@ -88,6 +88,7 @@ void txn_del_port(const xmlChar *port_name);
 void txn_add_port(xmlNodePtr node);
 void txn_mod_port_reqnumber(const xmlChar *port_name, const xmlChar* value);
 void txn_mod_port_admin_state(const xmlChar *port_name, const xmlChar* value);
+int txn_mod_port_configuration(xmlNodePtr cfg, struct nc_err **error);
 
 void txn_mod_port_add_tunnel(const xmlChar *port_name, xmlNodePtr tunnel_node);
 void txn_del_port_tunnel(const xmlChar *port_name, xmlNodePtr tunnel_node);

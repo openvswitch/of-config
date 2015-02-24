@@ -286,7 +286,7 @@ ofcds_editconfig(void *UNUSED(data), const nc_rpc * UNUSED(rpc),
 {
     int ret = EXIT_FAILURE, running = 0;
     char *aux;
-    xmlDocPtr cfgds = NULL, cfg = NULL;
+    xmlDocPtr cfgds = NULL, cfg = NULL, cfg_clone = NULL;
     xmlNodePtr rootcfg;
 
     if (defop == NC_EDIT_DEFOP_NOTSET) {
@@ -305,6 +305,10 @@ ofcds_editconfig(void *UNUSED(data), const nc_rpc * UNUSED(rpc),
 
     switch (target) {
     case NC_DATASTORE_RUNNING:
+        /* Make a copy of parsed config - we will find port/configuration
+         * in it.  It is used after txn_commit(). */
+        cfg_clone = xmlCopyDoc(cfg, 1);
+
         aux = ofc_get_config_data();
         if (!aux) {
             *error = nc_err_new(NC_ERR_OP_FAILED);
@@ -366,6 +370,15 @@ ofcds_editconfig(void *UNUSED(data), const nc_rpc * UNUSED(rpc),
 
     if (target == NC_DATASTORE_RUNNING) {
         ret = txn_commit(error);
+
+        if (ret == EXIT_SUCCESS) {
+            /* modify port/configuration of ports that were created */
+            ret = txn_mod_port_configuration(xmlDocGetRootElement(cfg_clone),
+                                             error);
+        }
+        /* config clone was used and it is not needed by now */
+        xmlFreeDoc(cfg_clone);
+
         xmlFreeDoc(cfgds);
     }
     xmlFreeDoc(cfg);

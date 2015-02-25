@@ -1113,7 +1113,7 @@ edit_delete(xmlNodePtr node, int running)
                 }
             }
         } else if (xmlStrEqual(node->parent->name, BAD_CAST "properties")) {
-            key = go2node(node->parent, BAD_CAST "resource-id");
+            key = go2node(node->parent->parent, BAD_CAST "resource-id");
             value = xmlNodeGetContent(key);
             if (xmlStrEqual(node->name, BAD_CAST "min-rate")) {
                 txn_mod_queue_options(value, "min-rate", NULL);
@@ -1454,7 +1454,7 @@ edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running,
                 }
             }
         } else if (xmlStrEqual(edit->parent->name, BAD_CAST "properties")) {
-            key = go2node(edit->parent, BAD_CAST "resource-id");
+            key = go2node(edit->parent->parent, BAD_CAST "resource-id");
             value = xmlNodeGetContent(key);
             if (xmlStrEqual(edit->name, BAD_CAST "min-rate")) {
                 txn_mod_queue_options(value, "min-rate", edit);

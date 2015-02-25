@@ -63,7 +63,6 @@ typedef struct {
     unsigned int seqno;
     bool added_interface;
     struct vconn *vconn;
-    ofc_resmap_t *resource_map;
     struct ofc_resmap_certificate *cert_map;
 } ovsdb_t;
 ovsdb_t *ovsdb_handler = NULL;
@@ -1480,12 +1479,6 @@ ofc_init(const char *ovs_db_path)
         return false;
     }
     p->added_interface = false;
-    /* create new resource-id map of 1024 elements, it will grow when needed */
-    p->resource_map = ofc_resmap_init(1024);
-    if (p->resource_map == NULL) {
-        free(p);
-        return false;
-    }
 
     p->cert_map = calloc(1, sizeof(struct ofc_resmap_certificate));
     if (p->cert_map == NULL) {
@@ -1513,7 +1506,6 @@ ofc_destroy(void)
         /* close everything */
         ovsdb_idl_destroy(ovsdb_handler->idl);
 
-        ofc_resmap_destroy(&ovsdb_handler->resource_map);
         free(ovsdb_handler->cert_map->owned_resid);
         free(ovsdb_handler->cert_map->external_resid);
         free(ovsdb_handler->cert_map);
@@ -1566,7 +1558,6 @@ txn_commit(struct nc_err **e)
 
     switch (status) {
     case TXN_SUCCESS:
-        ofc_resmap_update_uuids(ovsdb_handler->resource_map);
         nc_verb_verbose("OVSDB transaction successful");
         break;
     case TXN_UNCHANGED:
@@ -2901,68 +2892,6 @@ txn_add_bridge_queue(const xmlChar *br_name, const xmlChar *resource_id)
             }
         }
     }
-}
-void
-txn_del_bridge_queue(const xmlChar *br_name, const xmlChar *resource_id)
-{
-    const struct ovsrec_bridge *bridge;
-    struct ovsrec_qos *qos;
-    ofc_tuple_t *resid = NULL;
-    size_t i, q;
-    int cmp;
-
-    if (!resource_id || !br_name) {
-        return;
-    }
-
-    nc_verb_verbose("Delete queue %s from %s bridge resource list.",
-                    BAD_CAST resource_id, BAD_CAST br_name);
-    OVSREC_BRIDGE_FOR_EACH(bridge, ovsdb_handler->idl) {
-        if (xmlStrEqual(br_name, BAD_CAST bridge->name)) {
-            break;
-        }
-    }
-    if (bridge == NULL) {
-        /* not found */
-        return;
-    }
-
-    resid = ofc_resmap_find_r(ovsdb_handler->resource_map, (const char *) resource_id);
-    if (resid == NULL) {
-        /* not found */
-        return;
-    }
-    for (i = 0; i < bridge->n_ports; i++) {
-        qos = bridge->ports[i]->qos;
-        if (qos == NULL) {
-            continue;
-        }
-        for (q = 0; q < qos->n_queues; q++) {
-            /* compare with resource-id */
-            cmp = uuid_equals(&qos->value_queues[q]->header_.uuid,
-                              &resid->uuid);
-            if (cmp) {
-                //ovsrec_port_verify_qos(bridge->ports[i]);
-                //ovsrec_port_set_qos(bridge->ports[i], NULL);
-                //for (q = 0; q < qos->n_queues; q++) {
-                //    ovsrec_queue_delete(qos->value_queues);
-                //}
-                //ovsrec_qos_set_queues(qos, NULL, NULL, 0);
-                //ovsrec_qos_delete(qos);
-                return;
-            }
-        }
-    }
-}
-
-void
-txn_del_bridge_flow_table(const xmlChar *br_name, const xmlChar *resource_id)
-{
-    if (!resource_id || !br_name) {
-        return;
-    }
-    nc_verb_verbose("Remove flow-table %s from %s bridge resource list.",
-                    BAD_CAST resource_id, BAD_CAST br_name);
 }
 
 void

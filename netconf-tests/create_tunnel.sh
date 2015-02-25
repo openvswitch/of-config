@@ -12,6 +12,9 @@ get-config --filter=ovs.xml running
 copy-config --source=candidate running
 copy-config --config=create_ipgre_tunnel_port.xml running
 get-config --filter=ovs.xml running
+
+edit-config --config=change_tunnel.xml running
+get-config --filter=ovs.xml running
 disconnect
 KONEC
 echo ""

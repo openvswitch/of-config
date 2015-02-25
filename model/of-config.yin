@@ -1,10 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<module xmlns="urn:ietf:params:xml:ns:yang:yin:1" xmlns:of-config="urn:onf:config:yang" xmlns:yang="urn:ietf:params:xml:ns:yang:ietf-yang-types" xmlns:inet="urn:ietf:params:xml:ns:yang:ietf-inet-types" name="of-config">
+<module xmlns="urn:ietf:params:xml:ns:yang:yin:1" xmlns:of-config="urn:onf:config:yang" xmlns:inet="urn:ietf:params:xml:ns:yang:ietf-inet-types" name="of-config">
   <namespace uri="urn:onf:config:yang"/>
   <prefix value="of-config"/>
-  <import module="ietf-yang-types">
-    <prefix value="yang"/>
-  </import>
   <import module="ietf-inet-types">
     <prefix value="inet"/>
   </import>
@@ -748,34 +745,6 @@ Only elements from one choice must exist at a time.</text>
           </description>
         </leaf>
       </case>
-      <case name="v6-endpoints">
-        <leaf name="local-endpoint-ipv6-adress">
-          <type name="inet:ipv6-address"/>
-          <description>
-            <text>The IPv6 address of the local tunnel endpoint.</text>
-          </description>
-        </leaf>
-        <leaf name="remote-endpoint-ipv6-adress">
-          <type name="inet:ipv6-address"/>
-          <description>
-            <text>The IPv6 address of the remote tunnel endpoint.</text>
-          </description>
-        </leaf>
-      </case>
-      <case name="mac-endpoints">
-        <leaf name="local-endpoint-mac-adress">
-          <type name="yang:mac-address"/>
-          <description>
-            <text>The MAC address of the local tunnel endpoint.</text>
-          </description>
-        </leaf>
-        <leaf name="remote-endpoint-mac-adress">
-          <type name="yang:mac-address"/>
-          <description>
-            <text>The MAC address of the remote tunnel endpoint.</text>
-          </description>
-        </leaf>
-      </case>
     </choice>
   </grouping>
   <grouping name="OFPortIPGRETunnelType">
@@ -789,13 +758,6 @@ information.</text>
       <default value="true"/>
       <description>
         <text>Indicates presence of the GRE checksum.</text>
-      </description>
-    </leaf>
-    <leaf name="key-present">
-      <type name="boolean"/>
-      <default value="true"/>
-      <description>
-        <text>Indicates presence of the GRE key.</text>
       </description>
     </leaf>
     <leaf name="key">
@@ -812,83 +774,18 @@ information.</text>
       OXM_OF_TUNNEL_ID match field metadata in the OpenFlow protocol</text>
       </description>
     </leaf>
-    <leaf name="sequence-number-present">
-      <type name="boolean"/>
-      <default value="false"/>
-      <description>
-        <text>Indicates presence of the GRE sequence number.</text>
-      </description>
-    </leaf>
   </grouping>
   <grouping name="OFPortVXLANTunnelType">
     <description>
       <text>Properties of a VxLAN tunnel.</text>
     </description>
     <uses name="OFPortBaseTunnelType"/>
-    <leaf name="vni-valid">
-      <type name="boolean"/>
-      <default value="true"/>
-      <description>
-        <text>Indicates how the corresponding flag should be set in packets sent on
-       the tunnel.</text>
-      </description>
-    </leaf>
     <leaf name="vni">
       <type name="uint32"/>
       <description>
         <text>Virtual network identifier assigned to all packets sent on the tunnel.
        A VxLAN implementation MAY use the this element to set the
        OXM_OF_TUNNEL_ID match field metadata in the OpenFlow protocol.</text>
-      </description>
-    </leaf>
-    <leaf name="vni-multicast-group">
-      <type name="inet:ip-address"/>
-      <description>
-        <text>If IP multicast is used to support broadcast on the tunnel this
-       specifies the corresponding multicast IP address</text>
-      </description>
-    </leaf>
-    <leaf name="udp-source-port">
-      <type name="inet:port-number"/>
-      <description>
-        <text>Specifies the outer UDP source port number.  If this element is absent,
-       the port number MAY be chosen dynamically.</text>
-      </description>
-    </leaf>
-    <leaf name="udp-dest-port">
-      <type name="inet:port-number"/>
-      <default value="4789"/>
-      <description>
-        <text>Specifies the outer UDP destination port number.  It SHOULD
-       be set to 4789, the port number reserved for VxLAN at IANA.</text>
-      </description>
-    </leaf>
-    <leaf name="udp-checksum">
-      <type name="boolean"/>
-      <default value="false"/>
-      <description>
-        <text>Boolean flag to indicate whether or not the outer UDP checksum should be
-       set</text>
-      </description>
-    </leaf>
-  </grouping>
-  <grouping name="OFPortNVGRETunnelType">
-    <description>
-      <text>Properties of an NVGRE tunnel.</text>
-    </description>
-    <uses name="OFPortBaseTunnelType"/>
-    <leaf name="vsid">
-      <type name="uint32"/>
-      <description>
-        <text>Specifies the virtual subnet id used to identify packets belonging to
-the NVGRE virtual layer-2 network (24 bit)</text>
-      </description>
-    </leaf>
-    <leaf name="flow-id">
-      <type name="uint8"/>
-      <default value="0"/>
-      <description>
-        <text>8-bit value that is used to provide per-flow entropy for flows in the same VSID</text>
       </description>
     </leaf>
   </grouping>
@@ -1100,12 +997,6 @@ device-specific name of the interface.</text>
           <text>Properties of a VxLAN tunnel.</text>
         </description>
         <uses name="OFPortVXLANTunnelType"/>
-      </container>
-      <container name="nvgre-tunnel">
-        <description>
-          <text>Properties of a NVGRE tunnel.</text>
-        </description>
-        <uses name="OFPortNVGRETunnelType"/>
       </container>
     </choice>
   </grouping>

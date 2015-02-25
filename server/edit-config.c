@@ -1181,10 +1181,12 @@ edit_delete(xmlNodePtr node, int running, struct nc_err **e)
         } else if (xmlStrEqual(node->parent->name, BAD_CAST "advertised")) {
             key = get_key(node->parent->parent->parent, "name");
             ret = txn_del_port_advert(key, node, e);
-        } else if (xmlStrEqual(node->name, BAD_CAST "local-endpoint-ipv4-adress")) {
-            /* TODO TC */
-        } else if (xmlStrEqual(node->name, BAD_CAST "remote-endpoint-ipv4-adress")) {
-            /* TODO TC */
+        } else if (xmlStrEqual(node->name, BAD_CAST "local-endpoint-ipv4-adress")
+                   || xmlStrEqual(node->name, BAD_CAST "remote-endpoint-ipv4-adress")
+                   || xmlStrEqual(node->name, BAD_CAST "key")
+                   || xmlStrEqual(node->name, BAD_CAST "vni")) {
+            key = get_key(node->parent->parent, "name");
+            ret = txn_mod_port_tunnel_opt(key, node, NULL, e);
         } else {
             nc_verb_warning("%s: Unknown element %s (parent: %s)", __func__,
                             (const char *) node->name,
@@ -1514,10 +1516,14 @@ edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running, struct nc_err **e)
         } else if (xmlStrEqual(edit->parent->name, BAD_CAST "advertised")) {
             key = get_key(edit->parent->parent->parent, "name");
             ret = txn_add_port_advert(key, edit, e);
-        } else if (xmlStrEqual(edit->name, BAD_CAST "local-endpoint-ipv4-adress")) {
-            /* TODO TC */
-        } else if (xmlStrEqual(edit->name, BAD_CAST "remote-endpoint-ipv4-adress")) {
-            /* TODO TC */
+        } else if (xmlStrEqual(edit->name, BAD_CAST "local-endpoint-ipv4-adress")
+                   || xmlStrEqual(edit->name, BAD_CAST "remote-endpoint-ipv4-adress")
+                   || xmlStrEqual(edit->name, BAD_CAST "key")
+                   || xmlStrEqual(edit->name, BAD_CAST "vni")) {
+            key = get_key(edit->parent->parent, "name");
+            if (edit->children && edit->children->content) {
+                ret = txn_mod_port_tunnel_opt(key, edit, edit->children->content, e);
+            }
         } else {
             nc_verb_warning("%s: unknown element %s (parent: %s)", __func__,
                             (const char *) edit->name,

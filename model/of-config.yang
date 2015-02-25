@@ -2,7 +2,9 @@ module of-config {
   namespace "urn:onf:config:yang";
   prefix of-config;
 
+  /* Not used by this implementation
   import ietf-yang-types { prefix yang; }
+  */
   import ietf-inet-types { prefix inet; }
 
   organization "ONF Config Management Group";
@@ -773,6 +775,7 @@ module of-config {
         }
       }
 
+      /* not handled by current implementation
       case v6-endpoints {
         leaf local-endpoint-ipv6-adress {
           type inet:ipv6-address;
@@ -800,6 +803,7 @@ module of-config {
 	    "The MAC address of the remote tunnel endpoint.";
         }
       }
+      */
     }
   }
 
@@ -817,12 +821,14 @@ module of-config {
 	"Indicates presence of the GRE checksum.";
     }
 
+    /* not handled by current implementation
     leaf key-present {
       type boolean;
       default true;
       description
 	"Indicates presence of the GRE key.";
     }
+    */
 
     leaf key {
       when "../key-present='true'" {
@@ -837,12 +843,14 @@ module of-config {
         OXM_OF_TUNNEL_ID match field metadata in the OpenFlow protocol";
     }
 
+    /* not handled by current implementation
     leaf sequence-number-present {
       type boolean;
       default false;
       description
 	"Indicates presence of the GRE sequence number.";
     }
+    */
   }
 
   grouping OFPortVXLANTunnelType {
@@ -850,6 +858,7 @@ module of-config {
       "Properties of a VxLAN tunnel.";
     uses OFPortBaseTunnelType;
 
+    /* not handled by current implementation
     leaf vni-valid {
       type boolean;
       default true;
@@ -857,6 +866,7 @@ module of-config {
 	"Indicates how the corresponding flag should be set in packets sent on
          the tunnel.";
     }
+    */
 
     leaf vni {
       type uint32;
@@ -866,6 +876,7 @@ module of-config {
          OXM_OF_TUNNEL_ID match field metadata in the OpenFlow protocol.";
     }
 
+    /* not handled by current implementation
     leaf vni-multicast-group {
       type inet:ip-address;
       description
@@ -895,8 +906,10 @@ module of-config {
 	"Boolean flag to indicate whether or not the outer UDP checksum should be
          set";
     }
+    */
   }
 
+  /* not handled by current implementation
   grouping OFPortNVGRETunnelType {
     description
       "Properties of an NVGRE tunnel.";
@@ -918,6 +931,7 @@ module of-config {
     }
 
   }
+  */
 
   grouping OFPortType {
     description
@@ -1125,11 +1139,13 @@ module of-config {
         uses OFPortVXLANTunnelType;
       }
 
+      /* not handled by current implementation
       container nvgre-tunnel {
         description
 	  "Properties of a NVGRE tunnel.";
         uses OFPortNVGRETunnelType;
       }
+      */
     }
   }
 

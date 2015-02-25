@@ -3812,3 +3812,46 @@ txn_mod_port_add_tunnel(const xmlChar *port_name, xmlNodePtr tunnel_node,
     return EXIT_SUCCESS;
 }
 
+int
+txn_mod_port_tunnel_opt(const xmlChar *port_name, xmlNodePtr node, const xmlChar *value, struct nc_err **e)
+{
+    const struct ovsrec_interface *ifc = NULL;
+    const char *opt_key = NULL;
+
+    /* TODO TC error messages */
+    if (!node) {
+        *e = nc_err_new(NC_ERR_DATA_MISSING);
+    }
+
+    if (xmlStrEqual(node->name, BAD_CAST "local-endpoint-ipv4-adress")) {
+        opt_key = "local_ip";
+    } else if (xmlStrEqual(node->name, BAD_CAST "remote-endpoint-ipv4-adress")) {
+        opt_key = "remote_ip";
+    } else if (xmlStrEqual(node->name, BAD_CAST "key")) {
+        opt_key = "key";
+    } else if (xmlStrEqual(node->name, BAD_CAST "vni")) {
+        opt_key = "key";
+    } else {
+        *e = nc_err_new(NC_ERR_BAD_ELEM);
+        return EXIT_FAILURE;
+    }
+
+    ifc = find_interface_by_name(port_name);
+    if (!ifc) {
+        *e = nc_err_new(NC_ERR_DATA_MISSING);
+        return EXIT_FAILURE;
+    }
+
+    if (value) {
+        /* replace existing */
+        smap_replace((struct smap *) &ifc->options, opt_key, (const char *) value);
+    } else {
+        /* delete */
+        smap_remove((struct smap *) &ifc->options, opt_key);
+    }
+    ovsrec_interface_verify_options(ifc);
+    ovsrec_interface_set_options(ifc, &ifc->options);
+
+    return EXIT_SUCCESS;
+}
+

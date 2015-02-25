@@ -114,6 +114,7 @@ int txn_del_port_advert(const xmlChar *port_name, xmlNodePtr node, struct nc_err
 int txn_mod_port_reqnumber(const xmlChar *port_name, const xmlChar* value, struct nc_err **e);
 int txn_mod_port_admin_state(const xmlChar *port_name, const xmlChar* value, struct nc_err **e);
 int txn_mod_port_configuration(xmlNodePtr cfg, struct nc_err **error);
+int txn_mod_port_tunnel_opt(const xmlChar *port_name, xmlNodePtr node, const xmlChar *value, struct nc_err **e);
 
 int txn_mod_port_add_tunnel(const xmlChar *port_name, xmlNodePtr tunnel_node, struct nc_err **e);
 int txn_del_port_tunnel(const xmlChar *port_name, xmlNodePtr tunnel_node, struct nc_err **e);

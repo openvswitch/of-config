@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<capable-switch xmlns="urn:onf:config:yang">
+  <id>openvswitch</id>
+  <resources>
+    <queue>
+      <resource-id>my_queue</resource-id>
+      <id>667</id>
+      <port>ofc-bridge</port>
+      <properties>
+        <min-rate>15</min-rate>
+        <max-rate>85</max-rate>
+      </properties>
+    </queue>
+  </resources>
+</capable-switch>
+

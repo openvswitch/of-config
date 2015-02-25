@@ -98,6 +98,15 @@ void txn_del_port_tunnel(const xmlChar *port_name, xmlNodePtr tunnel_node);
 
 void txn_add_queue(xmlNodePtr node);
 void txn_del_queue(const xmlChar *resource_id);
+void txn_add_queue_port(const xmlChar *resource_id, xmlNodePtr edit);
+void txn_add_queue_id(const xmlChar *resource_id, xmlNodePtr edit);
+void txn_del_queue_port(const xmlChar *resource_id, xmlNodePtr edit);
+void txn_del_queue_id(const xmlChar *resource_id, xmlNodePtr edit);
+
+/* if edit is not NULL, add max-rate / min-rate / experimenter-id / experimenter-data into other_options.
+ * if edit is null, delete. */
+void txn_mod_queue_options(const xmlChar *resource_id, const char *option, xmlNodePtr edit);
+
 void txn_add_flow_table(xmlNodePtr node);
 void txn_del_flow_table(xmlNodePtr node);
 

@@ -1094,7 +1094,37 @@ edit_delete(xmlNodePtr node, int running)
              * OVSDB's garbage collection.
              */
         } else if (xmlStrEqual(node->parent->name, BAD_CAST "queue")) {
-            /* TODO TC: queue/resource-id, id, port, properties/ * */
+            if (xmlStrEqual(node->name, BAD_CAST "id")) {
+                key = go2node(node->parent, BAD_CAST "resource-id");
+                value = xmlNodeGetContent(key);
+                txn_del_queue_id(value, node);
+                xmlFree(value);
+            } else if (xmlStrEqual(node->name, BAD_CAST "port")) {
+                key = go2node(node->parent, BAD_CAST "resource-id");
+                value = xmlNodeGetContent(key);
+                txn_del_queue_port(value, node);
+                xmlFree(value);
+            } else if (xmlStrEqual(node->name, BAD_CAST "properties")) {
+                while (node->children) {
+                    ret = edit_delete(node->children, running);
+                    if (ret != EXIT_SUCCESS) {
+                        return EXIT_FAILURE;
+                    }
+                }
+            }
+        } else if (xmlStrEqual(node->parent->name, BAD_CAST "properties")) {
+            key = go2node(node->parent, BAD_CAST "resource-id");
+            value = xmlNodeGetContent(key);
+            if (xmlStrEqual(node->name, BAD_CAST "min-rate")) {
+                txn_mod_queue_options(value, "min-rate", NULL);
+            } else if (xmlStrEqual(node->name, BAD_CAST "max-rate")) {
+                txn_mod_queue_options(value, "max-rate", NULL);
+            } else if (xmlStrEqual(node->name, BAD_CAST "experimenter-id")) {
+                txn_mod_queue_options(value, "experimenter-id", NULL);
+            } else if (xmlStrEqual(node->name, BAD_CAST "experimenter-data")) {
+                txn_mod_queue_options(value, "experimenter-data", NULL);
+            }
+            xmlFree(value);
         } else if (xmlStrEqual(node->parent->name, BAD_CAST "flow-table")) {
             /* TODO TC: flow-table/resource-id, table-id, name  */
         } else if (xmlStrEqual(node->name, BAD_CAST "controller")) {
@@ -1148,7 +1178,7 @@ edit_delete(xmlNodePtr node, int running)
             /* TODO TC */
         } else {
             /* TODO is everything covered? */
-            nc_verb_error("Element %s is not covered in edit_create()!!! (parent: %s)",
+            nc_verb_error("Element %s is not covered in edit_delete()!!! (parent: %s)",
                     (const char *) node->name, (const char *) node->parent->name);
         }
     }
@@ -1299,6 +1329,7 @@ edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running,
 {
     xmlNodePtr key, parent, aux;
     const xmlChar *bridge_name;
+    xmlChar *value;
     int ret;
 
     /* remove operation attribute */
@@ -1345,8 +1376,8 @@ edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running,
                     txn_add_flow_table(edit);
                 } else {
                     /* TODO is everything covered? */
-                    nc_verb_error("Element %s is not covered in edit_create()!!! (parent: %s)",
-                                  (const char *) edit->name, (const char *) edit->parent->name);
+                    nc_verb_error("Element %s is not covered in edit_create()!!! (parent: %s) (%s:%d)",
+                                  (const char *) edit->name, (const char *) edit->parent->name, __FILE__, __LINE__);
                 }
             } else { /* logical-switch */
                 /* get bridge name */
@@ -1356,15 +1387,16 @@ edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running,
                 if (xmlStrEqual(edit->name, BAD_CAST "port")) {
                     txn_add_bridge_port(key->children->content,
                                         edit->children->content);
-                } else if (xmlStrEqual(edit->name, BAD_CAST "queue")) {
-                    txn_add_bridge_queue(key->children->content,
-                                         edit->children->content);
+                // TODO useless?: queue is connected to port (port is placed inside <queue>) -> use this only for delete
+                //} else if (xmlStrEqual(edit->name, BAD_CAST "queue")) {
+                //    txn_add_bridge_queue(key->children->content,
+                //                         edit->children->content);
                 } else if (xmlStrEqual(edit->name, BAD_CAST "flow-table")) {
                     /* TODO TC: flow-table: add link, do nothing if flow-table does not exist */
                 } else {
                     /* TODO is everything covered? */
-                    nc_verb_error("Element %s is not covered in edit_create()!!! (parent: %s)",
-                                  (const char *) edit->name, (const char *) edit->parent->name);
+                    nc_verb_error("Element %s is not covered in edit_create()!!! (parent: %s) (%s:%d)",
+                                  (const char *) edit->name, (const char *) edit->parent->name, __FILE__, __LINE__);
                 }
                 /* certificate is ignored on purpose!
                  * Once defined, it is automatically referenced
@@ -1403,7 +1435,37 @@ edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running,
              * OVSDB's garbage collection.
              */
         } else if (xmlStrEqual(edit->parent->name, BAD_CAST "queue")) {
-            /* TODO TC: resource-id, id, port, properties/ * */
+            if (xmlStrEqual(edit->name, BAD_CAST "id")) {
+                key = go2node(edit->parent, BAD_CAST "resource-id");
+                value = xmlNodeGetContent(key);
+                txn_add_queue_id(value, edit);
+                xmlFree(value);
+            } else if (xmlStrEqual(edit->name, BAD_CAST "port")) {
+                key = go2node(edit->parent, BAD_CAST "resource-id");
+                value = xmlNodeGetContent(key);
+                txn_add_queue_port(value, edit);
+                xmlFree(value);
+            } else if (xmlStrEqual(edit->name, BAD_CAST "properties")) {
+                while (edit->children) {
+                    ret = edit_create(orig_doc, edit->children, running, error);
+                    if (ret != EXIT_SUCCESS) {
+                        return EXIT_FAILURE;
+                    }
+                }
+            }
+        } else if (xmlStrEqual(edit->parent->name, BAD_CAST "properties")) {
+            key = go2node(edit->parent, BAD_CAST "resource-id");
+            value = xmlNodeGetContent(key);
+            if (xmlStrEqual(edit->name, BAD_CAST "min-rate")) {
+                txn_mod_queue_options(value, "min-rate", edit);
+            } else if (xmlStrEqual(edit->name, BAD_CAST "max-rate")) {
+                txn_mod_queue_options(value, "max-rate", edit);
+            } else if (xmlStrEqual(edit->name, BAD_CAST "experimenter-id")) {
+                txn_mod_queue_options(value, "experimenter-id", edit);
+            } else if (xmlStrEqual(edit->name, BAD_CAST "experimenter-data")) {
+                txn_mod_queue_options(value, "experimenter-data", edit);
+            }
+            xmlFree(value);
         } else if (xmlStrEqual(edit->parent->name, BAD_CAST "flow-table")) {
             /* TODO TC: resource-id, table-id, name  */
         } else if (xmlStrEqual(edit->name, BAD_CAST "controller")) {
@@ -1454,8 +1516,8 @@ edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running,
             /* TODO TC */
         } else {
             /* TODO is everything covered? */
-            nc_verb_error("Element %s is not covered in edit_create()!!! (parent: %s)",
-                    (const char *) edit->name, (const char *) edit->parent->name);
+            nc_verb_error("Element %s is not covered in edit_create()!!! (parent: %s) (%s:%d)",
+                    (const char *) edit->name, (const char *) edit->parent->name, __FILE__, __LINE__);
         }
     } else {
         /* XML */

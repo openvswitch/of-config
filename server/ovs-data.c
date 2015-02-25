@@ -564,9 +564,10 @@ get_queues_config(void)
 
     ds_init(&string);
     OVSREC_QUEUE_FOR_EACH_SAFE(row, next, ovsdb_handler->idl) {
-        resource_id = find_resid_generate(ovsdb_handler->resource_map,
-                                          &row->header_.uuid);
-
+        resource_id = smap_get(&row->external_ids, "ofc_resource_id");
+        if ((resource_id == NULL) || (!strcmp(resource_id, ""))) {
+            continue;
+        }
         ds_put_format(&string,
                       "<queue><resource-id>%s</resource-id>",
                       resource_id);
@@ -1087,9 +1088,10 @@ static char *
 get_bridges_config(void)
 {
     const struct ovsrec_bridge *row, *next;
+    const char *resid;
     struct ovsrec_port *port;
     struct ds string;
-    size_t i;
+    size_t i, j;
 
     ds_init(&string);
     OVSREC_BRIDGE_FOR_EACH_SAFE(row, next, ovsdb_handler->idl) {
@@ -1137,11 +1139,13 @@ get_bridges_config(void)
         if (row->n_ports > 0) {
             for (i = 0; i < row->n_ports; ++i) {
                 if (row->ports[i]->qos != NULL) {
-                    /* XXX test with some QoS'ed interface */
-                    append_resource_refs(&string,
-                            (struct ovsdb_idl_row **) row->ports[i]->qos
-                            ->value_queues,
-                            row->ports[i]->qos->n_queues, "queue");
+                    for (j = 0; j < row->ports[i]->qos->n_queues; j++) {
+                        resid = smap_get(&row->ports[i]->qos->value_queues[j]->external_ids,
+                                         "ofc_resource_id");
+                        if (resid != NULL) {
+                            ds_put_format(&string, "<queue>%s</queue>", resid);
+                        }
+                    }
                 }
             }
         }
@@ -1989,16 +1993,28 @@ txn_del_port_advert(const xmlChar *port_name, xmlNodePtr node)
     dev_set_ethtool((char*)port_name, ecmd);
 }
 
+
+/* Queue */
+
+static void
+txn_add_queue_resid(struct ovsrec_queue *q, const xmlChar *resid)
+{
+    if (resid == NULL) {
+        nc_verb_error("No resource-id given. (%s:%d)", __FILE__, __LINE__);
+        return;
+    }
+    smap_add_once(&q->external_ids, "ofc_resource_id", (const char *) resid);
+    ovsrec_queue_verify_external_ids(q);
+    ovsrec_queue_set_external_ids(q, &q->external_ids);
+}
+
 void
 txn_add_queue(xmlNodePtr node)
 {
-    xmlNodePtr aux, prop;
-    xmlChar *port_name = NULL, *id = NULL, *min_rate = NULL, *max_rate = NULL;
+    xmlNodePtr aux, prop = NULL, port;
+    xmlChar *id = NULL;
     xmlChar *resource_id = NULL;
-    struct ovsrec_qos *qos;
     struct ovsrec_queue *queue;
-    const struct ovsrec_queue *queue_resid;
-    const struct ovsrec_port *port;
 
     if (!node) {
         return;
@@ -2014,54 +2030,241 @@ txn_add_queue(xmlNodePtr node)
         } else if (xmlStrEqual(aux->name, BAD_CAST "id")) {
             id = xmlNodeGetContent(aux);
         } else if (xmlStrEqual(aux->name, BAD_CAST "port")) {
-            port_name = xmlNodeGetContent(aux);
+            port = aux;
         } else if (xmlStrEqual(aux->name, BAD_CAST "properties")) {
-            for (prop = aux->children; prop; prop = prop->next) {
-                if (xmlStrEqual(prop->name, BAD_CAST "min-rate")) {
-                    min_rate = xmlNodeGetContent(prop);
-                } else if (xmlStrEqual(prop->name, BAD_CAST "max-rate")) {
-                    max_rate = xmlNodeGetContent(prop);
-                }
-            }
+            prop = aux;
         }
     }
-    nc_verb_verbose("Add queue %s to %s.", BAD_CAST resource_id, BAD_CAST port_name);
+    nc_verb_verbose("Add queue %s to port.", (const char *) resource_id);
 
     /* TODO check if exists */
 
     /* create new */
-    qos = ovsrec_qos_insert(ovsdb_handler->txn);
     queue = ovsrec_queue_insert(ovsdb_handler->txn);
-    queue_resid = ovsrec_queue_first(ovsdb_handler->idl);
-
-    ofc_resmap_insert(ovsdb_handler->resource_map, (const char *) resource_id,
-                      &queue_resid->header_.uuid,
-                      &queue_resid->header_);
+    txn_add_queue_resid(queue, resource_id);
     int64_t key;
     if (sscanf((char *) id, "%"SCNi64, &key) != 1) {
         /* parsing error, wrong number */
     }
-    ovsrec_qos_verify_queues(qos);
-    ovsrec_qos_set_queues(qos, (int64_t *) &key, (struct ovsrec_queue **) &queue, 1);
-    OVSREC_PORT_FOR_EACH(port, ovsdb_handler->idl) {
-        if (xmlStrEqual(port_name, BAD_CAST port->name)) {
-            ovsrec_port_verify_qos(port);
-            ovsrec_port_set_qos(port, qos);
-            break;
+
+    txn_add_queue_port(resource_id, port);
+
+    if (prop != NULL) {
+        for (aux = prop->children; aux; aux = aux->next) {
+            txn_mod_queue_options(resource_id, (const char *) aux->name, aux);
         }
     }
-    if (max_rate != NULL) {
-        smap_add_once(&queue->other_config, "max-rate", (char *) max_rate);
-        xmlFree(max_rate);
-    }
-    if (min_rate != NULL) {
-        smap_add_once(&queue->other_config, "min-rate", (char *) min_rate);
-        xmlFree(min_rate);
-    }
+
     ovsrec_queue_verify_other_config(queue);
     ovsrec_queue_set_other_config(queue, &queue->other_config);
+    xmlFree(resource_id);
 }
 
+static const struct ovsrec_port *
+find_port_by_name(const xmlChar *port_name)
+{
+    const struct ovsrec_port *port, *next;
+    OVSREC_PORT_FOR_EACH_SAFE(port, next, ovsdb_handler->idl) {
+        if (xmlStrEqual(port_name, BAD_CAST port->name)) {
+            return port;
+        }
+    }
+    return NULL;
+}
+
+static const struct ovsrec_interface *
+find_interface_by_name(const xmlChar *ifc_name)
+{
+    const struct ovsrec_interface *ifc, *next;
+    OVSREC_INTERFACE_FOR_EACH_SAFE(ifc, next, ovsdb_handler->idl) {
+        if (xmlStrEqual(ifc_name, BAD_CAST ifc->name)) {
+            return ifc;
+        }
+    }
+    return NULL;
+}
+
+/* Finds queue by resource-id and returns pointer to it.  When no queue is
+ * found, returns NULL. */
+static const struct ovsrec_queue *
+find_queue(const xmlChar *resource_id)
+{
+    const struct ovsrec_queue *r, *n;
+    const char *res_id;
+    OVSREC_QUEUE_FOR_EACH_SAFE(r, n, ovsdb_handler->idl) {
+        res_id = smap_get(&r->external_ids, "ofc_resource_id");
+        if (xmlStrEqual(resource_id, BAD_CAST res_id)) {
+            return r;
+        }
+    }
+    return NULL;
+}
+
+/* Finds qos by queue resource-id and returns pointer to it.  Additionally,
+ * if index is not NULL, it is set to index of queue in qos array is set.
+ * When no qos is found, returns NULL. */
+static const struct ovsrec_qos *
+find_qos_by_queue(const xmlChar *resource_id, size_t *index)
+{
+    const struct ovsrec_queue *queue;
+    const struct ovsrec_qos *r, *n;
+    size_t i;
+    queue = find_queue(resource_id);
+    if (queue == NULL) {
+        return NULL;
+    }
+    OVSREC_QOS_FOR_EACH_SAFE(r, n, ovsdb_handler->idl) {
+        for (i = 0; i < r->n_queues; i++) {
+            if (uuid_equals(&queue->header_.uuid,
+                            &r->value_queues[i]->header_.uuid)) {
+                if (index != NULL) {
+                    *index = i;
+                }
+                return r;
+            }
+        }
+    }
+    return NULL;
+}
+
+/* Add reference for queue to port (via qos). Parameter 'edit'
+ * points to <port> element of queue.
+ */
+void
+txn_add_queue_port(const xmlChar *resource_id, xmlNodePtr port_elem)
+{
+    const struct ovsrec_queue *queue = find_queue(resource_id);
+    struct ovsrec_queue **queues;
+    int64_t *ids;
+    size_t n_queues, i;
+    const struct ovsrec_port *port;
+    const struct ovsrec_qos *qos;
+    int64_t id;
+    xmlNodePtr id_elem;
+    xmlChar *xml_id, *port_name = xmlNodeGetContent(port_elem);
+    port = find_port_by_name(port_name);
+
+    if ((queue == NULL) || (port == NULL)) {
+        goto cleanup;
+    }
+
+    id_elem = go2node(port_elem->parent, BAD_CAST "id");
+    if (id_elem != NULL) {
+        xml_id = xmlNodeGetContent(id_elem);
+        if (sscanf((char *) xml_id, "%"SCNi64, &id) != 1) {
+            /* parsing error, wrong number */
+            goto cleanup;
+        }
+        xmlFree(xml_id);
+    } else {
+        goto cleanup;
+    }
+
+    qos = port->qos;
+    if (qos == NULL) {
+        /* create new qos */
+        qos = ovsrec_qos_insert(ovsdb_handler->txn);
+        ovsrec_qos_verify_queues(qos);
+        ovsrec_qos_set_queues(qos, (int64_t *) &id, (struct ovsrec_queue **) &queue, 1);
+        ovsrec_port_verify_qos(port);
+        ovsrec_port_set_qos(port, qos);
+    } else {
+        /* add into existing qos (that is referred from port) */
+
+        /* enlarge array of pairs */
+        n_queues = port->qos->n_queues + 1;
+        ids = malloc(n_queues * sizeof(*ids));
+        queues = malloc(n_queues * sizeof(*queues));
+        for (i = 0; i < port->qos->n_queues; i++) {
+            ids[i] = port->qos->key_queues[i];
+            queues[i] = port->qos->value_queues[i];
+        }
+        ids[n_queues - 1] = id;
+        queues[n_queues - 1] = (struct ovsrec_queue *) queue;
+        ovsrec_qos_verify_queues(qos);
+        ovsrec_qos_set_queues(qos, ids, queues, n_queues);
+        free(ids);
+        /* queues array is passed as non-const, hopefully it will be freed */
+    }
+
+cleanup:
+    xmlFree(port_name);
+    return;
+}
+
+void
+txn_add_queue_id(const xmlChar *resource_id, xmlNodePtr edit)
+{
+    const struct ovsrec_qos *qos;
+    xmlChar *value;
+    size_t index;
+    int64_t key;
+
+    qos = find_qos_by_queue(resource_id, &index);
+    if (qos == NULL) {
+        return;
+    }
+    value = xmlNodeGetContent(edit);
+    if (sscanf((char *) value, "%"SCNi64, &key) != 1) {
+        /* parsing error, wrong number */
+        goto cleanup;
+    }
+    qos->key_queues[index] = key;
+    ovsrec_qos_verify_queues(qos);
+    ovsrec_qos_set_queues(qos, qos->key_queues, qos->value_queues,
+                          qos->n_queues);
+
+cleanup:
+    xmlFree(value);
+}
+
+void
+txn_del_queue_port(const xmlChar *resource_id, xmlNodePtr port_elem)
+{
+    nc_verb_error("UNIMPLEMENTED");
+}
+
+void
+txn_del_queue_id(const xmlChar *resource_id, xmlNodePtr edit)
+{
+    nc_verb_error("UNIMPLEMENTED");
+}
+
+void
+txn_mod_queue_options(const xmlChar *resource_id, const char *option, xmlNodePtr edit)
+{
+    const struct ovsrec_queue *queue;
+    xmlChar *value;
+    queue = find_queue(resource_id);
+    if (queue == NULL) {
+        goto cleanup;
+    }
+    if (edit != NULL) {
+        /* add */
+        value = xmlNodeGetContent(edit);
+        nc_verb_verbose("add option %s with value %s to queue", option,
+                (const char *) value);
+        if (value != NULL) {
+            smap_replace((struct smap *) &queue->other_config, option,
+                         (const char *) value);
+            ovsrec_queue_verify_other_config(queue);
+            ovsrec_queue_set_other_config(queue, &queue->other_config);
+            xmlFree(value);
+
+            return;
+        }
+    } else {
+        /* delete */
+        nc_verb_verbose("delete option %s from queue", option);
+        smap_remove((struct smap *) &queue->other_config, option);
+        ovsrec_queue_verify_other_config(queue);
+        ovsrec_queue_set_other_config(queue, &queue->other_config);
+    }
+}
+
+/* end of Queue */
+
+
 xmlChar *
 ofc_find_bridge_for_flowtable(xmlNodePtr root, xmlChar *flowtable)
 {
@@ -2183,15 +2386,10 @@ txn_add_flow_table(xmlNodePtr node)
 void
 txn_del_port_tunnel(const xmlChar *port_name, xmlNodePtr tunnel_node)
 {
-    const struct ovsrec_interface *ifc, *next, *found = NULL;
+    const struct ovsrec_interface *found = NULL;
     nc_verb_verbose("Removing tunnel (%s:%d)", __FILE__, __LINE__);
 
-    OVSREC_INTERFACE_FOR_EACH_SAFE(ifc, next, ovsdb_handler->idl) {
-        if (!strncmp(ifc->name, (char *) port_name, strlen(ifc->name)+1)) {
-            found = ifc;
-            break;
-        }
-    }
+    found = find_interface_by_name(port_name);
     if (found == NULL) {
         /* not found */
         return;
@@ -2602,7 +2800,7 @@ txn_add_bridge_queue(const xmlChar *br_name, const xmlChar *resource_id)
 {
     const struct ovsrec_bridge *bridge;
     struct ovsrec_qos *qos;
-    ofc_tuple_t *resid = NULL;
+    const struct ovsrec_queue *queue;
     size_t i, q;
     int cmp;
 
@@ -2622,11 +2820,7 @@ txn_add_bridge_queue(const xmlChar *br_name, const xmlChar *resource_id)
         return;
     }
 
-    resid = ofc_resmap_find_r(ovsdb_handler->resource_map, (const char *) resource_id);
-    if (resid == NULL) {
-        /* not found */
-        return;
-    }
+    queue = find_queue(resource_id);
     for (i = 0; i < bridge->n_ports; i++) {
         qos = bridge->ports[i]->qos;
         if (qos == NULL) {
@@ -2635,11 +2829,10 @@ txn_add_bridge_queue(const xmlChar *br_name, const xmlChar *resource_id)
         for (q = 0; q < qos->n_queues; q++) {
             /* compare with resource-id */
             cmp = uuid_equals(&qos->value_queues[q]->header_.uuid,
-                              &resid->uuid);
+                              &queue->header_.uuid);
             if (cmp) {
                 ovsrec_port_verify_qos(bridge->ports[i]);
                 ovsrec_port_set_qos(bridge->ports[i], NULL);
-                //ovsrec_qos_delete(qos);
                 return;
             }
         }
@@ -2746,7 +2939,6 @@ txn_del_bridge(const xmlChar *br_name)
 void
 txn_del_queue(const xmlChar *resource_id)
 {
-    ofc_tuple_t *found;
     const struct ovsrec_queue *queue;
     size_t i, n_queues;
     const struct ovsrec_qos *row;
@@ -2756,12 +2948,7 @@ txn_del_queue(const xmlChar *resource_id)
         return;
     }
     nc_verb_verbose("Delete queue %s.", BAD_CAST resource_id);
-    found = ofc_resmap_find_r(ovsdb_handler->resource_map, (const char *) resource_id);
-    if (found == NULL) {
-        nc_verb_error("Queue was not found.");
-        return;
-    }
-    queue = ovsrec_queue_get_for_uuid(ovsdb_handler->idl, &found->uuid);
+    queue = find_queue(resource_id);
 
     /* remove queue reference from qos table */
     OVSREC_QOS_FOR_EACH(row, ovsdb_handler->idl) {
@@ -2783,8 +2970,6 @@ txn_del_queue(const xmlChar *resource_id)
     if (changed) {
         /* remove queue itself */
         ovsrec_queue_delete(queue);
-
-        ofc_resmap_remove_r(ovsdb_handler->resource_map, (const char *) resource_id);
     }
 }
 

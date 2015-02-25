@@ -37,6 +37,7 @@
 #include <dynamic-string.h>
 #include <ovsdb-idl-provider.h>
 #include <vswitch-idl.h>
+#include <dirs.h>
 #include <dpif.h>
 #include <vconn.h>
 #include <socket-util.h>
@@ -155,14 +156,14 @@ ofc_of_open_vconn(const char *name, struct vconn **vconnp)
     int ofp_version;
     int error;
 
-    if (asprintf(&bridge_path, "%s/%s.mgmt", OFC_OVS_OFSOCKET_DIR, name) == -1) {
+    if (asprintf(&bridge_path, "%s/%s.mgmt", ovs_rundir(), name) == -1) {
         return false;
     }
 
     /* changed to called function */
     dp_parse_name(name, &datapath_name, &datapath_type);
 
-    if (asprintf(&socket_name, "%s/%s.mgmt", OFC_OVS_OFSOCKET_DIR, datapath_name) == -1) {
+    if (asprintf(&socket_name, "%s/%s.mgmt", ovs_rundir(), datapath_name) == -1) {
         free(bridge_path);
         free(datapath_name);
         free(datapath_type);
@@ -1107,7 +1108,7 @@ get_bridges_config(void)
         find_and_append_smap_val(&row->other_config, "datapath-id",
                                  "datapath-id", &string);
         if (row->fail_mode) {
-            if (strcmp(row->fail_mode, "standalone")) {
+            if (!strcmp(row->fail_mode, "standalone")) {
                 ds_put_format(&string, "<lost-connection-behavior>"
                               "failStandaloneMode</lost-connection-behavior>");
             } else {

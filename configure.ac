@@ -39,20 +39,6 @@ AC_SUBST(OVS_SRCDIR)],
 [AC_MSG_ERROR(Missing --with-ovs-srcdir that specifies path to the Open vSwitch repository.)]
 )
 
-AC_ARG_WITH([ovs-dbpath],
-AC_HELP_STRING([--with-ovs-dbpath=PATH],[Change default path to OVSDB socket (default: unix:/var/run/openvswitch/db.sock)]),
-[OFC_OVS_DBPATH="$withval"],
-[OFC_OVS_DBPATH="unix:/var/run/openvswitch/db.sock"]
-)
-AC_DEFINE_DIR([OFC_OVS_DBPATH], [OFC_OVS_DBPATH], [Default path to OVSDB socket])
-
-AC_ARG_WITH([ovs-ofdir],
-AC_HELP_STRING([--with-ovs-ofdir=PATH],[Change default path to OpenFlow control socket directory (default: /var/run/openvswitch/)]),
-[OFC_OVS_OFSOCKET_DIR="$withval"],
-[OFC_OVS_OFSOCKET_DIR="/var/run/openvswitch/"]
-)
-AC_DEFINE_DIR([OFC_OVS_OFSOCKET_DIR], [OFC_OVS_OFSOCKET_DIR], [Change default path to OpenFlow control socket directory])
-
 AC_ARG_ENABLE([buildexamples],
 	AC_HELP_STRING([--enable-buildexamples], [Build examples directory (containing tests and experiments, will be removed in future).]),
 	[if test "$enableval" = "yes"; then

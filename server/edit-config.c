@@ -1584,7 +1584,7 @@ edit_merge(xmlDocPtr orig_doc, xmlNodePtr edit_node, int running,
     } else {
         /* we can go recursive */
         while (child) {
-            if (is_key(edit_node)) {
+            if (is_key(child)) {
                 /* skip keys */
                 child = child->next;
             } else {

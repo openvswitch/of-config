@@ -41,17 +41,6 @@
 #define OFC_RESOURCE_ID "ofc_resource_id"
 
 /*
- * Certificates (external and owned) are mapped to same UUID.
- * There is no need to allocate resmap for certificates.
- */
-#include <uuid.h>
-struct ofc_resmap_certificate {
-    struct uuid uuid;       /* UUID of SSL row */
-    char *external_resid;   /* resource-id of external-certificate */
-    char *owned_resid;      /* resource-id of owned-certificate */
-};
-
-/*
  * ofconfig-datastore.c
  */
 

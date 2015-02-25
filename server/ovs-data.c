@@ -63,7 +63,6 @@ typedef struct {
     unsigned int seqno;
     bool added_interface;
     struct vconn *vconn;
-    struct ofc_resmap_certificate *cert_map;
 } ovsdb_t;
 ovsdb_t *ovsdb_handler = NULL;
 
@@ -1143,7 +1142,8 @@ get_owned_certificates_config(void)
 {
     struct ds str;
     off_t size;
-    char* pem, *pem_start, *pem_end;
+    char *pem, *pem_start, *pem_end;
+    const char *resid;
     const struct ovsrec_ssl *ssl;
     int fd;
 
@@ -1151,17 +1151,16 @@ get_owned_certificates_config(void)
 
     ssl = ovsrec_ssl_first(ovsdb_handler->idl);
     if (ssl != NULL && ssl->certificate != NULL && ssl->private_key != NULL) {
-        /* missing resource-id */
-        if (ovsdb_handler->cert_map->owned_resid == NULL) {
-            ovsdb_handler->cert_map->owned_resid = strdup(print_uuid_ro(&ssl->header_.uuid));
-        }
-        if (uuid_equals(&ovsdb_handler->cert_map->uuid, &ssl->header_.uuid)) {
+        resid = smap_get(&ssl->external_ids, OFC_RESOURCE_ID);
+        if (!resid) {
             ds_destroy(&str);
             return NULL;
         }
 
         ds_put_format(&str, "<owned-certificate>");
-        ds_put_format(&str, "<resource-id>%s</resource-id>", ovsdb_handler->cert_map->owned_resid);
+        if (resid) {
+            ds_put_format(&str, "<resource-id>%s</resource-id>", resid);
+        }
 
         /* certificate */
         fd = open(ssl->certificate, O_RDONLY);
@@ -1257,25 +1256,22 @@ get_external_certificates_config(void)
     struct ds str;
     off_t size;
     char* pem, *pem_start, *pem_end;
+    const char *resid = NULL;
     const struct ovsrec_ssl *ssl;
     int fd;
 
     ds_init(&str);
 
     ssl = ovsrec_ssl_first(ovsdb_handler->idl);
-    if (ssl != NULL &&
-            ssl->ca_cert != NULL) {
-        /* missing resource-id */
-        if (ovsdb_handler->cert_map->external_resid == NULL) {
-            ovsdb_handler->cert_map->external_resid = strdup(print_uuid_ro(&ssl->header_.uuid));
-        }
-        if (uuid_equals(&ovsdb_handler->cert_map->uuid, &ssl->header_.uuid)) {
+    if (ssl != NULL && ssl->ca_cert != NULL) {
+        resid = smap_get(&ssl->external_ids, OFC_RESOURCE_ID);
+        if (!resid) {
             ds_destroy(&str);
             return NULL;
         }
 
         ds_put_format(&str, "<external-certificate>");
-        ds_put_format(&str, "<resource-id>%s</resource-id>", ovsdb_handler->cert_map->external_resid);
+        ds_put_format(&str, "<resource-id>%s</resource-id>", resid);
 
         /* certificate (ca_cert) */
         fd = open(ssl->ca_cert, O_RDONLY);
@@ -1491,12 +1487,6 @@ ofc_init(const char *ovs_db_path)
     }
     p->added_interface = false;
 
-    p->cert_map = calloc(1, sizeof(struct ofc_resmap_certificate));
-    if (p->cert_map == NULL) {
-        free(p);
-        return false;
-    }
-
     ovsrec_init();
     p->idl = ovsdb_idl_create(ovs_db_path, &ovsrec_idl_class, true, true);
     p->txn = NULL;
@@ -1516,10 +1506,6 @@ ofc_destroy(void)
     if (ovsdb_handler != NULL) {
         /* close everything */
         ovsdb_idl_destroy(ovsdb_handler->idl);
-
-        free(ovsdb_handler->cert_map->owned_resid);
-        free(ovsdb_handler->cert_map->external_resid);
-        free(ovsdb_handler->cert_map);
 
         free(ovsdb_handler);
         ovsdb_handler = NULL;
@@ -2685,8 +2671,10 @@ txn_add_owned_certificate(xmlNodePtr node, struct nc_err **e)
     const struct ovsrec_ssl *ssl;
     xmlNodePtr aux, leaf;
     xmlChar *xmlval;
-    int fd, mod;
+    const xmlChar *new_resid;
+    int fd;
     char *key_type, *key_data;
+    const char *resid = NULL;
 
     if (!node) {
         nc_verb_error("%s: invalid input parameters.", __func__);
@@ -2696,15 +2684,16 @@ txn_add_owned_certificate(xmlNodePtr node, struct nc_err **e)
 
     /* prepare new structures to set content of the SSL configuration */
     ssl = ovsrec_ssl_first(ovsdb_handler->idl);
-    if (!ssl) {
-        mod = 0;
-        ssl = ovsrec_ssl_insert(ovsdb_handler->txn);
-    } else {
-        mod = 1;
-        if (uuid_equals(&ovsdb_handler->cert_map->uuid, &ssl->header_.uuid)) {
+    if (ssl) {
+        resid = smap_get(&ssl->external_ids, OFC_RESOURCE_ID);
+        new_resid = get_key(node->parent->parent, "id");
+
+        if (!xmlStrEqual(new_resid, BAD_CAST resid)) {
             /* TODO error, this SSL table UUID does not match the saved one */
             return EXIT_FAILURE;
         }
+    } else {
+        ssl = ovsrec_ssl_insert(ovsdb_handler->txn);
     }
 
     for (aux = node->children; aux; aux = aux->next) {
@@ -2714,22 +2703,11 @@ txn_add_owned_certificate(xmlNodePtr node, struct nc_err **e)
 
         if (xmlStrEqual(aux->name, BAD_CAST "resource-id")) {
             xmlval = xmlNodeGetContent(aux);
-            if (mod) {
-                if (ovsdb_handler->cert_map->owned_resid != NULL &&
-                    strcmp(ovsdb_handler->cert_map->owned_resid, (char*) xmlval)) {
-                    xmlFree(xmlval);
-                    /* TODO error, second owned-certificate item in the list, not allowed */
-                    return EXIT_FAILURE;
-                }
-            } else {
-                if (ovsdb_handler->cert_map->owned_resid != NULL) {
-                    /* TODO error, resid filled without any SSL table */
-                    return EXIT_FAILURE;
-                }
-                memcpy(&ovsdb_handler->cert_map->uuid, &ssl->header_.uuid, sizeof(struct uuid));
-            }
-            ovsdb_handler->cert_map->owned_resid = (char*) xmlval;
-            xmlval = NULL;
+            smap_replace((struct smap *) &ssl->external_ids, OFC_RESOURCE_ID,
+                         (const char *) xmlval);
+            ovsrec_ssl_verify_external_ids(ssl);
+            ovsrec_ssl_set_external_ids(ssl, &ssl->external_ids);
+            xmlFree(xmlval);
         } else if (xmlStrEqual(aux->name, BAD_CAST "certificate")) {
             /* TODO error check */
             fd = creat(OFC_DATADIR "/cert.pem", 0644);
@@ -2770,14 +2748,12 @@ txn_add_owned_certificate(xmlNodePtr node, struct nc_err **e)
     /* Get the Open_vSwitch table for linking the SSL structure into and
      * thus force all the bridges to use it.
      */
-    if (!mod) {
-        ovs = ovsrec_open_vswitch_first(ovsdb_handler->idl);
-        if (!ovs) {
-            ovs = ovsrec_open_vswitch_insert(ovsdb_handler->txn);
-        }
-        ovsrec_open_vswitch_verify_ssl(ovs);
-        ovsrec_open_vswitch_set_ssl(ovs, ssl);
+    ovs = ovsrec_open_vswitch_first(ovsdb_handler->idl);
+    if (!ovs) {
+        ovs = ovsrec_open_vswitch_insert(ovsdb_handler->txn);
     }
+    ovsrec_open_vswitch_verify_ssl(ovs);
+    ovsrec_open_vswitch_set_ssl(ovs, ssl);
 
     return EXIT_SUCCESS;
 }
@@ -2787,8 +2763,10 @@ txn_add_external_certificate(xmlNodePtr node, struct nc_err **e)
 {
     const struct ovsrec_open_vswitch *ovs;
     const struct ovsrec_ssl *ssl;
+    const char *resid = NULL;
     xmlNodePtr aux;
     xmlChar *xmlval;
+    const xmlChar *new_resid;
     int fd, mod;
 
     if (!node) {
@@ -2804,7 +2782,10 @@ txn_add_external_certificate(xmlNodePtr node, struct nc_err **e)
         ssl = ovsrec_ssl_insert(ovsdb_handler->txn);
     } else {
         mod = 1;
-        if (uuid_equals(&ovsdb_handler->cert_map->uuid, &ssl->header_.uuid)) {
+        resid = smap_get(&ssl->external_ids, OFC_RESOURCE_ID);
+        new_resid = get_key(node, "resource-id");
+
+        if (!xmlStrEqual(new_resid, BAD_CAST resid)) {
             /* TODO error, this SSL table UUID does not match the saved one */
             return EXIT_FAILURE;
         }
@@ -2817,22 +2798,11 @@ txn_add_external_certificate(xmlNodePtr node, struct nc_err **e)
 
         if (xmlStrEqual(aux->name, BAD_CAST "resource-id")) {
             xmlval = xmlNodeGetContent(aux);
-            if (mod) {
-                if (ovsdb_handler->cert_map->external_resid != NULL &&
-                        strcmp(ovsdb_handler->cert_map->external_resid, (char*) xmlval)) {
-                    xmlFree(xmlval);
-                    /* TODO error, second external-certificate item in the list, not allowed */
-                    return EXIT_FAILURE;
-                }
-            } else {
-                if (ovsdb_handler->cert_map->external_resid != NULL) {
-                    /* TODO error, resid filled without any SSL table */
-                    return EXIT_FAILURE;
-                }
-                memcpy(&ovsdb_handler->cert_map->uuid, &ssl->header_.uuid, sizeof(struct uuid));
-            }
-            ovsdb_handler->cert_map->external_resid = (char*) xmlval;
-            xmlval = NULL;
+            smap_replace((struct smap *) &ssl->external_ids, OFC_RESOURCE_ID,
+                         (const char *) xmlval);
+            ovsrec_ssl_verify_external_ids(ssl);
+            ovsrec_ssl_set_external_ids(ssl, &ssl->external_ids);
+            xmlFree(xmlval);
         } else if (xmlStrEqual(aux->name, BAD_CAST "certificate")) {
             /* TODO error check */
             fd = creat(OFC_DATADIR "/ca_cert.pem", 0644);
@@ -2862,27 +2832,53 @@ txn_add_external_certificate(xmlNodePtr node, struct nc_err **e)
     return EXIT_SUCCESS;
 }
 
+/* Finds queue by resource-id and returns pointer to it.  When no queue is
+ * found, returns NULL. */
+static const struct ovsrec_ssl *
+find_ssl(const xmlChar *resource_id)
+{
+    const struct ovsrec_ssl *r, *n;
+    const char *res_id;
+
+    if (!resource_id) {
+        return NULL;
+    }
+
+    OVSREC_SSL_FOR_EACH_SAFE(r, n, ovsdb_handler->idl) {
+        res_id = smap_get(&r->external_ids, OFC_RESOURCE_ID);
+        if (xmlStrEqual(resource_id, BAD_CAST res_id)) {
+            return r;
+        }
+    }
+    return NULL;
+}
+
 int
 txn_del_owned_certificate(xmlNodePtr node, struct nc_err **e)
 {
     const struct ovsrec_open_vswitch *ovs;
     const struct ovsrec_ssl *ssl;
     xmlNodePtr aux;
-    xmlChar *xmlval;
+    const xmlChar *resid;
 
+    /* TODO TC return errors */
     if (!node) {
         nc_verb_error("%s: invalid input parameters.", __func__);
         *e = nc_err_new(NC_ERR_OP_FAILED);
         return EXIT_FAILURE;
     }
 
-    ssl = ovsrec_ssl_first(ovsdb_handler->idl);
-    if (!ssl) {
-        /* TODO error, cannot delete, no SSL table */
+    aux = go2node(node, BAD_CAST "resource-id");
+    if (aux && aux->content) {
+        resid = aux->content;
+    } else {
+        *e = nc_err_new(NC_ERR_OP_FAILED);
         return EXIT_FAILURE;
     }
-    if (uuid_equals(&ovsdb_handler->cert_map->uuid, &ssl->header_.uuid)) {
-        /* TODO error, this SSL table UUID does not match the saved one */
+
+    ssl = find_ssl(resid);
+    if (!ssl) {
+        /* TODO error, cannot delete, no SSL table */
         return EXIT_FAILURE;
     }
 
@@ -2891,19 +2887,7 @@ txn_del_owned_certificate(xmlNodePtr node, struct nc_err **e)
             continue;
         }
 
-        if (xmlStrEqual(aux->name, BAD_CAST "resource-id")) {
-            xmlval = xmlNodeGetContent(aux);
-            if (ovsdb_handler->cert_map->owned_resid == NULL ||
-                    strcmp(ovsdb_handler->cert_map->owned_resid, (char*) xmlval)) {
-                xmlFree(xmlval);
-                /* TODO error, unknown saved resid, should not happen normally */
-                return EXIT_FAILURE;
-            }
-            xmlFree(xmlval);
-
-            free(ovsdb_handler->cert_map->owned_resid);
-            ovsdb_handler->cert_map->owned_resid = NULL;
-        } else if (xmlStrEqual(aux->name, BAD_CAST "certificate")) {
+        if (xmlStrEqual(aux->name, BAD_CAST "certificate")) {
             /* TODO error check */
             unlink(OFC_DATADIR "/cert.pem");
             ovsrec_ssl_set_certificate(ssl, "");
@@ -2920,10 +2904,9 @@ txn_del_owned_certificate(xmlNodePtr node, struct nc_err **e)
         /* TODO error, no vswitch structure to delete from, how come? */
         return EXIT_FAILURE;
     }
-    if (ovsdb_handler->cert_map->external_resid == NULL && ssl->ca_cert == NULL) {
-        ovsrec_open_vswitch_set_ssl(ovs, NULL);
-        ovsrec_ssl_delete(ssl);
-    }
+    ovsrec_open_vswitch_verify_ssl(ovs);
+    ovsrec_open_vswitch_set_ssl(ovs, NULL);
+    ovsrec_ssl_delete(ssl);
 
     return EXIT_SUCCESS;
 }
@@ -2934,21 +2917,26 @@ txn_del_external_certificate(xmlNodePtr node, struct nc_err **e)
     const struct ovsrec_open_vswitch *ovs;
     const struct ovsrec_ssl *ssl;
     xmlNodePtr aux;
-    xmlChar *xmlval;
+    const xmlChar *resid;
 
+    /* TODO TC return errors */
     if (!node) {
         nc_verb_error("%s: invalid input parameters.", __func__);
         *e = nc_err_new(NC_ERR_OP_FAILED);
         return EXIT_FAILURE;
     }
 
-    ssl = ovsrec_ssl_first(ovsdb_handler->idl);
-    if (!ssl) {
-        /* TODO error, cannot delete, no SSL table */
+    aux = go2node(node, BAD_CAST "resource-id");
+    if (aux && aux->content) {
+        resid = aux->content;
+    } else {
+        *e = nc_err_new(NC_ERR_OP_FAILED);
         return EXIT_FAILURE;
     }
-    if (uuid_equals(&ovsdb_handler->cert_map->uuid, &ssl->header_.uuid)) {
-        /* TODO error, this SSL table UUID does not match the saved one */
+
+    ssl = find_ssl(resid);
+    if (!ssl) {
+        /* TODO error, cannot delete, no SSL table */
         return EXIT_FAILURE;
     }
 
@@ -2957,19 +2945,7 @@ txn_del_external_certificate(xmlNodePtr node, struct nc_err **e)
             continue;
         }
 
-        if (xmlStrEqual(aux->name, BAD_CAST "resource-id")) {
-            xmlval = xmlNodeGetContent(aux);
-            if (ovsdb_handler->cert_map->external_resid == NULL ||
-                    strcmp(ovsdb_handler->cert_map->external_resid, (char*) xmlval)) {
-                xmlFree(xmlval);
-                /* TODO error, unknown saved resid, should not happen normally */
-                return EXIT_FAILURE;
-            }
-            xmlFree(xmlval);
-
-            free(ovsdb_handler->cert_map->external_resid);
-            ovsdb_handler->cert_map->external_resid = NULL;
-        } else if (xmlStrEqual(aux->name, BAD_CAST "certificate")) {
+        if (xmlStrEqual(aux->name, BAD_CAST "certificate")) {
             /* TODO error check */
             unlink(OFC_DATADIR "/ca_cert.pem");
             ovsrec_ssl_set_ca_cert(ssl, "");
@@ -2982,11 +2958,9 @@ txn_del_external_certificate(xmlNodePtr node, struct nc_err **e)
         /* TODO error, no vswitch structure to delete from, how come? */
         return EXIT_FAILURE;
     }
-    if (ovsdb_handler->cert_map->owned_resid == NULL &&
-            ssl->certificate == NULL && ssl->private_key == NULL) {
-        ovsrec_open_vswitch_set_ssl(ovs, NULL);
-        ovsrec_ssl_delete(ssl);
-    }
+    ovsrec_open_vswitch_verify_ssl(ovs);
+    ovsrec_open_vswitch_set_ssl(ovs, NULL);
+    ovsrec_ssl_delete(ssl);
 
     return EXIT_SUCCESS;
 }

@@ -290,14 +290,18 @@ ofc_of_mod_port_internal(struct vconn *vconnp, const char *port_name,
     ofpbuf_delete(reply);
 }
 
-void
-ofc_of_mod_port(const xmlChar *bridge_name, const xmlChar *port_name, const xmlChar *bit_xchar, const xmlChar *value)
+int
+ofc_of_mod_port(const xmlChar *bridge_name, const xmlChar *port_name,
+                const xmlChar *bit_xchar, const xmlChar *value,
+                struct nc_err **e)
 {
     struct vconn *vconnp;
     enum ofputil_port_config bit;
     struct ofpbuf *of_ports = NULL;
     char val;
-    if (xmlStrEqual(value, BAD_CAST "false")) {
+
+    if (!value || xmlStrEqual(value, BAD_CAST "false")) {
+        /* !value = delete */
         val = 0;
     } else if (xmlStrEqual(value, BAD_CAST "true")) {
         val = 1;
@@ -305,11 +309,11 @@ ofc_of_mod_port(const xmlChar *bridge_name, const xmlChar *port_name, const xmlC
         val = 1; /* inverse logic for admin-state */
     } else if (xmlStrEqual(value, BAD_CAST "up")) {
         val = 0; /* inverse logic for admin-state */
-    } else if (xmlStrEqual(value, BAD_CAST "")) {
-        /* delete -> change to default */
-        val = 0;
     } else {
-        return;
+        *e = nc_err_new(NC_ERR_BAD_ELEM);
+        nc_err_set(*e, NC_ERR_PARAM_INFO_BADELEM, (char*) bit_xchar);
+        nc_err_set(*e,NC_ERR_PARAM_MSG, "Invalid element value.");
+        return EXIT_FAILURE;
     }
     if (xmlStrEqual(bit_xchar, BAD_CAST "no-receive")) {
         bit = OFPUTIL_PC_NO_RECV;
@@ -320,8 +324,10 @@ ofc_of_mod_port(const xmlChar *bridge_name, const xmlChar *port_name, const xmlC
     } else if (xmlStrEqual(bit_xchar, BAD_CAST "admin-state")) {
         bit = OFPUTIL_PC_PORT_DOWN;
     } else {
-        nc_verb_error("Bad element");
-        return;
+        *e = nc_err_new(NC_ERR_BAD_ELEM);
+        nc_err_set(*e, NC_ERR_PARAM_INFO_BADELEM, (char*)bit_xchar);
+        nc_err_set(*e, NC_ERR_PARAM_MSG, "Invalid element name.");
+        return EXIT_FAILURE;
     }
 
     if (ofc_of_open_vconn((char *) bridge_name, &vconnp) == true) {
@@ -329,6 +335,9 @@ ofc_of_mod_port(const xmlChar *bridge_name, const xmlChar *port_name, const xmlC
     } else {
         nc_verb_error("OpenFlow: could not connect to '%s' bridge.",
                       bridge_name);
+        *e = nc_err_new(NC_ERR_OP_FAILED);
+        nc_err_set(*e, NC_ERR_PARAM_MSG, "Unable to connect to the bridge via openFlow.");
+        return EXIT_FAILURE;
     }
     ofc_of_mod_port_internal(vconnp, (char *) port_name, bit, val);
     if (of_ports != NULL) {
@@ -337,6 +346,8 @@ ofc_of_mod_port(const xmlChar *bridge_name, const xmlChar *port_name, const xmlC
     if (vconnp != NULL) {
         vconn_close(vconnp);
     }
+
+    return EXIT_SUCCESS;
 }
 
 /* Finds interface with 'name' in OpenFlow 'reply' and returns pointer to it.
@@ -1611,8 +1622,8 @@ txn_commit(struct nc_err **e)
     return ret;
 }
 
-void
-txn_del_all(void)
+int
+txn_del_all(struct nc_err **UNUSED(e))
 {
     const struct ovsrec_open_vswitch *ovs;
     const struct ovsrec_flow_sample_collector_set *fscs;
@@ -1657,34 +1668,46 @@ txn_del_all(void)
     OVSREC_SSL_FOR_EACH(ssl, ovsdb_handler->idl) {
         ovsrec_ssl_delete(ssl);
     }
+
+    return EXIT_SUCCESS;
 }
 
-void
-txn_del_port(const xmlChar *port_name)
+int
+txn_del_port(const xmlChar *port_name, struct nc_err **e)
 {
     const struct ovsrec_port *port;
 
     if (!port_name) {
-        return;
+        nc_verb_error("%s: invalid input parameters.", __func__);
+        *e = nc_err_new(NC_ERR_OP_FAILED);
+        return EXIT_FAILURE;
     }
 
     OVSREC_PORT_FOR_EACH(port, ovsdb_handler->idl) {
         if (xmlStrEqual(port_name, BAD_CAST port->name)) {
             ovsrec_port_delete(port);
-            break;
+            return EXIT_SUCCESS;
         }
     }
+
+    *e = nc_err_new(NC_ERR_BAD_ELEM);
+    nc_err_set(*e, NC_ERR_PARAM_INFO_BADELEM, "name");
+    nc_err_set(*e, NC_ERR_PARAM_MSG, "Port does not exist in OVSDB");
+    return EXIT_FAILURE;
 }
 
 /* /capable-switch/resources/port/requested-number */
-void
-txn_mod_port_reqnumber(const xmlChar *port_name, const xmlChar* value)
+int
+txn_mod_port_reqnumber(const xmlChar *port_name, const xmlChar* value,
+                       struct nc_err **e)
 {
     int64_t rn;
     const struct ovsrec_interface *iface;
 
     if (!port_name) {
-        return;
+        nc_verb_error("%s: invalid input parameters.", __func__);
+        *e = nc_err_new(NC_ERR_OP_FAILED);
+        return EXIT_FAILURE;
     }
 
     /* get correct interface table row */
@@ -1702,14 +1725,27 @@ txn_mod_port_reqnumber(const xmlChar *port_name, const xmlChar* value)
         } else {
             ovsrec_interface_set_ofport_request(iface, NULL, 0);
         }
+
+        return EXIT_SUCCESS;
+    } else {
+        *e = nc_err_new(NC_ERR_BAD_ELEM);
+        nc_err_set(*e, NC_ERR_PARAM_INFO_BADELEM, "name");
+        nc_err_set(*e, NC_ERR_PARAM_MSG, "Port does not exist in OVSDB");
+        return EXIT_FAILURE;
     }
 }
 
-void
-txn_mod_port_admin_state(const xmlChar *port_name, const xmlChar* value)
+int
+txn_mod_port_admin_state(const xmlChar *port_name, const xmlChar* value,
+                         struct nc_err **e)
 {
     unsigned int flags;
 
+    if (!port_name) {
+        nc_verb_error("%s: invalid input parameters.", __func__);
+        *e = nc_err_new(NC_ERR_OP_FAILED);
+        return EXIT_FAILURE;
+    }
 
     if (!value) {
         /* delete -> set default value (up) */
@@ -1721,15 +1757,15 @@ txn_mod_port_admin_state(const xmlChar *port_name, const xmlChar* value)
         } else if (xmlStrEqual(value, BAD_CAST "down")) {
             flags = dev_get_flags((char*) port_name) & ~IFF_UP;
         } else {
-            /*
-            *e = nc_err_new(NC_ERR_INVALID_VALUE);
+            *e = nc_err_new(NC_ERR_BAD_ELEM);
             nc_err_set(*e, NC_ERR_PARAM_INFO_BADELEM, "admin-state");
+            nc_err_set(*e, NC_ERR_PARAM_MSG, "Invalid value to set.");
             return EXIT_FAILURE;
-            */
-            return;
         }
         dev_set_flags((char*) port_name, flags);
     }
+
+    return EXIT_SUCCESS;
 }
 
 int
@@ -1739,7 +1775,7 @@ txn_mod_port_configuration(xmlNodePtr cfg, struct nc_err **error)
     xmlXPathObjectPtr xpathObj;
     xmlDocPtr doc;
     const xmlChar *bridge_name = NULL;
-    xmlChar *port_name, *value;
+    const xmlChar *port_name, *value;
     xmlNodePtr port, aux;
     const char *xpathexpr = "//ofc:port/ofc:configuration/..";
     size_t size, i;
@@ -1778,16 +1814,15 @@ txn_mod_port_configuration(xmlNodePtr cfg, struct nc_err **error)
     for (i = 0; i < size; i++) {
         if (xpathObj->nodesetval->nodeTab[i]) {
             port = xpathObj->nodesetval->nodeTab[i];
-            port_name = xmlNodeGetContent(go2node(port, BAD_CAST "name"));
-            bridge_name = ofc_find_bridge_for_port_iterative(port_name);
+            port_name = get_key(port, "name");
+            bridge_name = ofc_find_bridge_with_port(port_name);
             aux = go2node(port, BAD_CAST "configuration");
             for (aux = aux->children; aux; aux = aux->next) {
-                value = xmlNodeGetContent(aux);
-                ofc_of_mod_port(bridge_name, port_name, aux->name, value);
-                xmlFree(value);
+                value = aux->children ? aux->children->content : NULL;
+                if (ofc_of_mod_port(bridge_name, port_name, aux->name, value, error)) {
+                    return EXIT_FAILURE;
+                }
             }
-
-            xmlFree(port_name);
         }
     }
 
@@ -1798,18 +1833,20 @@ cleanup:
     return txn_commit(error);
 }
 
-void
-txn_add_port(xmlNodePtr node)
+int
+txn_add_port(xmlNodePtr node, struct nc_err **e)
 {
     xmlNodePtr aux, aux2, advert;
-    xmlChar *xmlval, *port_name;
+    const xmlChar *xmlval, *port_name;
     struct ovsrec_port *port;
     struct ovsrec_interface *iface;
     struct ethtool_cmd *ecmd;
     int i;
 
     if (!node) {
-        return;
+        nc_verb_error("%s: invalid input parameters.", __func__);
+        *e = nc_err_new(NC_ERR_OP_FAILED);
+        return EXIT_FAILURE;
     }
 
     /* prepare new structures to set content of the port configuration */
@@ -1823,25 +1860,30 @@ txn_add_port(xmlNodePtr node)
         }
 
         if (xmlStrEqual(aux->name, BAD_CAST "name")) {
-            xmlval = xmlNodeGetContent(aux);
-            ovsrec_interface_verify_name(iface);
-            ovsrec_interface_set_name(iface, (char*) xmlval);
-            ovsrec_port_verify_name(port);
-            ovsrec_port_set_name(port, (char*) xmlval);
-            xmlFree(xmlval);
+            xmlval = aux->children ? aux->children->content : NULL;
+            if (xmlval) {
+                ovsrec_interface_verify_name(iface);
+                ovsrec_interface_set_name(iface, (char*) xmlval);
+                ovsrec_port_verify_name(port);
+                ovsrec_port_set_name(port, (char*) xmlval);
+            } else {
+                return EXIT_FAILURE;
+            }
         } else if (xmlStrEqual(aux->name, BAD_CAST "requested-number")) {
-            xmlval = xmlNodeGetContent(aux);
-            txn_mod_port_reqnumber(BAD_CAST iface->name, xmlval);
-            xmlFree(xmlval);
+            xmlval = aux->children ? aux->children->content : NULL;
+            if (txn_mod_port_reqnumber(BAD_CAST iface->name, xmlval, e)) {
+                return EXIT_FAILURE;
+            }
         } else if (xmlStrEqual(aux->name, BAD_CAST "configuration")) {
             /* can't be set before commit, it will be set later */
             ovsdb_handler->added_interface = true;
         } else if (xmlStrEqual(aux->name, BAD_CAST "ipgre-tunnel")
                    || xmlStrEqual(aux->name, BAD_CAST "vxlan-tunnel")
                    || xmlStrEqual(aux->name, BAD_CAST "tunnel")) {
-            port_name = xmlNodeGetContent(go2node(aux->parent, BAD_CAST "name"));
-            txn_mod_port_add_tunnel(port_name, aux);
-            xmlFree(port_name);
+            port_name = get_key(aux->parent, "name");
+            if (txn_mod_port_add_tunnel(port_name, aux, e)) {
+                return EXIT_FAILURE;
+            }
         } else if (xmlStrEqual(aux->name, BAD_CAST "features")) {
             advert = go2node(aux, BAD_CAST "advertised");
             if (!advert) {
@@ -1891,13 +1933,23 @@ txn_add_port(xmlNodePtr node)
         }
     }
     ovsdb_handler->added_interface = true;
+
+    return EXIT_SUCCESS;
 }
 
-void
-txn_add_port_advert(const xmlChar *port_name, xmlNodePtr node)
+int
+txn_add_port_advert(const xmlChar *port_name, xmlNodePtr node,
+                    struct nc_err **e)
 {
     int i;
     struct ethtool_cmd *ecmd;
+
+    if (!port_name || !node) {
+        nc_verb_error("%s: invalid input parameters.", __func__);
+        *e = nc_err_new(NC_ERR_OP_FAILED);
+        return EXIT_FAILURE;
+    }
+
     ecmd = dev_get_ethtool((char*)port_name);
 
     if (xmlStrEqual(node->name, BAD_CAST "rate")) {
@@ -1930,13 +1982,23 @@ txn_add_port_advert(const xmlChar *port_name, xmlNodePtr node)
         }
     }
     dev_set_ethtool((char*)port_name, ecmd);
+
+    return EXIT_SUCCESS;
 }
 
-void
-txn_del_port_advert(const xmlChar *port_name, xmlNodePtr node)
+int
+txn_del_port_advert(const xmlChar *port_name, xmlNodePtr node,
+                    struct nc_err **e)
 {
     int i;
     struct ethtool_cmd *ecmd;
+
+    if (!port_name || !node) {
+        nc_verb_error("%s: invalid input parameters.", __func__);
+        *e = nc_err_new(NC_ERR_OP_FAILED);
+        return EXIT_FAILURE;
+    }
+
     ecmd = dev_get_ethtool((char*)port_name);
 
     if (xmlStrEqual(node->name, BAD_CAST "rate")) {
@@ -1961,33 +2023,42 @@ txn_del_port_advert(const xmlChar *port_name, xmlNodePtr node)
         ecmd->advertising &= ~ADVERTISED_Asym_Pause;
     }
     dev_set_ethtool((char*)port_name, ecmd);
+
+    return EXIT_SUCCESS;
 }
 
 
 /* Queue */
 
-static void
-txn_add_queue_resid(struct ovsrec_queue *q, const xmlChar *resid)
+static int
+txn_add_queue_resid(struct ovsrec_queue *q, const xmlChar *resid,
+                    struct nc_err **e)
 {
-    if (resid == NULL) {
-        nc_verb_error("No resource-id given. (%s:%d)", __FILE__, __LINE__);
-        return;
+    if (!q || !resid) {
+        nc_verb_error("%s: invalid input parameters.", __func__);
+        *e = nc_err_new(NC_ERR_OP_FAILED);
+        return EXIT_FAILURE;
     }
+
     smap_add_once(&q->external_ids, OFC_RESOURCE_ID, (const char *) resid);
     ovsrec_queue_verify_external_ids(q);
     ovsrec_queue_set_external_ids(q, &q->external_ids);
+
+    return EXIT_SUCCESS;
 }
 
-void
-txn_add_queue(xmlNodePtr node)
+int
+txn_add_queue(xmlNodePtr node, struct nc_err **e)
 {
     xmlNodePtr aux, prop = NULL, port;
     xmlChar *id = NULL;
-    xmlChar *resource_id = NULL;
+    xmlChar *resid = NULL;
     struct ovsrec_queue *queue;
 
     if (!node) {
-        return;
+        nc_verb_error("%s: invalid input parameters.", __func__);
+        *e = nc_err_new(NC_ERR_OP_FAILED);
+        return EXIT_FAILURE;
     }
 
     for (aux = node->children; aux; aux = aux->next) {
@@ -1996,7 +2067,7 @@ txn_add_queue(xmlNodePtr node)
         }
 
         if (xmlStrEqual(aux->name, BAD_CAST "resource-id")) {
-            resource_id = aux->children->content;
+            resid = aux->children->content;
         } else if (xmlStrEqual(aux->name, BAD_CAST "id")) {
             id = aux->children->content;
         } else if (xmlStrEqual(aux->name, BAD_CAST "port")) {
@@ -2005,34 +2076,47 @@ txn_add_queue(xmlNodePtr node)
             prop = aux;
         }
     }
-    nc_verb_verbose("Add queue %s to port.", (const char *) resource_id);
+    nc_verb_verbose("Add queue %s to port.", (const char *) resid);
 
     /* TODO check if exists */
 
     /* create new */
     queue = ovsrec_queue_insert(ovsdb_handler->txn);
-    txn_add_queue_resid(queue, resource_id);
+    if (txn_add_queue_resid(queue, resid, e)) {
+        return EXIT_FAILURE;
+    }
     int64_t key;
     if (sscanf((char *) id, "%"SCNi64, &key) != 1) {
         /* parsing error, wrong number */
     }
 
-    txn_add_queue_port(resource_id, port);
+    if (txn_add_queue_port(resid, port, e)) {
+        return EXIT_FAILURE;
+    }
 
     if (prop != NULL) {
         for (aux = prop->children; aux; aux = aux->next) {
-            txn_mod_queue_options(resource_id, (const char *) aux->name, aux);
+            if (txn_mod_queue_options(resid, (char*)aux->name, aux, e)) {
+                return EXIT_FAILURE;
+            }
         }
     }
 
     ovsrec_queue_verify_other_config(queue);
     ovsrec_queue_set_other_config(queue, &queue->other_config);
+
+    return EXIT_SUCCESS;
 }
 
 static const struct ovsrec_port *
 find_port_by_name(const xmlChar *port_name)
 {
     const struct ovsrec_port *port, *next;
+
+    if (!port_name) {
+        return NULL;
+    }
+
     OVSREC_PORT_FOR_EACH_SAFE(port, next, ovsdb_handler->idl) {
         if (xmlStrEqual(port_name, BAD_CAST port->name)) {
             return port;
@@ -2045,6 +2129,11 @@ static const struct ovsrec_interface *
 find_interface_by_name(const xmlChar *ifc_name)
 {
     const struct ovsrec_interface *ifc, *next;
+
+    if (!ifc_name) {
+        return NULL;
+    }
+
     OVSREC_INTERFACE_FOR_EACH_SAFE(ifc, next, ovsdb_handler->idl) {
         if (xmlStrEqual(ifc_name, BAD_CAST ifc->name)) {
             return ifc;
@@ -2060,6 +2149,11 @@ find_queue(const xmlChar *resource_id)
 {
     const struct ovsrec_queue *r, *n;
     const char *res_id;
+
+    if (!resource_id) {
+        return NULL;
+    }
+
     OVSREC_QUEUE_FOR_EACH_SAFE(r, n, ovsdb_handler->idl) {
         res_id = smap_get(&r->external_ids, OFC_RESOURCE_ID);
         if (xmlStrEqual(resource_id, BAD_CAST res_id)) {
@@ -2078,6 +2172,7 @@ find_qos_by_queue(const xmlChar *resource_id, size_t *index)
     const struct ovsrec_queue *queue;
     const struct ovsrec_qos *r, *n;
     size_t i;
+
     queue = find_queue(resource_id);
     if (queue == NULL) {
         return NULL;
@@ -2099,8 +2194,9 @@ find_qos_by_queue(const xmlChar *resource_id, size_t *index)
 /* Add reference for queue to port (via qos). Parameter 'edit'
  * points to <port> element of queue.
  */
-void
-txn_add_queue_port(const xmlChar *resource_id, xmlNodePtr port_elem)
+int
+txn_add_queue_port(const xmlChar *resource_id, xmlNodePtr port_elem,
+                   struct nc_err **e)
 {
     const struct ovsrec_queue *queue = find_queue(resource_id);
     struct ovsrec_queue **queues;
@@ -2110,23 +2206,28 @@ txn_add_queue_port(const xmlChar *resource_id, xmlNodePtr port_elem)
     const struct ovsrec_qos *qos;
     int64_t id;
     xmlNodePtr id_elem;
-    xmlChar *xml_id, *port_name = xmlNodeGetContent(port_elem);
+    xmlChar *xml_id, *port_name;
+
+    port_name = port_elem->children ? port_elem->children->content : NULL;
     port = find_port_by_name(port_name);
 
     if ((queue == NULL) || (port == NULL)) {
-        goto cleanup;
+        nc_verb_error("%s: invalid input parameters.", __func__);
+        *e = nc_err_new(NC_ERR_OP_FAILED);
+        return EXIT_FAILURE;
     }
 
     id_elem = go2node(port_elem->parent, BAD_CAST "id");
     if (id_elem != NULL) {
+        /* TODO: TC - do not use xmlNodeGetContent or check the result */
         xml_id = xmlNodeGetContent(id_elem);
         if (sscanf((char *) xml_id, "%"SCNi64, &id) != 1) {
             /* parsing error, wrong number */
-            goto cleanup;
+            return EXIT_FAILURE;
         }
         xmlFree(xml_id);
     } else {
-        goto cleanup;
+        return EXIT_FAILURE;
     }
 
     qos = port->qos;
@@ -2156,85 +2257,90 @@ txn_add_queue_port(const xmlChar *resource_id, xmlNodePtr port_elem)
         /* queues array is passed as non-const, hopefully it will be freed */
     }
 
-cleanup:
-    xmlFree(port_name);
-    return;
+    return EXIT_SUCCESS;
 }
 
-void
-txn_add_queue_id(const xmlChar *resource_id, xmlNodePtr edit)
+int
+txn_add_queue_id(const xmlChar *resource_id, xmlNodePtr edit,
+                 struct nc_err **e)
 {
     const struct ovsrec_qos *qos;
-    xmlChar *value;
     size_t index;
     int64_t key;
 
     qos = find_qos_by_queue(resource_id, &index);
-    if (qos == NULL) {
-        return;
+    if (!qos || !edit || !edit->children || !edit->children->content) {
+        nc_verb_error("%s: invalid input parameters.", __func__);
+        *e = nc_err_new(NC_ERR_OP_FAILED);
+        return EXIT_FAILURE;
     }
-    value = xmlNodeGetContent(edit);
-    if (sscanf((char *) value, "%"SCNi64, &key) != 1) {
+    if (sscanf((char *) edit->children->content, "%"SCNi64, &key) != 1) {
         /* parsing error, wrong number */
-        goto cleanup;
+        return EXIT_FAILURE;
     }
     qos->key_queues[index] = key;
     ovsrec_qos_verify_queues(qos);
     ovsrec_qos_set_queues(qos, qos->key_queues, qos->value_queues,
                           qos->n_queues);
 
-cleanup:
-    xmlFree(value);
+    return EXIT_SUCCESS;
 }
 
-void
-txn_del_queue_port(const xmlChar *resource_id, xmlNodePtr port_elem)
+int
+txn_del_queue_port(const xmlChar *resource_id, xmlNodePtr port_elem,
+                   struct nc_err **e)
 {
     nc_verb_error("UNIMPLEMENTED");
+    return EXIT_SUCCESS;
 }
 
-void
-txn_del_queue_id(const xmlChar *resource_id, xmlNodePtr edit)
+int
+txn_del_queue_id(const xmlChar *resource_id, xmlNodePtr edit,
+                 struct nc_err **e)
 {
     nc_verb_error("UNIMPLEMENTED");
+    return EXIT_SUCCESS;
 }
 
-void
-txn_mod_queue_options(const xmlChar *resource_id, const char *option, xmlNodePtr edit)
+int
+txn_mod_queue_options(const xmlChar *resource_id, const char *option,
+                      xmlNodePtr edit, struct nc_err **e)
 {
     const struct ovsrec_queue *queue;
-    xmlChar *value;
-    queue = find_queue(resource_id);
-    if (queue == NULL) {
-        return;
-    }
-    if (edit != NULL) {
-        /* add */
-        value = xmlNodeGetContent(edit);
-        nc_verb_verbose("add option %s with value %s to queue", option,
-                (const char *) value);
-        if (value != NULL) {
-            smap_replace((struct smap *) &queue->other_config, option,
-                         (const char *) value);
-            ovsrec_queue_verify_other_config(queue);
-            ovsrec_queue_set_other_config(queue, &queue->other_config);
-            xmlFree(value);
+    char *value;
 
-            return;
-        }
+    queue = find_queue(resource_id);
+    if (queue == NULL || !edit || !edit->children || !edit->children->content) {
+        nc_verb_error("%s: invalid input parameters.", __func__);
+        *e = nc_err_new(NC_ERR_OP_FAILED);
+        return EXIT_FAILURE;
+    }
+
+    if (edit) {
+        /* add */
+        value = (char*)edit->children->content;
+        nc_verb_verbose("add option %s with value %s to queue", option, value);
+
+        smap_replace((struct smap *) &queue->other_config, option, value);
+        ovsrec_queue_verify_other_config(queue);
+        ovsrec_queue_set_other_config(queue, &queue->other_config);
+
+        return EXIT_SUCCESS;
     } else {
         /* delete */
         nc_verb_verbose("delete option %s from queue", option);
         smap_remove((struct smap *) &queue->other_config, option);
         ovsrec_queue_verify_other_config(queue);
         ovsrec_queue_set_other_config(queue, &queue->other_config);
+
+        return EXIT_SUCCESS;
     }
 }
 
 /* end of Queue */
 
 
-xmlChar *
+static xmlChar *
 ofc_find_bridge_for_flowtable(xmlNodePtr root, xmlChar *flowtable)
 {
     xmlXPathContextPtr xpathCtx;
@@ -2291,8 +2397,8 @@ cleanup:
     return bridge_name;
 }
 
-void
-txn_add_flow_table(xmlNodePtr node)
+int
+txn_add_flow_table(xmlNodePtr node, struct nc_err **e)
 {
     xmlNodePtr aux;
     xmlNodePtr resource_id = NULL;
@@ -2303,8 +2409,12 @@ txn_add_flow_table(xmlNodePtr node)
     const struct ovsrec_bridge *bridge;
 
     if (!node) {
-        return;
+        nc_verb_error("%s: invalid input parameters.", __func__);
+        *e = nc_err_new(NC_ERR_OP_FAILED);
+        return EXIT_FAILURE;
     }
+
+    /* TODO: TC - do not use xmlNodeGetContent() or check the return value */
 
     for (aux = node->children; aux; aux = aux->next) {
         if (aux->type != XML_ELEMENT_NODE) {
@@ -2317,6 +2427,8 @@ txn_add_flow_table(xmlNodePtr node)
             table_id_txt = xmlNodeGetContent(aux);
             if (sscanf((const char *) table_id_txt, "%"SCNi64, &table_id) != 1) {
                 /* parsing error, wrong number */
+                xmlFree(table_id_txt);
+                return EXIT_FAILURE;
             }
             /* TODO check table_id range 0-255? */
         } else if (xmlStrEqual(aux->name, BAD_CAST "name")) {
@@ -2331,7 +2443,8 @@ txn_add_flow_table(xmlNodePtr node)
     /* TODO check if exists */
     bridge_name = ofc_find_bridge_for_flowtable(node, table_id_txt);
     if (bridge_name == NULL) {
-        goto cleanup;
+        xmlFree(table_id_txt);
+        return EXIT_FAILURE;
     }
     OVSREC_BRIDGE_FOR_EACH(bridge, ovsdb_handler->idl) {
         if (xmlStrEqual(bridge_name, BAD_CAST bridge->name)) {
@@ -2340,11 +2453,15 @@ txn_add_flow_table(xmlNodePtr node)
                     (struct ovsrec_flow_table **) &flowtable, 1);
         }
     }
-    txn_mod_flowtable_name(table_id_txt, name);
-    txn_mod_flowtable_resid(table_id_txt, resource_id);
-cleanup:
+
+    if (txn_mod_flowtable_name(table_id_txt, name, e) ||
+                     txn_mod_flowtable_resid(table_id_txt, resource_id, e)) {
+        xmlFree(table_id_txt);
+        return EXIT_FAILURE;
+    }
+
     xmlFree(table_id_txt);
-    return;
+    return EXIT_SUCCESS;
 }
 
 /* Finds flow-table by resource-id and returns pointer to it.  When no queue is
@@ -2374,35 +2491,47 @@ find_flowtable(const xmlChar *table_id)
     return NULL;
 }
 
-void
-txn_mod_flowtable_name(const xmlChar *table_id, xmlNodePtr node)
+int
+txn_mod_flowtable_name(const xmlChar *table_id, xmlNodePtr node,
+                       struct nc_err **e)
 {
     xmlChar *value;
     const struct ovsrec_flow_table *ft;
 
+    if (!table_id) {
+        nc_verb_error("%s: invalid input parameters.", __func__);
+        *e = nc_err_new(NC_ERR_OP_FAILED);
+        return EXIT_FAILURE;
+    }
+
     ft = find_flowtable(table_id);
-    if (ft == NULL) {
+    if (!ft) {
         nc_verb_error("Flow-table %s was not found, name is not set.",
                       (const char *) table_id);
-        return;
+        *e = nc_err_new(NC_ERR_BAD_ELEM);
+        nc_err_set(*e, NC_ERR_PARAM_INFO_BADELEM, "table-id");
+        nc_err_set(*e, NC_ERR_PARAM_MSG, "Flow table does not exist in OVSDB");
+        return EXIT_FAILURE;
     }
+
     if (node != NULL) {
         /* add */
         value = xmlNodeGetContent(node);
         ovsrec_flow_table_verify_name(ft);
         ovsrec_flow_table_set_name(ft, (const char *) value);
         xmlFree(value);
-        return;
     } else {
         /* delete */
         ovsrec_flow_table_verify_name(ft);
         ovsrec_flow_table_set_name(ft, "");
-        return;
     }
+
+    return EXIT_SUCCESS;
 }
 
-void
-txn_mod_flowtable_resid(const xmlChar *table_id, xmlNodePtr node)
+int
+txn_mod_flowtable_resid(const xmlChar *table_id, xmlNodePtr node,
+                        struct nc_err **e)
 {
     xmlChar *value;
     const struct ovsrec_flow_table *ft;
@@ -2410,7 +2539,10 @@ txn_mod_flowtable_resid(const xmlChar *table_id, xmlNodePtr node)
     if (ft == NULL) {
         nc_verb_error("Flow-table %s was not found, name is not set.",
                       (const char *) table_id);
-        return;
+        *e = nc_err_new(NC_ERR_BAD_ELEM);
+        nc_err_set(*e, NC_ERR_PARAM_INFO_BADELEM, "table-id");
+        nc_err_set(*e, NC_ERR_PARAM_MSG, "Flow table does not exist in OVSDB");
+        return EXIT_FAILURE;
     }
     if (node != NULL) {
         /* add */
@@ -2430,19 +2562,25 @@ txn_mod_flowtable_resid(const xmlChar *table_id, xmlNodePtr node)
         ovsrec_flow_table_verify_external_ids(ft);
         ovsrec_flow_table_set_external_ids(ft, &ft->external_ids);
     }
+
+    return EXIT_SUCCESS;
 }
 
 
-void
-txn_del_port_tunnel(const xmlChar *port_name, xmlNodePtr tunnel_node)
+
+int
+txn_del_port_tunnel(const xmlChar *port_name, xmlNodePtr tunnel_node,
+                    struct nc_err **e)
 {
     const struct ovsrec_interface *found = NULL;
     nc_verb_verbose("Removing tunnel (%s:%d)", __FILE__, __LINE__);
 
     found = find_interface_by_name(port_name);
     if (found == NULL) {
-        /* not found */
-        return;
+        *e = nc_err_new(NC_ERR_BAD_ELEM);
+        nc_err_set(*e, NC_ERR_PARAM_INFO_BADELEM, "name");
+        nc_err_set(*e, NC_ERR_PARAM_MSG, "Port not found in OVSDB.");
+        return EXIT_FAILURE;
     }
 
     ovsrec_interface_verify_options(found);
@@ -2451,15 +2589,19 @@ txn_del_port_tunnel(const xmlChar *port_name, xmlNodePtr tunnel_node)
     smap_remove((struct smap *) &found->options, "remote_ip");
     ovsrec_interface_set_options(found, &found->options);
     ovsrec_interface_set_type(found, "");
+
+    return EXIT_SUCCESS;
 }
 
-void
-txn_del_flow_table(xmlNodePtr node)
+int
+txn_del_flow_table(xmlNodePtr node, struct nc_err **e)
 {
     xmlChar *table_id_txt;
     int64_t table_id;
     const struct ovsrec_bridge *row;
     size_t i, n_flow_tables;
+
+    /* TODO: TC - do not use xmlNodeGetContent() or check the return value */
 
     table_id_txt = xmlNodeGetContent(go2node(node, BAD_CAST "table-id"));
     nc_verb_verbose("!!!!Deleting flow-table %s", (const char *) table_id_txt);
@@ -2488,24 +2630,29 @@ txn_del_flow_table(xmlNodePtr node)
             ovsrec_bridge_set_flow_tables(row, row->key_flow_tables,
                                           row->value_flow_tables,
                                           n_flow_tables);
-            goto cleanup;
+            xmlFree(table_id_txt);
+            return EXIT_SUCCESS;
         }
     }
+
 cleanup:
     xmlFree(table_id_txt);
-    return;
+    return EXIT_FAILURE;
 }
 
 /* Remove port reference from the Bridge table */
-void
-txn_del_bridge_port(const xmlChar *br_name, const xmlChar *port_name)
+int
+txn_del_bridge_port(const xmlChar *br_name, const xmlChar *port_name,
+                    struct nc_err **e)
 {
     const struct ovsrec_bridge *bridge;
     struct ovsrec_port **ports;
     size_t i, j;
 
     if (!port_name || !br_name) {
-        return;
+        nc_verb_error("%s: invalid input parameters.", __func__);
+        *e = nc_err_new(NC_ERR_OP_FAILED);
+        return EXIT_FAILURE;
     }
 
     OVSREC_BRIDGE_FOR_EACH(bridge, ovsdb_handler->idl) {
@@ -2514,7 +2661,10 @@ txn_del_bridge_port(const xmlChar *br_name, const xmlChar *port_name)
         }
     }
     if (!bridge) {
-        return;
+        *e = nc_err_new(NC_ERR_BAD_ELEM);
+        nc_err_set(*e, NC_ERR_PARAM_INFO_BADELEM, "id");
+        nc_err_set(*e, NC_ERR_PARAM_MSG, "Logical-switch does not exist in OVSDB");
+        return EXIT_FAILURE;
     }
 
     ports = malloc(sizeof *bridge->ports * (bridge->n_ports - 1));
@@ -2527,10 +2677,12 @@ txn_del_bridge_port(const xmlChar *br_name, const xmlChar *port_name)
     ovsrec_bridge_verify_ports(bridge);
     ovsrec_bridge_set_ports(bridge, ports, bridge->n_ports - 1);
     free(ports);
+
+    return EXIT_SUCCESS;
 }
 
-void
-txn_add_owned_certificate(xmlNodePtr node)
+int
+txn_add_owned_certificate(xmlNodePtr node, struct nc_err **e)
 {
     const struct ovsrec_open_vswitch *ovs;
     const struct ovsrec_ssl *ssl;
@@ -2540,7 +2692,9 @@ txn_add_owned_certificate(xmlNodePtr node)
     char *key_type, *key_data;
 
     if (!node) {
-        return;
+        nc_verb_error("%s: invalid input parameters.", __func__);
+        *e = nc_err_new(NC_ERR_OP_FAILED);
+        return EXIT_FAILURE;
     }
 
     /* prepare new structures to set content of the SSL configuration */
@@ -2552,6 +2706,7 @@ txn_add_owned_certificate(xmlNodePtr node)
         mod = 1;
         if (uuid_equals(&ovsdb_handler->cert_map->uuid, &ssl->header_.uuid)) {
             /* TODO error, this SSL table UUID does not match the saved one */
+            return EXIT_FAILURE;
         }
     }
 
@@ -2567,10 +2722,12 @@ txn_add_owned_certificate(xmlNodePtr node)
                     strcmp(ovsdb_handler->cert_map->owned_resid, (char*) xmlval)) {
                     xmlFree(xmlval);
                     /* TODO error, second owned-certificate item in the list, not allowed */
+                    return EXIT_FAILURE;
                 }
             } else {
                 if (ovsdb_handler->cert_map->owned_resid != NULL) {
                     /* TODO error, resid filled without any SSL table */
+                    return EXIT_FAILURE;
                 }
                 memcpy(&ovsdb_handler->cert_map->uuid, &ssl->header_.uuid, sizeof(struct uuid));
             }
@@ -2624,10 +2781,12 @@ txn_add_owned_certificate(xmlNodePtr node)
         ovsrec_open_vswitch_verify_ssl(ovs);
         ovsrec_open_vswitch_set_ssl(ovs, ssl);
     }
+
+    return EXIT_SUCCESS;
 }
 
-void
-txn_add_external_certificate(xmlNodePtr node)
+int
+txn_add_external_certificate(xmlNodePtr node, struct nc_err **e)
 {
     const struct ovsrec_open_vswitch *ovs;
     const struct ovsrec_ssl *ssl;
@@ -2636,7 +2795,9 @@ txn_add_external_certificate(xmlNodePtr node)
     int fd, mod;
 
     if (!node) {
-        return;
+        nc_verb_error("%s: invalid input parameters.", __func__);
+        *e = nc_err_new(NC_ERR_OP_FAILED);
+        return EXIT_FAILURE;
     }
 
     /* prepare new structures to set content of the SSL configuration */
@@ -2648,6 +2809,7 @@ txn_add_external_certificate(xmlNodePtr node)
         mod = 1;
         if (uuid_equals(&ovsdb_handler->cert_map->uuid, &ssl->header_.uuid)) {
             /* TODO error, this SSL table UUID does not match the saved one */
+            return EXIT_FAILURE;
         }
     }
 
@@ -2663,10 +2825,12 @@ txn_add_external_certificate(xmlNodePtr node)
                         strcmp(ovsdb_handler->cert_map->external_resid, (char*) xmlval)) {
                     xmlFree(xmlval);
                     /* TODO error, second external-certificate item in the list, not allowed */
+                    return EXIT_FAILURE;
                 }
             } else {
                 if (ovsdb_handler->cert_map->external_resid != NULL) {
                     /* TODO error, resid filled without any SSL table */
+                    return EXIT_FAILURE;
                 }
                 memcpy(&ovsdb_handler->cert_map->uuid, &ssl->header_.uuid, sizeof(struct uuid));
             }
@@ -2697,10 +2861,12 @@ txn_add_external_certificate(xmlNodePtr node)
         ovsrec_open_vswitch_verify_ssl(ovs);
         ovsrec_open_vswitch_set_ssl(ovs, ssl);
     }
+
+    return EXIT_SUCCESS;
 }
 
-void
-txn_del_owned_certificate(xmlNodePtr node)
+int
+txn_del_owned_certificate(xmlNodePtr node, struct nc_err **e)
 {
     const struct ovsrec_open_vswitch *ovs;
     const struct ovsrec_ssl *ssl;
@@ -2708,15 +2874,19 @@ txn_del_owned_certificate(xmlNodePtr node)
     xmlChar *xmlval;
 
     if (!node) {
-        return;
+        nc_verb_error("%s: invalid input parameters.", __func__);
+        *e = nc_err_new(NC_ERR_OP_FAILED);
+        return EXIT_FAILURE;
     }
 
     ssl = ovsrec_ssl_first(ovsdb_handler->idl);
     if (!ssl) {
         /* TODO error, cannot delete, no SSL table */
+        return EXIT_FAILURE;
     }
     if (uuid_equals(&ovsdb_handler->cert_map->uuid, &ssl->header_.uuid)) {
         /* TODO error, this SSL table UUID does not match the saved one */
+        return EXIT_FAILURE;
     }
 
     for (aux = node->children; aux; aux = aux->next) {
@@ -2730,6 +2900,7 @@ txn_del_owned_certificate(xmlNodePtr node)
                     strcmp(ovsdb_handler->cert_map->owned_resid, (char*) xmlval)) {
                 xmlFree(xmlval);
                 /* TODO error, unknown saved resid, should not happen normally */
+                return EXIT_FAILURE;
             }
             xmlFree(xmlval);
 
@@ -2750,15 +2921,18 @@ txn_del_owned_certificate(xmlNodePtr node)
     ovs = ovsrec_open_vswitch_first(ovsdb_handler->idl);
     if (!ovs) {
         /* TODO error, no vswitch structure to delete from, how come? */
+        return EXIT_FAILURE;
     }
     if (ovsdb_handler->cert_map->external_resid == NULL && ssl->ca_cert == NULL) {
         ovsrec_open_vswitch_set_ssl(ovs, NULL);
         ovsrec_ssl_delete(ssl);
     }
+
+    return EXIT_SUCCESS;
 }
 
-void
-txn_del_external_certificate(xmlNodePtr node)
+int
+txn_del_external_certificate(xmlNodePtr node, struct nc_err **e)
 {
     const struct ovsrec_open_vswitch *ovs;
     const struct ovsrec_ssl *ssl;
@@ -2766,15 +2940,19 @@ txn_del_external_certificate(xmlNodePtr node)
     xmlChar *xmlval;
 
     if (!node) {
-        return;
+        nc_verb_error("%s: invalid input parameters.", __func__);
+        *e = nc_err_new(NC_ERR_OP_FAILED);
+        return EXIT_FAILURE;
     }
 
     ssl = ovsrec_ssl_first(ovsdb_handler->idl);
     if (!ssl) {
         /* TODO error, cannot delete, no SSL table */
+        return EXIT_FAILURE;
     }
     if (uuid_equals(&ovsdb_handler->cert_map->uuid, &ssl->header_.uuid)) {
         /* TODO error, this SSL table UUID does not match the saved one */
+        return EXIT_FAILURE;
     }
 
     for (aux = node->children; aux; aux = aux->next) {
@@ -2788,6 +2966,7 @@ txn_del_external_certificate(xmlNodePtr node)
                     strcmp(ovsdb_handler->cert_map->external_resid, (char*) xmlval)) {
                 xmlFree(xmlval);
                 /* TODO error, unknown saved resid, should not happen normally */
+                return EXIT_FAILURE;
             }
             xmlFree(xmlval);
 
@@ -2804,16 +2983,20 @@ txn_del_external_certificate(xmlNodePtr node)
     ovs = ovsrec_open_vswitch_first(ovsdb_handler->idl);
     if (!ovs) {
         /* TODO error, no vswitch structure to delete from, how come? */
+        return EXIT_FAILURE;
     }
     if (ovsdb_handler->cert_map->owned_resid == NULL &&
             ssl->certificate == NULL && ssl->private_key == NULL) {
         ovsrec_open_vswitch_set_ssl(ovs, NULL);
         ovsrec_ssl_delete(ssl);
     }
+
+    return EXIT_SUCCESS;
 }
 
-void
-txn_add_bridge_port(const xmlChar *br_name, const xmlChar *port_name)
+int
+txn_add_bridge_port(const xmlChar *br_name, const xmlChar *port_name,
+                    struct nc_err **e)
 {
     const struct ovsrec_bridge *bridge;
     const struct ovsrec_port *port;
@@ -2821,7 +3004,9 @@ txn_add_bridge_port(const xmlChar *br_name, const xmlChar *port_name)
     size_t i;
 
     if (!port_name || !br_name) {
-        return;
+        nc_verb_error("%s: invalid input parameters.", __func__);
+        *e = nc_err_new(NC_ERR_OP_FAILED);
+        return EXIT_FAILURE;
     }
 
     OVSREC_BRIDGE_FOR_EACH(bridge, ovsdb_handler->idl) {
@@ -2835,8 +3020,16 @@ txn_add_bridge_port(const xmlChar *br_name, const xmlChar *port_name)
         }
     }
     if (!port || !bridge) {
-        nc_verb_warning("%s: %s not found", __func__, port ? "bridge" : "port");
-        return;
+        nc_verb_error("%s: %s not found", __func__, port ? "bridge" : "port");
+        *e = nc_err_new(NC_ERR_BAD_ELEM);
+        if (!port) {
+            nc_err_set(*e, NC_ERR_PARAM_INFO_BADELEM, "port");
+            nc_err_set(*e, NC_ERR_PARAM_MSG, "Invalid port leafref");
+        } else {
+            nc_err_set(*e, NC_ERR_PARAM_INFO_BADELEM, "id");
+            nc_err_set(*e, NC_ERR_PARAM_MSG, "Logical switch does not exist in OVSDB");
+        }
+        return EXIT_FAILURE;
     }
     nc_verb_verbose("Add port %s to %s bridge resource list.",
                     BAD_CAST port_name, BAD_CAST br_name);
@@ -2850,10 +3043,13 @@ txn_add_bridge_port(const xmlChar *br_name, const xmlChar *port_name)
     ovsrec_bridge_verify_ports(bridge);
     ovsrec_bridge_set_ports(bridge, ports, bridge->n_ports + 1);
     free(ports);
+
+    return EXIT_SUCCESS;
 }
 
-void
-txn_add_bridge_queue(const xmlChar *br_name, const xmlChar *resource_id)
+int
+txn_add_bridge_queue(const xmlChar *br_name, const xmlChar *resource_id,
+                     struct nc_err **e)
 {
     const struct ovsrec_bridge *bridge;
     struct ovsrec_qos *qos;
@@ -2862,7 +3058,9 @@ txn_add_bridge_queue(const xmlChar *br_name, const xmlChar *resource_id)
     int cmp;
 
     if (!resource_id || !br_name) {
-        return;
+        nc_verb_error("%s: invalid input parameters.", __func__);
+        *e = nc_err_new(NC_ERR_OP_FAILED);
+        return EXIT_FAILURE;
     }
 
     nc_verb_verbose("Add queue %s to %s bridge resource list.",
@@ -2873,10 +3071,13 @@ txn_add_bridge_queue(const xmlChar *br_name, const xmlChar *resource_id)
         }
     }
     if (bridge == NULL) {
-        /* not found */
-        return;
+        *e = nc_err_new(NC_ERR_BAD_ELEM);
+        nc_err_set(*e, NC_ERR_PARAM_INFO_BADELEM, "id");
+        nc_err_set(*e, NC_ERR_PARAM_MSG, "Logical switch does not exist in OVSDB");
+        return EXIT_FAILURE;
     }
 
+    /* TODO store resource-id into OVSDB's external_ids */
     queue = find_queue(resource_id);
     for (i = 0; i < bridge->n_ports; i++) {
         qos = bridge->ports[i]->qos;
@@ -2890,13 +3091,16 @@ txn_add_bridge_queue(const xmlChar *br_name, const xmlChar *resource_id)
             if (cmp) {
                 ovsrec_port_verify_qos(bridge->ports[i]);
                 ovsrec_port_set_qos(bridge->ports[i], NULL);
-                return;
+                return EXIT_SUCCESS;
             }
         }
     }
+
+    return EXIT_FAILURE;
 }
-void
-txn_del_bridge_queue(const xmlChar *br_name, const xmlChar *resource_id)
+int
+txn_del_bridge_queue(const xmlChar *br_name, const xmlChar *resource_id,
+                     struct nc_err **e)
 {
     const struct ovsrec_bridge *bridge;
     struct ovsrec_qos *qos;
@@ -2905,7 +3109,9 @@ txn_del_bridge_queue(const xmlChar *br_name, const xmlChar *resource_id)
     int cmp;
 
     if (!resource_id || !br_name) {
-        return;
+        nc_verb_error("%s: invalid input parameters.", __func__);
+        *e = nc_err_new(NC_ERR_OP_FAILED);
+        return EXIT_FAILURE;
     }
 
     nc_verb_verbose("Delete queue %s from %s bridge resource list.",
@@ -2916,14 +3122,18 @@ txn_del_bridge_queue(const xmlChar *br_name, const xmlChar *resource_id)
         }
     }
     if (bridge == NULL) {
-        /* not found */
-        return;
+        *e = nc_err_new(NC_ERR_BAD_ELEM);
+        nc_err_set(*e, NC_ERR_PARAM_INFO_BADELEM, "id");
+        nc_err_set(*e, NC_ERR_PARAM_MSG, "Logical-switch does not exist in OVSDB");
+        return EXIT_FAILURE;
     }
+
+    /* TODO store resource-id into OVSDB's external_ids column */
 
     resid = ofc_resmap_find_r(ovsdb_handler->resource_map, (const char *) resource_id);
     if (resid == NULL) {
         /* not found */
-        return;
+        return EXIT_FAILURE;
     }
     for (i = 0; i < bridge->n_ports; i++) {
         qos = bridge->ports[i]->qos;
@@ -2942,24 +3152,31 @@ txn_del_bridge_queue(const xmlChar *br_name, const xmlChar *resource_id)
                 //}
                 //ovsrec_qos_set_queues(qos, NULL, NULL, 0);
                 //ovsrec_qos_delete(qos);
-                return;
+                return EXIT_SUCCESS;
             }
         }
     }
+
+    return EXIT_FAILURE;
 }
 
-void
-txn_del_bridge_flow_table(const xmlChar *br_name, const xmlChar *resource_id)
+int
+txn_del_bridge_flow_table(const xmlChar *br_name, const xmlChar *resource_id,
+                          struct nc_err **e)
 {
     if (!resource_id || !br_name) {
-        return;
+        nc_verb_error("%s: invalid input parameters.", __func__);
+        *e = nc_err_new(NC_ERR_OP_FAILED);
+        return EXIT_FAILURE;
     }
     nc_verb_verbose("Remove flow-table %s from %s bridge resource list.",
                     BAD_CAST resource_id, BAD_CAST br_name);
+
+    return EXIT_SUCCESS;
 }
 
-void
-txn_del_bridge(const xmlChar *br_name)
+int
+txn_del_bridge(const xmlChar *br_name, struct nc_err **e)
 {
     struct ovsrec_bridge **bridges;
     const struct ovsrec_bridge *bridge;
@@ -2967,7 +3184,9 @@ txn_del_bridge(const xmlChar *br_name)
     size_t i, j;
 
     if (!br_name) {
-        return;
+        nc_verb_error("%s: invalid input parameters.", __func__);
+        *e = nc_err_new(NC_ERR_OP_FAILED);
+        return EXIT_FAILURE;
     }
 
     /* remove bridge reference from Open_vSwitch table */
@@ -2991,10 +3210,12 @@ txn_del_bridge(const xmlChar *br_name)
 
     /* remove bridge itself */
     ovsrec_bridge_delete(bridge);
+
+    return EXIT_SUCCESS;
 }
 
-void
-txn_del_queue(const xmlChar *resource_id)
+int
+txn_del_queue(const xmlChar *resource_id, struct nc_err **e)
 {
     const struct ovsrec_queue *queue;
     size_t i, n_queues;
@@ -3002,7 +3223,9 @@ txn_del_queue(const xmlChar *resource_id)
     bool cmp, changed = false;
 
     if (!resource_id) {
-        return;
+        nc_verb_error("%s: invalid input parameters.", __func__);
+        *e = nc_err_new(NC_ERR_OP_FAILED);
+        return EXIT_FAILURE;
     }
     nc_verb_verbose("Delete queue %s.", BAD_CAST resource_id);
     queue = find_queue(resource_id);
@@ -3028,14 +3251,23 @@ txn_del_queue(const xmlChar *resource_id)
         /* remove queue itself */
         ovsrec_queue_delete(queue);
     }
+
+    return EXIT_SUCCESS;
 }
 
 /* /capable-switch/logical-switches/switch/controllers/controller/local-ip-address */
-void
-txn_mod_contr_lip(const xmlChar *contr_id, const xmlChar* value)
+int
+txn_mod_contr_lip(const xmlChar *contr_id, const xmlChar* value,
+                  struct nc_err **e)
 {
     const struct ovsrec_controller *contr;
     const char *aux;
+
+    if (!contr_id) {
+        nc_verb_error("%s: invalid input parameters.", __func__);
+        *e = nc_err_new(NC_ERR_OP_FAILED);
+        return EXIT_FAILURE;
+    }
 
     OVSREC_CONTROLLER_FOR_EACH(contr, ovsdb_handler->idl) {
         aux = smap_get(&(contr->external_ids), "ofconfig-id");
@@ -3044,15 +3276,20 @@ txn_mod_contr_lip(const xmlChar *contr_id, const xmlChar* value)
         }
     }
     if (!contr) {
-        return;
+        *e = nc_err_new(NC_ERR_BAD_ELEM);
+        nc_err_set(*e, NC_ERR_PARAM_INFO_BADELEM, "id");
+        nc_err_set(*e, NC_ERR_PARAM_MSG, "Controller does not exist in OVSDB");
+        return EXIT_FAILURE;
     }
 
     ovsrec_controller_set_local_ip(contr, (char*)value);
+
+    return EXIT_SUCCESS;
 }
 
 /* /capable-switch/logical-switches/switch/controllers/controller */
-void
-txn_add_contr(xmlNodePtr node, const xmlChar *br_name)
+int
+txn_add_contr(xmlNodePtr node, const xmlChar *br_name, struct nc_err **e)
 {
     struct ovsrec_controller *contr;
     struct ovsrec_controller **contrs;
@@ -3061,6 +3298,12 @@ txn_add_contr(xmlNodePtr node, const xmlChar *br_name)
     const char *proto = "ssl", *ip, *port = NULL;
     char *target = NULL;
     int i;
+
+    if (!br_name || !node) {
+        nc_verb_error("%s: invalid input parameters.", __func__);
+        *e = nc_err_new(NC_ERR_OP_FAILED);
+        return EXIT_FAILURE;
+    }
 
     contr = ovsrec_controller_insert(ovsdb_handler->txn);
     ovsrec_controller_set_connection_mode(contr, "in-band");
@@ -3099,7 +3342,10 @@ txn_add_contr(xmlNodePtr node, const xmlChar *br_name)
         }
     }
     if (!br) {
-        return;
+        *e = nc_err_new(NC_ERR_BAD_ELEM);
+        nc_err_set(*e, NC_ERR_PARAM_INFO_BADELEM, "id");
+        nc_err_set(*e, NC_ERR_PARAM_MSG, "Bridge does not exist in OVSDB");
+        return EXIT_FAILURE;
     }
 
     contrs = malloc(sizeof *br->controller * (br->n_controller + 1));
@@ -3110,17 +3356,26 @@ txn_add_contr(xmlNodePtr node, const xmlChar *br_name)
 
     ovsrec_bridge_set_controller(br, contrs, br->n_controller + 1);
     free(contrs);
+
+    return EXIT_SUCCESS;
 }
 
 /* /capable-switch/logical-switches/switch/controllers/controller */
-void
-txn_del_contr(const xmlChar *contr_id, const xmlChar *br_name)
+int
+txn_del_contr(const xmlChar *contr_id, const xmlChar *br_name,
+              struct nc_err **e)
 {
     const struct ovsrec_bridge *br;
     const struct ovsrec_controller *contr;
     struct ovsrec_controller **contrs;
     const char *aux;
     int i, j;
+
+    if (!contr_id || !br_name) {
+        nc_verb_error("%s: invalid input parameters.", __func__);
+        *e = nc_err_new(NC_ERR_OP_FAILED);
+        return EXIT_FAILURE;
+    }
 
     OVSREC_CONTROLLER_FOR_EACH(contr, ovsdb_handler->idl) {
         aux = smap_get(&(contr->external_ids), "ofconfig-id");
@@ -3129,7 +3384,10 @@ txn_del_contr(const xmlChar *contr_id, const xmlChar *br_name)
         }
     }
     if (!contr) {
-        return;
+        *e = nc_err_new(NC_ERR_BAD_ELEM);
+        nc_err_set(*e, NC_ERR_PARAM_INFO_BADELEM, "id");
+        nc_err_set(*e, NC_ERR_PARAM_MSG, "Controller does not exist in OVSDB");
+        return EXIT_FAILURE;
     }
 
     /* remove controller from the bridge */
@@ -3139,7 +3397,10 @@ txn_del_contr(const xmlChar *contr_id, const xmlChar *br_name)
         }
     }
     if (!br) {
-        return;
+        *e = nc_err_new(NC_ERR_BAD_ELEM);
+        nc_err_set(*e, NC_ERR_PARAM_INFO_BADELEM, "id");
+        nc_err_set(*e, NC_ERR_PARAM_MSG, "Bridge does not exist in OVSDB");
+        return EXIT_FAILURE;
     }
 
     contrs = malloc(sizeof *br->controller * (br->n_controller - 1));
@@ -3153,18 +3414,26 @@ txn_del_contr(const xmlChar *contr_id, const xmlChar *br_name)
 
     /* remove the controller itself */
     ovsrec_controller_delete(contr);
+
+    return EXIT_SUCCESS;
 }
 
 /* /capable-switch/logical-switches/switch/controllers/controller/--
  * -- ip-address, port, protocol
  */
-void
+int
 txn_mod_contr_target(const xmlChar *contr_id, const xmlChar *name,
-                     const xmlChar *value)
+                     const xmlChar *value, struct nc_err **e)
 {
     const struct ovsrec_controller *contr;
     char *aux;
     const char *p;
+
+    if (!contr_id || !name) {
+        nc_verb_error("%s: invalid input parameters.", __func__);
+        *e = nc_err_new(NC_ERR_OP_FAILED);
+        return EXIT_FAILURE;
+    }
 
     OVSREC_CONTROLLER_FOR_EACH(contr, ovsdb_handler->idl) {
         p = smap_get(&(contr->external_ids), "ofconfig-id");
@@ -3173,7 +3442,10 @@ txn_mod_contr_target(const xmlChar *contr_id, const xmlChar *name,
         }
     }
     if (!contr) {
-        return;
+        *e = nc_err_new(NC_ERR_BAD_ELEM);
+        nc_err_set(*e, NC_ERR_PARAM_INFO_BADELEM, "id");
+        nc_err_set(*e, NC_ERR_PARAM_MSG, "Controller does not exist in OVSDB");
+        return EXIT_FAILURE;
     }
 
     if (!contr->target) {
@@ -3222,11 +3494,14 @@ txn_mod_contr_target(const xmlChar *contr_id, const xmlChar *name,
             ovsrec_controller_set_target(contr, NULL);
         }
     }
+
+    return EXIT_SUCCESS;
 }
 
 /* /capable-switch/logical-switches/switch/datapath-id */
-void
-txn_mod_bridge_datapath(const xmlChar *br_name, const xmlChar* value)
+int
+txn_mod_bridge_datapath(const xmlChar *br_name, const xmlChar* value,
+                        struct nc_err **e)
 {
     int i, j;
     static char dp[17];
@@ -3234,7 +3509,9 @@ txn_mod_bridge_datapath(const xmlChar *br_name, const xmlChar* value)
     const struct ovsrec_bridge *bridge;
 
     if (!br_name) {
-        return;
+        nc_verb_error("%s: invalid input parameters.", __func__);
+        *e = nc_err_new(NC_ERR_OP_FAILED);
+        return EXIT_FAILURE;
     }
 
     OVSREC_BRIDGE_FOR_EACH(bridge, ovsdb_handler->idl) {
@@ -3243,7 +3520,10 @@ txn_mod_bridge_datapath(const xmlChar *br_name, const xmlChar* value)
         }
     }
     if (!bridge) {
-        return;
+        *e = nc_err_new(NC_ERR_BAD_ELEM);
+        nc_err_set(*e, NC_ERR_PARAM_INFO_BADELEM, "id");
+        nc_err_set(*e, NC_ERR_PARAM_MSG, "Bridge does not exist in OVSDB");
+        return EXIT_FAILURE;
     }
 
     smap_clone(&othcfg, &bridge->other_config);
@@ -3254,7 +3534,11 @@ txn_mod_bridge_datapath(const xmlChar *br_name, const xmlChar* value)
         if (xmlStrlen(value) != 23) {
             nc_verb_error("Invalid datapath (%s)", value);
             smap_destroy(&othcfg);
-            return;
+
+            *e = nc_err_new(NC_ERR_BAD_ELEM);
+            nc_err_set(*e, NC_ERR_PARAM_INFO_BADELEM, "datapath-id");
+            nc_err_set(*e, NC_ERR_PARAM_MSG, "Invalid value to set");
+            return EXIT_FAILURE;
         }
 
         for (i = j = 0; i < 17; i++, j++) {
@@ -3273,16 +3557,21 @@ txn_mod_bridge_datapath(const xmlChar *br_name, const xmlChar* value)
     ovsrec_bridge_verify_other_config(bridge);
     ovsrec_bridge_set_other_config(bridge, &othcfg);
     smap_destroy(&othcfg);
+
+    return EXIT_SUCCESS;
 }
 
 /* /capable-switch/logical-switches/switch/lost-connection-behavior */
-void
-txn_mod_bridge_failmode(const xmlChar *br_name, const xmlChar* value)
+int
+txn_mod_bridge_failmode(const xmlChar *br_name, const xmlChar* value,
+                        struct nc_err **e)
 {
     const struct ovsrec_bridge *bridge;
 
     if (!br_name) {
-        return;
+        nc_verb_error("%s: invalid input parameters.", __func__);
+        *e = nc_err_new(NC_ERR_OP_FAILED);
+        return EXIT_FAILURE;
     }
 
     OVSREC_BRIDGE_FOR_EACH(bridge, ovsdb_handler->idl) {
@@ -3291,7 +3580,10 @@ txn_mod_bridge_failmode(const xmlChar *br_name, const xmlChar* value)
         }
     }
     if (!bridge) {
-        return;
+        *e = nc_err_new(NC_ERR_BAD_ELEM);
+        nc_err_set(*e, NC_ERR_PARAM_INFO_BADELEM, "id");
+        nc_err_set(*e, NC_ERR_PARAM_MSG, "Bridge does not exist in OVSDB");
+        return EXIT_FAILURE;
     }
 
     if (value && xmlStrEqual(value, BAD_CAST "failStandaloneMode")) {
@@ -3300,12 +3592,14 @@ txn_mod_bridge_failmode(const xmlChar *br_name, const xmlChar* value)
         /* default mode */
         ovsrec_bridge_set_fail_mode(bridge, "secure");
     }
+
+    return EXIT_SUCCESS;
 }
 
 /* Insert bridge reference into the Open_vSwitch table */
-static void
+static int
 txn_ovs_insert_bridge(const struct ovsrec_open_vswitch *ovs,
-                      struct ovsrec_bridge *bridge)
+                      struct ovsrec_bridge *bridge, struct nc_err **e)
 {
     assert(ovs);
     assert(bridge);
@@ -3322,18 +3616,22 @@ txn_ovs_insert_bridge(const struct ovsrec_open_vswitch *ovs,
     ovsrec_open_vswitch_verify_bridges(ovs);
     ovsrec_open_vswitch_set_bridges(ovs, bridges, ovs->n_bridges + 1);
     free(bridges);
+
+    return EXIT_SUCCESS;
 }
 
 /* Insert port reference into the Bridge table */
-static void
+static int
 txn_bridge_insert_port(const struct ovsrec_bridge *bridge,
-                       struct ovsrec_port *port)
+                       struct ovsrec_port *port, struct nc_err **e)
 {
     struct ovsrec_port **ports;
     size_t i;
 
     if (!bridge || !port) {
-        return;
+        nc_verb_error("%s: invalid input parameters.", __func__);
+        *e = nc_err_new(NC_ERR_OP_FAILED);
+        return EXIT_FAILURE;
     }
     nc_verb_verbose("Add port %s %s", port->name, print_uuid_ro(&port->header_.uuid));
 
@@ -3345,10 +3643,12 @@ txn_bridge_insert_port(const struct ovsrec_bridge *bridge,
     ovsrec_bridge_verify_ports(bridge);
     ovsrec_bridge_set_ports(bridge, ports, bridge->n_ports + 1);
     free(ports);
+
+    return EXIT_SUCCESS;
 }
 
-void
-txn_add_bridge(xmlNodePtr node)
+int
+txn_add_bridge(xmlNodePtr node, struct nc_err **e)
 {
     const struct ovsrec_open_vswitch *ovs;
     const struct ovsrec_bridge *bridge, *next;
@@ -3358,7 +3658,9 @@ txn_add_bridge(xmlNodePtr node)
     int failmode_flag = 0;
 
     if (!node) {
-        return;
+        nc_verb_error("%s: invalid input parameters.", __func__);
+        *e = nc_err_new(NC_ERR_OP_FAILED);
+        return EXIT_FAILURE;
     }
     /* find id */
     for (aux = node->children; aux; aux = aux->next) {
@@ -3367,7 +3669,7 @@ txn_add_bridge(xmlNodePtr node)
         }
 
         if (xmlStrEqual(aux->name, BAD_CAST "id")) {
-            bridge_id = xmlNodeGetContent(aux);
+            bridge_id = aux->children ? aux->children->content : NULL;
             break;
         }
     }
@@ -3376,8 +3678,10 @@ txn_add_bridge(xmlNodePtr node)
     OVSREC_BRIDGE_FOR_EACH_SAFE(bridge, next, ovsdb_handler->idl) {
         if (xmlStrEqual(bridge_id, BAD_CAST bridge->name)) {
             /* existing bridge, exit */
-            xmlFree(bridge_id);
-            return;
+            *e = nc_err_new(NC_ERR_BAD_ELEM);
+            nc_err_set(*e, NC_ERR_PARAM_INFO_BADELEM, "id");
+            nc_err_set(*e, NC_ERR_PARAM_MSG, "Bridge already exists in OVSDB");
+            return EXIT_FAILURE;
         }
     }
 
@@ -3389,11 +3693,12 @@ txn_add_bridge(xmlNodePtr node)
 
     /* create new bridge and add it into Open_vSwitch table */
     bridge = ovsrec_bridge_insert(ovsdb_handler->txn);
-    txn_ovs_insert_bridge(ovs, (struct ovsrec_bridge*)bridge);
+    if (txn_ovs_insert_bridge(ovs, (struct ovsrec_bridge*)bridge, e)) {
+        return EXIT_FAILURE;
+    }
 
     ovsrec_bridge_verify_name(bridge);
     ovsrec_bridge_set_name(bridge, (char *) bridge_id);
-    xmlFree(bridge_id);
 
     for (aux = node->children; aux; aux = aux->next) {
         if (aux->type != XML_ELEMENT_NODE) {
@@ -3401,20 +3706,22 @@ txn_add_bridge(xmlNodePtr node)
         }
 
         if (xmlStrEqual(aux->name, BAD_CAST "datapath-id")) {
-            xmlval = xmlNodeGetContent(aux);
-            txn_mod_bridge_datapath(BAD_CAST bridge->name, xmlval);
-            xmlFree(xmlval);
+            xmlval = aux->children ? aux->children->content : NULL;
+            if (txn_mod_bridge_datapath(BAD_CAST bridge->name, xmlval, e)) {
+                return EXIT_FAILURE;
+            }
         } else if (xmlStrEqual(aux->name, BAD_CAST "resources")) {
             for (leaf = aux->children; leaf; leaf = leaf->next) {
                 if (xmlStrEqual(leaf->name, BAD_CAST "port")) {
-                    xmlval = xmlNodeGetContent(leaf);
+                    xmlval = leaf->children ? leaf->children->content : NULL;
                     OVSREC_PORT_FOR_EACH(port, ovsdb_handler->idl) {
                         if (xmlStrEqual(xmlval, BAD_CAST port->name)) {
                             break;
                         }
                     }
-                    txn_bridge_insert_port(bridge, (struct ovsrec_port *)port);
-                    xmlFree(xmlval);
+                    if (txn_bridge_insert_port(bridge, (struct ovsrec_port *)port, e)) {
+                        return EXIT_FAILURE;
+                    }
                 }
                 /* TODO: queue, flow-table
                  * certificate is already set, there is no explicit link to it
@@ -3423,10 +3730,14 @@ txn_add_bridge(xmlNodePtr node)
             }
         } else if (xmlStrEqual(aux->name, BAD_CAST "controllers")) {
             for (leaf = aux->children; leaf; leaf = leaf->next) {
-                txn_add_contr(leaf, BAD_CAST bridge->name);
+                if (txn_add_contr(leaf, BAD_CAST bridge->name, e)) {
+                    return EXIT_FAILURE;
+                }
             }
         } else if (xmlStrEqual(aux->name, BAD_CAST "lost-connection-behavior")) {
-            txn_mod_bridge_failmode(BAD_CAST bridge->name, aux->children->content);
+            if (txn_mod_bridge_failmode(BAD_CAST bridge->name, aux->children->content, e)) {
+                return EXIT_FAILURE;
+            }
             failmode_flag = 1;
         }
         /* enabled is not handled:
@@ -3437,12 +3748,16 @@ txn_add_bridge(xmlNodePtr node)
 
     if (!failmode_flag) {
         /* set default value for fail_mode */
-        txn_mod_bridge_failmode(BAD_CAST bridge->name, NULL);
+        if (txn_mod_bridge_failmode(BAD_CAST bridge->name, NULL, e)) {
+            return EXIT_FAILURE;
+        }
     }
+
+    return EXIT_FAILURE;
 }
 
 const xmlChar *
-ofc_find_bridge_for_port_iterative(xmlChar *port_name)
+ofc_find_bridge_with_port(const xmlChar *port_name)
 {
     const struct ovsrec_bridge *bridge, *next;
     const struct ovsrec_port *port;
@@ -3519,14 +3834,21 @@ cleanup:
     return bridge_name;
 }
 
-void
-txn_mod_port_add_tunnel(const xmlChar *port_name, xmlNodePtr tunnel_node)
+int
+txn_mod_port_add_tunnel(const xmlChar *port_name, xmlNodePtr tunnel_node,
+                        struct nc_err **e)
 {
     xmlNodePtr iter;
     char *option, *value;
     struct smap opt_cl;
     const struct ovsrec_interface *ifc, *next, *found = NULL;
     nc_verb_verbose("Adding tunnel (%s:%d)", __FILE__, __LINE__);
+
+    if (!port_name || !tunnel_node) {
+        nc_verb_error("%s: invalid input parameters.", __func__);
+        *e = nc_err_new(NC_ERR_OP_FAILED);
+        return EXIT_FAILURE;
+    }
 
     OVSREC_INTERFACE_FOR_EACH_SAFE(ifc, next, ovsdb_handler->idl) {
         if (!strncmp(ifc->name, (char *) port_name, strlen(ifc->name)+1)) {
@@ -3535,8 +3857,11 @@ txn_mod_port_add_tunnel(const xmlChar *port_name, xmlNodePtr tunnel_node)
         }
     }
     if (found == NULL) {
-        /* not found */
-        return;
+        /* existing bridge, exit */
+        *e = nc_err_new(NC_ERR_BAD_ELEM);
+        nc_err_set(*e, NC_ERR_PARAM_INFO_BADELEM, "name");
+        nc_err_set(*e, NC_ERR_PARAM_MSG, "Port does not exist in OVSDB");
+        return EXIT_FAILURE;
     }
 
     smap_clone(&opt_cl, &ifc->options);
@@ -3565,5 +3890,7 @@ txn_mod_port_add_tunnel(const xmlChar *port_name, xmlNodePtr tunnel_node)
     }
     ovsrec_interface_verify_options(ifc);
     ovsrec_interface_set_options(ifc, &opt_cl);
+
+    return EXIT_SUCCESS;
 }
 

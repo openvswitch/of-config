@@ -35,13 +35,6 @@
 #include "data.h"
 #include "edit-config.c"
 
-
-#ifdef __GNUC__
-#   define UNUSED(x) UNUSED_ ## x __attribute__((__unused__))
-#else
-#   define UNUSED(x) UNUSED_ ## x
-#endif
-
 #define XML_READ_OPT XML_PARSE_NOBLANKS|XML_PARSE_NSCLEAN
 
 /* daemonize flag from server.c */
@@ -268,7 +261,10 @@ ofcds_deleteconfig(void *UNUSED(data), NC_DATASTORE target,
     switch(target) {
     case NC_DATASTORE_RUNNING:
         txn_init();
-        txn_del_all();
+        if (txn_del_all(error)) {
+            txn_abort();
+            return EXIT_FAILURE;
+        }
         ofc_set_switchid(NULL);
         return txn_commit(error);
     case NC_DATASTORE_STARTUP:

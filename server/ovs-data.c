@@ -2027,9 +2027,9 @@ txn_add_queue(xmlNodePtr node)
         }
 
         if (xmlStrEqual(aux->name, BAD_CAST "resource-id")) {
-            resource_id = xmlNodeGetContent(aux);
+            resource_id = aux->children->content;
         } else if (xmlStrEqual(aux->name, BAD_CAST "id")) {
-            id = xmlNodeGetContent(aux);
+            id = aux->children->content;
         } else if (xmlStrEqual(aux->name, BAD_CAST "port")) {
             port = aux;
         } else if (xmlStrEqual(aux->name, BAD_CAST "properties")) {
@@ -2058,7 +2058,6 @@ txn_add_queue(xmlNodePtr node)
 
     ovsrec_queue_verify_other_config(queue);
     ovsrec_queue_set_other_config(queue, &queue->other_config);
-    xmlFree(resource_id);
 }
 
 static const struct ovsrec_port *

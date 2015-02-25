@@ -48,11 +48,15 @@ volatile int mainloop = 0;
 /* daemonize flag for hack in ofconfig-datastore.c */
 volatile int ofc_daemonize = 1;
 
+/* OVSDB socket path shared with ofconfig-datastore.c */
+extern char *ovsdb_path;
+
 /* Print usage help */
 static void
 print_usage(char *progname)
 {
-    fprintf(stdout, "Usage: %s [-fh] [-v level]\n", progname);
+    fprintf(stdout, "Usage: %s [-fh] [-d OVSDB] [-v level]\n", progname);
+    fprintf(stdout, " -d,--db  OVSDB         socket path to communicate with OVSDB\n");
     fprintf(stdout, " -f,--foreground        run in foreground\n");
     fprintf(stdout, " -h,--help              display help\n");
     fprintf(stdout, " -v,--verbose level     verbose output level\n");
@@ -92,9 +96,10 @@ signal_handler(int sig)
 int
 main(int argc, char **argv)
 {
-    const char *optstring = "fhv:";
+    const char *optstring = "d:fhv:";
 
     const struct option longopts[] = {
+        {"db", required_argument, 0, 'd'},
         {"foreground", no_argument, 0, 'f'},
         {"help", no_argument, 0, 'h'},
         {"verbose", required_argument, 0, 'v'},
@@ -129,6 +134,9 @@ main(int argc, char **argv)
     while ((next_option = getopt_long(argc, argv, optstring, longopts,
                                       &longindex)) != -1) {
         switch (next_option) {
+        case 'd':
+            ovsdb_path = strdup(optarg);
+            break;
         case 'f':
             ofc_daemonize = 0;
             break;

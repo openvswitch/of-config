@@ -18,17 +18,23 @@
  * - NACM
  */
 
+#define _GNU_SOURCE
 #include <config.h>
 
 #include <assert.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <syslog.h>
 
 #include <libnetconf.h>
 
+/* libovs */
+#include <dirs.h>
+
 #include "data.h"
 #include "edit-config.c"
+
 
 #ifdef __GNUC__
 #   define UNUSED(x) UNUSED_ ## x __attribute__((__unused__))
@@ -40,6 +46,9 @@
 
 /* daemonize flag from server.c */
 extern int ofc_daemonize;
+
+/* OVSDB socket path shared with server.c */
+char *ovsdb_path = NULL;
 
 /* local locks info */
 struct {
@@ -61,8 +70,11 @@ int ofcds_deleteconfig(void *UNUSED(data), NC_DATASTORE UNUSED(target),
 int
 ofcds_init(void *UNUSED(data))
 {
-    /* TODO replace OFC_OVS_DBPATH with some parameter */
-    if (ofc_init(OFC_OVS_DBPATH) == false) {
+    if (!ovsdb_path) {
+        /* default path */
+        asprintf(&ovsdb_path, "unix:%s/db.sock", ovs_rundir());
+    }
+    if (ofc_init(ovsdb_path) == false) {
         return EXIT_FAILURE;
     }
 

@@ -2238,7 +2238,7 @@ txn_mod_queue_options(const xmlChar *resource_id, const char *option, xmlNodePtr
     xmlChar *value;
     queue = find_queue(resource_id);
     if (queue == NULL) {
-        goto cleanup;
+        return;
     }
     if (edit != NULL) {
         /* add */

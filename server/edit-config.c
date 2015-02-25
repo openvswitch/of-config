@@ -1044,8 +1044,7 @@ edit_delete(xmlNodePtr node, int running, struct nc_err **e)
                     key = get_key(node, "name");
                     ret = txn_del_port(key, e);
                 } else if (xmlStrEqual(node->name, BAD_CAST "queue")) {
-                    key = get_key(node, "resource-id");
-                    ret = txn_del_queue(key, e);
+                    ret = txn_del_queue(node, e);
                 } else if (xmlStrEqual(node->name,
                                        BAD_CAST "owned-certificate")) {
                     ret = txn_del_owned_certificate(node, e);
@@ -1076,9 +1075,7 @@ edit_delete(xmlNodePtr node, int running, struct nc_err **e)
                 } else if (xmlStrEqual(node->name, BAD_CAST "port")) {
                     ret = txn_del_bridge_port(key, aux, e);
                 } else if (xmlStrEqual(node->name, BAD_CAST "queue")) {
-               /* TODO TC handle error */
-               value = node->children->content;
-                    txn_del_queue(value);
+                    ret = txn_del_queue(node, e);
                 } else if (xmlStrEqual(node->name, BAD_CAST "flow-table")) {
                     ret = txn_del_flow_table(node, e);
                 }
@@ -1406,9 +1403,10 @@ edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running, struct nc_err **e)
                     ret = EXIT_FAILURE;
                 } else if (xmlStrEqual(edit->name, BAD_CAST "port")) {
                     ret = txn_add_bridge_port(key, aux, e);
-                // TODO useless?: queue is connected to port (port is placed inside <queue>) -> use this only for delete
-                //} else if (xmlStrEqual(edit->name, BAD_CAST "queue")) {
-                //    ret = txn_add_bridge_queue(key, aux, e);
+                /*} else if (xmlStrEqual(edit->name, BAD_CAST "queue")) {
+                 * queue is connected to port (port is placed inside <queue>)
+                 *    -> use this only element only for delete
+                 */
                 } else if (xmlStrEqual(edit->name, BAD_CAST "flow-table")) {
                     /* TODO TC: flow-table: add link, do nothing if flow-table does not exist */
                 }

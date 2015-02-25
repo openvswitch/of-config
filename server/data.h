@@ -119,7 +119,7 @@ int txn_mod_port_add_tunnel(const xmlChar *port_name, xmlNodePtr tunnel_node, st
 int txn_del_port_tunnel(const xmlChar *port_name, xmlNodePtr tunnel_node, struct nc_err **e);
 
 int txn_add_queue(xmlNodePtr node, struct nc_err **e);
-int txn_del_queue(const xmlChar *resource_id, struct nc_err **e);
+int txn_del_queue(const xmlNodePtr node, struct nc_err **e);
 int txn_add_queue_port(const xmlChar *resource_id, xmlNodePtr edit, struct nc_err **e);
 int txn_add_queue_id(const xmlChar *resource_id, xmlNodePtr edit, struct nc_err **e);
 int txn_del_queue_port(const xmlChar *resource_id, xmlNodePtr edit, struct nc_err **e);

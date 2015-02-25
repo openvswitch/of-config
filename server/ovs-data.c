@@ -1490,12 +1490,6 @@ ofc_init(const char *ovs_db_path)
         return false;
     }
     p->added_interface = false;
-    /* create new resource-id map of 1024 elements, it will grow when needed */
-    p->resource_map = ofc_resmap_init(1024);
-    if (p->resource_map == NULL) {
-        free(p);
-        return false;
-    }
 
     p->cert_map = calloc(1, sizeof(struct ofc_resmap_certificate));
     if (p->cert_map == NULL) {
@@ -2599,7 +2593,6 @@ txn_del_flow_table(xmlNodePtr node, struct nc_err **e)
 
     /* TODO: TC - do not use xmlNodeGetContent() or check the return value */
 
-    table_id_txt = xmlNodeGetContent(go2node(node, BAD_CAST "table-id"));
     if (xmlStrEqual(node->parent->parent->name, BAD_CAST "capable-switch")) {
         table_id_txt = xmlNodeGetContent(go2node(node, BAD_CAST "table-id"));
         nc_verb_verbose("Deleting flow-table from resources.");
@@ -3052,55 +3045,6 @@ txn_add_bridge_port(const xmlChar *br_name, const xmlChar *port_name,
 }
 
 int
-txn_add_bridge_queue(const xmlChar *br_name, const xmlChar *resource_id,
-                     struct nc_err **e)
-{
-    const struct ovsrec_bridge *bridge;
-    struct ovsrec_qos *qos;
-    const struct ovsrec_queue *queue;
-    size_t i, q;
-    int cmp;
-
-    if (!resource_id || !br_name) {
-        nc_verb_error("%s: invalid input parameters.", __func__);
-        *e = nc_err_new(NC_ERR_OP_FAILED);
-        return EXIT_FAILURE;
-    }
-
-    nc_verb_verbose("Add queue %s to %s bridge resource list.",
-                    BAD_CAST resource_id, BAD_CAST br_name);
-    OVSREC_BRIDGE_FOR_EACH(bridge, ovsdb_handler->idl) {
-        if (xmlStrEqual(br_name, BAD_CAST bridge->name)) {
-            break;
-        }
-    }
-    if (bridge == NULL) {
-        *e = nc_err_new(NC_ERR_BAD_ELEM);
-        nc_err_set(*e, NC_ERR_PARAM_INFO_BADELEM, "id");
-        nc_err_set(*e, NC_ERR_PARAM_MSG, "Logical switch does not exist in OVSDB");
-        return EXIT_FAILURE;
-    }
-
-    queue = find_queue(resource_id);
-    for (i = 0; i < bridge->n_ports; i++) {
-        qos = bridge->ports[i]->qos;
-        if (qos == NULL) {
-            continue;
-        }
-        for (q = 0; q < qos->n_queues; q++) {
-            /* compare with resource-id */
-            cmp = uuid_equals(&qos->value_queues[q]->header_.uuid,
-                              &queue->header_.uuid);
-            if (cmp) {
-                ovsrec_port_verify_qos(bridge->ports[i]);
-                ovsrec_port_set_qos(bridge->ports[i], NULL);
-                return EXIT_SUCCESS;
-            }
-        }
-    }
-}
-
-int
 txn_del_bridge(const xmlChar *br_name, struct nc_err **e)
 {
     struct ovsrec_bridge **bridges;
@@ -3140,32 +3084,81 @@ txn_del_bridge(const xmlChar *br_name, struct nc_err **e)
 }
 
 int
-txn_del_queue(const xmlChar *resource_id, struct nc_err **e)
+txn_del_queue(const xmlNodePtr node, struct nc_err **e)
 {
     const struct ovsrec_queue *queue;
     size_t i, n_queues;
     const struct ovsrec_qos *row;
     bool cmp, changed = false;
+    const xmlChar *resource_id = NULL;
+    xmlNodePtr aux;
+    const char *port_name = NULL;
+    const struct ovsrec_port *port = NULL;
 
-    if (!resource_id) {
+    /* TODO: TC - do not use xmlNodeGetContent() or check the return value */
+    if (!node) {
         nc_verb_error("%s: invalid input parameters.", __func__);
         *e = nc_err_new(NC_ERR_OP_FAILED);
         return EXIT_FAILURE;
     }
-    nc_verb_verbose("Delete queue %s.", BAD_CAST resource_id);
+
+    if (xmlStrEqual(node->parent->parent->name, BAD_CAST "capable-switch")) {
+        aux = go2node(node, BAD_CAST "resource-id");
+        if (aux && aux->children && aux->children->content) {
+            resource_id = aux->children->content;
+        } else {
+            *e = nc_err_new(NC_ERR_OP_FAILED);
+            nc_verb_error("%s: no resource-id found.", __func__);
+            return EXIT_FAILURE;
+        }
+    } else {
+        /* we are in switch */
+        if (node->children && node->children->content) {
+            resource_id = node->children->content;
+        } else {
+            *e = nc_err_new(NC_ERR_OP_FAILED);
+            nc_verb_error("%s: no resource-id found.", __func__);
+            return EXIT_FAILURE;
+        }
+    }
+    nc_verb_verbose("Delete queue %s.", resource_id);
     queue = find_queue(resource_id);
 
     /* remove queue reference from qos table */
     OVSREC_QOS_FOR_EACH(row, ovsdb_handler->idl) {
         for (i = 0; i < row->n_queues; i++) {
             cmp = uuid_equals(&queue->header_.uuid,
-                                    &row->value_queues[i]->header_.uuid);
+                              &row->value_queues[i]->header_.uuid);
             if (cmp) {
-                /* found */
+                /* Found... */
+                n_queues = row->n_queues - 1;
+                if (n_queues == 0) {
+                    /* delete QoS that will be empty */
+                    if (find_queue_port(queue, &port_name)) {
+                        port = find_port_by_name(BAD_CAST port_name);
+                        if (port) {
+                            ovsrec_port_verify_qos(port);
+                            ovsrec_port_set_qos(port, NULL);
+                        } else {
+                            nc_verb_error("%s: Port was not found.", __func__);
+                        }
+                    } else {
+                        nc_verb_error("%s: QoS was not found.", __func__);
+                    }
+                }
+
+                /* remove Queue */
                 row->value_queues[i] = row->value_queues[row->n_queues];
                 row->key_queues[i] = row->key_queues[row->n_queues];
-                n_queues = row->n_queues - 1;
-                ovsrec_qos_set_queues(row, row->key_queues, row->value_queues, n_queues);
+                ovsrec_qos_verify_queues(row);
+                ovsrec_qos_set_queues(row, row->key_queues, row->value_queues,
+                                      n_queues);
+
+                if (n_queues == 0) {
+                    /* last queue, we can delete QoS */
+                    ovsrec_qos_delete(row);
+                }
+
                 changed = true;
                 break;
             }

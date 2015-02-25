@@ -2,8 +2,10 @@
 <capable-switch xmlns="urn:onf:config:yang">
   <id>openvswitch</id>
   <resources>
-    <flow-table xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0" nc:operation="remove">
+    <flow-table>
       <table-id>123</table-id>
+      <resource-id>my_flowtable_2</resource-id>
+      <name>flowtable_2</name>
     </flow-table>
   </resources>
 </capable-switch>

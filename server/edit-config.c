@@ -357,14 +357,17 @@ static int
 is_key(xmlNodePtr node)
 {
     if (xmlStrEqual(node->name, BAD_CAST "id")) {
-        if (xmlStrEqual(node->parent->name, BAD_CAST "switch") ||
-                 xmlStrEqual(node->parent->name, BAD_CAST "controller")) {
+        if (xmlStrEqual(node->parent->name, BAD_CAST "switch")
+            || xmlStrEqual(node->parent->name, BAD_CAST "controller")) {
             return 1;
         }
-    } else if (xmlStrEqual(node->name, BAD_CAST "name") &&
-            !xmlStrEqual(node->parent->name, BAD_CAST "flow-table")) {
+    } else if (xmlStrEqual(node->name, BAD_CAST "table-id")) {
         return 1;
-    } else if (xmlStrEqual(node->name, BAD_CAST "resource-id")) {
+    } else if (xmlStrEqual(node->name, BAD_CAST "name")
+               && !xmlStrEqual(node->parent->name, BAD_CAST "flow-table")) {
+        return 1;
+    } else if (xmlStrEqual(node->name, BAD_CAST "resource-id")
+               && !xmlStrEqual(node->parent->name, BAD_CAST "flow-table")) {
         return 1;
     }
 
@@ -455,7 +458,7 @@ matching_elements(xmlNodePtr node1, xmlNodePtr node2)
         aux1 = "name";
     } else if (xmlStrEqual(node2->name, BAD_CAST "flow-table") &&
                     xmlStrEqual(node2->parent->parent->name, BAD_CAST "capable-switch")) {
-        aux1 = "resource-id";
+        aux1 = "table-id";
     } else if ((xmlStrEqual(node2->name, BAD_CAST "queue") ||
                     xmlStrEqual(node2->name, BAD_CAST "owned-certificate") ||
                     xmlStrEqual(node2->name, BAD_CAST "external-certificate")) &&
@@ -1001,7 +1004,8 @@ edit_delete(xmlNodePtr node, int running)
         return EXIT_SUCCESS;
     }
 
-    nc_verb_verbose("Deleting the node %s", (char*)node->name);
+    nc_verb_verbose("Deleting the node %s%s", (char*)node->name,
+                    (running?" Running":""));
     if (running) {
         if (node->parent->type == XML_DOCUMENT_NODE) { /* capable-switch node */
             /* removing root */
@@ -1053,6 +1057,7 @@ edit_delete(xmlNodePtr node, int running)
                                            node->children->content);
                 } else if (xmlStrEqual(node->name, BAD_CAST "flow-table")) {
                     /* TODO TC: flow-table delete from bridge */
+                    txn_del_flow_table(node);
                 } else {
                     /* TODO is everything covered? */
                     nc_verb_error("Element %s is not covered in edit_delete()!!! (parent: %s)",
@@ -1127,6 +1132,14 @@ edit_delete(xmlNodePtr node, int running)
             xmlFree(value);
         } else if (xmlStrEqual(node->parent->name, BAD_CAST "flow-table")) {
             /* TODO TC: flow-table/resource-id, table-id, name  */
+            key = go2node(node->parent, BAD_CAST "table-id");
+            value = xmlNodeGetContent(key);
+            if (xmlStrEqual(node->name, BAD_CAST "name")) {
+                txn_mod_flowtable_name(value, NULL);
+            } else if (xmlStrEqual(node->name, BAD_CAST "resource-id")) {
+                txn_mod_flowtable_resid(value, NULL);
+            }
+            xmlFree(value);
         } else if (xmlStrEqual(node->name, BAD_CAST "controller")) {
             key = go2node(node, BAD_CAST "id");
             aux = go2node(node->parent->parent, BAD_CAST "id");
@@ -1468,6 +1481,14 @@ edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running,
             xmlFree(value);
         } else if (xmlStrEqual(edit->parent->name, BAD_CAST "flow-table")) {
             /* TODO TC: resource-id, table-id, name  */
+            key = go2node(edit->parent, BAD_CAST "table-id");
+            value = xmlNodeGetContent(key);
+            if (xmlStrEqual(edit->name, BAD_CAST "name")) {
+                txn_mod_flowtable_name(value, edit);
+            } else if (xmlStrEqual(edit->name, BAD_CAST "resource-id")) {
+                txn_mod_flowtable_resid(value, edit);
+            }
+            xmlFree(value);
         } else if (xmlStrEqual(edit->name, BAD_CAST "controller")) {
             key = go2node(edit->parent->parent, BAD_CAST "id");
             txn_add_contr(edit, key->children->content);

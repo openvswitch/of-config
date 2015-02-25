@@ -402,7 +402,7 @@ module of-config {
 
       leaf-list flow-table {
         type leafref {
-          path "/capable-switch/resources/flow-table/resource-id";
+          path "/capable-switch/resources/flow-table/table-id";
         }
         description
 	  "A resource identifier of a flow table of the OpenFlow Capable
@@ -1488,7 +1488,7 @@ module of-config {
       }
 
       list flow-table {
-        key resource-id;
+        key table-id;
         description
 	  "The list contains all flow table resources of the OpenFlow Capable
            Switch.";

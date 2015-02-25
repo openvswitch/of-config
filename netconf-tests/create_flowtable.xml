@@ -3,8 +3,8 @@
   <id>openvswitch</id>
   <resources>
     <flow-table xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0" nc:operation="create">
-      <resource-id>my_flowtable</resource-id>
       <table-id>123</table-id>
+      <resource-id>my_flowtable</resource-id>
       <name>flowtable</name>
     </flow-table>
   </resources>
@@ -12,7 +12,7 @@
     <switch>
       <id>ofc-bridge</id>
       <resources>
-        <flow-table>my_flowtable</flow-table>
+        <flow-table>123</flow-table>
       </resources>
     </switch>
   </logical-switches>

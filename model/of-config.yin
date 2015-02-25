@@ -383,7 +383,7 @@ Logical Switch.</text>
       </leaf>
       <leaf-list name="flow-table">
         <type name="leafref">
-          <path value="/capable-switch/resources/flow-table/resource-id"/>
+          <path value="/capable-switch/resources/flow-table/table-id"/>
         </type>
         <description>
           <text>A resource identifier of a flow table of the OpenFlow Capable
@@ -1456,7 +1456,7 @@ OpenFlow Configuration Points.</text>
         <uses name="OFExternalCertificateType"/>
       </list>
       <list name="flow-table">
-        <key value="resource-id"/>
+        <key value="table-id"/>
         <description>
           <text>The list contains all flow table resources of the OpenFlow Capable
        Switch.</text>

@@ -1,10 +1,13 @@
 #!/bin/bash
 netopeer-cli <<KONEC
 connect localhost
-edit-config --config=create_flowtable.xml running
+edit-config --test=set --config=create_flowtable.xml running
 get-config --filter=ovs.xml running
 
-edit-config --config=remove_flowtable.xml running
+edit-config --test=set --config=change_flowtable.xml running
+get-config --filter=ovs.xml running
+
+edit-config --test=set --config=remove_flowtable.xml running
 get-config --filter=ovs.xml running
 
 disconnect

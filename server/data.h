@@ -27,6 +27,13 @@
 #include "res-map.h"
 
 /*
+ * OF-CONFIG uses resource-id to identify some configuration data.  It is
+ * stored into OVSDB for every row that is mapped to OF-CONFIG.  Value of
+ * resource-id is store in 'external_ids' string maps with key
+ * 'OFC_RESOURCE_ID'. */
+#define OFC_RESOURCE_ID "ofc_resource_id"
+
+/*
  * ofconfig-datastore.c
  */
 
@@ -109,6 +116,8 @@ void txn_mod_queue_options(const xmlChar *resource_id, const char *option, xmlNo
 
 void txn_add_flow_table(xmlNodePtr node);
 void txn_del_flow_table(xmlNodePtr node);
+void txn_mod_flowtable_name(const xmlChar *table_id, xmlNodePtr node);
+void txn_mod_flowtable_resid(const xmlChar *table_id, xmlNodePtr node);
 
 void txn_add_owned_certificate(xmlNodePtr node);
 void txn_del_owned_certificate(xmlNodePtr node);

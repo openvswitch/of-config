@@ -19,11 +19,19 @@
 
 #include <libxml/tree.h>
 
+#include <libnetconf.h>
+
 #ifndef OFC_VERBOSITY
 #define OFC_VERBOSITY   0
 #endif
 
 #include <stdbool.h>
+
+#ifdef __GNUC__
+#   define UNUSED(x) UNUSED_ ## x __attribute__((__unused__))
+#else
+#   define UNUSED(x) UNUSED_ ## x
+#endif
 
 /*
  * OF-CONFIG uses resource-id to identify some configuration data.  It is
@@ -52,6 +60,8 @@ struct ofc_resmap_certificate {
  */
 xmlNodePtr go2node(xmlNodePtr parent, xmlChar *name);
 
+const xmlChar *get_key(xmlNodePtr parent, const char *name);
+
 /*
  * Get the operation value from the node, if not present, it tries to get it
  * from parents. If no operation set, it returns defop
@@ -69,7 +79,7 @@ char *ofc_get_state_data(void);
 
 char *ofc_get_config_data(void);
 
-void ofc_of_mod_port(const xmlChar *bridge_name, const xmlChar *port_name, const xmlChar *bit_xchar, const xmlChar *value);
+int ofc_of_mod_port(const xmlChar *bridge_name, const xmlChar *port_name, const xmlChar *bit_xchar, const xmlChar *value, struct nc_err **e);
 
 void ofc_destroy(void);
 
@@ -82,67 +92,55 @@ void txn_init(void);
 /*
  * Delete complete OVSDB content
  */
-void txn_del_all(void);
+int txn_del_all(struct nc_err **e);
 
 /* new functions */
-void txn_del_bridge_port(const xmlChar *br_name, const xmlChar *port_name);
-void txn_add_bridge_port(const xmlChar *br_name, const xmlChar *port_name);
-void txn_del_bridge_queue(const xmlChar *br_name, const xmlChar *resource_id);
-void txn_add_bridge_queue(const xmlChar *br_name, const xmlChar *resource_id);
-void txn_del_bridge_flow_table(const xmlChar *br_name, const xmlChar *resource_id);
-void txn_add_bridge_flow_table(const xmlChar *br_name, const xmlChar *resource_id);
-void txn_del_bridge(const xmlChar *br_name);
-void txn_add_bridge(xmlNodePtr node);
-void txn_mod_bridge_datapath(const xmlChar *br_name, const xmlChar* value);
-void txn_mod_bridge_failmode(const xmlChar *br_name, const xmlChar* value);
+int txn_del_bridge_port(const xmlChar *br_name, const xmlChar *port_name, struct nc_err **e);
+int txn_add_bridge_port(const xmlChar *br_name, const xmlChar *port_name, struct nc_err **e);
+int txn_del_bridge(const xmlChar *br_name, struct nc_err **e);
+int txn_add_bridge(xmlNodePtr node, struct nc_err **e);
+int txn_mod_bridge_datapath(const xmlChar *br_name, const xmlChar* value, struct nc_err **e);
+int txn_mod_bridge_failmode(const xmlChar *br_name, const xmlChar* value, struct nc_err **e);
 
-void txn_del_contr(const xmlChar *contr_id, const xmlChar *br_name);
-void txn_add_contr(xmlNodePtr node, const xmlChar *br_name);
-void txn_mod_contr_lip(const xmlChar *contr_id, const xmlChar* value);
-void txn_mod_contr_target(const xmlChar *contr_id, const xmlChar *name,
-                          const xmlChar *value);
+int txn_del_contr(const xmlChar *contr_id, const xmlChar *br_name, struct nc_err **e);
+int txn_add_contr(xmlNodePtr node, const xmlChar *br_name, struct nc_err **e);
+int txn_mod_contr_lip(const xmlChar *contr_id, const xmlChar* value, struct nc_err **e);
+int txn_mod_contr_target(const xmlChar *contr_id, const xmlChar *name, const xmlChar *value, struct nc_err **e);
 
-void txn_del_port(const xmlChar *port_name);
-void txn_add_port(xmlNodePtr node);
-void txn_add_port_advert(const xmlChar *port_name, xmlNodePtr node);
-void txn_del_port_advert(const xmlChar *port_name, xmlNodePtr node);
-void txn_mod_port_reqnumber(const xmlChar *port_name, const xmlChar* value);
-void txn_mod_port_admin_state(const xmlChar *port_name, const xmlChar* value);
+int txn_del_port(const xmlChar *port_name, struct nc_err **e);
+int txn_add_port(xmlNodePtr node, struct nc_err **e);
+int txn_add_port_advert(const xmlChar *port_name, xmlNodePtr node, struct nc_err **e);
+int txn_del_port_advert(const xmlChar *port_name, xmlNodePtr node, struct nc_err **e);
+int txn_mod_port_reqnumber(const xmlChar *port_name, const xmlChar* value, struct nc_err **e);
+int txn_mod_port_admin_state(const xmlChar *port_name, const xmlChar* value, struct nc_err **e);
 int txn_mod_port_configuration(xmlNodePtr cfg, struct nc_err **error);
 
-void txn_mod_port_add_tunnel(const xmlChar *port_name, xmlNodePtr tunnel_node);
-void txn_del_port_tunnel(const xmlChar *port_name, xmlNodePtr tunnel_node);
+int txn_mod_port_add_tunnel(const xmlChar *port_name, xmlNodePtr tunnel_node, struct nc_err **e);
+int txn_del_port_tunnel(const xmlChar *port_name, xmlNodePtr tunnel_node, struct nc_err **e);
 
-void txn_add_queue(xmlNodePtr node);
-void txn_del_queue(const xmlChar *resource_id);
-void txn_add_queue_port(const xmlChar *resource_id, xmlNodePtr edit);
-void txn_add_queue_id(const xmlChar *resource_id, xmlNodePtr edit);
-void txn_del_queue_port(const xmlChar *resource_id, xmlNodePtr edit);
-void txn_del_queue_id(const xmlChar *resource_id, xmlNodePtr edit);
+int txn_add_queue(xmlNodePtr node, struct nc_err **e);
+int txn_del_queue(const xmlChar *resource_id, struct nc_err **e);
+int txn_add_queue_port(const xmlChar *resource_id, xmlNodePtr edit, struct nc_err **e);
+int txn_add_queue_id(const xmlChar *resource_id, xmlNodePtr edit, struct nc_err **e);
+int txn_del_queue_port(const xmlChar *resource_id, xmlNodePtr edit, struct nc_err **e);
+int txn_del_queue_id(const xmlChar *resource_id, xmlNodePtr edit, struct nc_err **e);
 
 /* if edit is not NULL, add max-rate / min-rate / experimenter-id / experimenter-data into other_options.
  * if edit is null, delete. */
-void txn_mod_queue_options(const xmlChar *resource_id, const char *option, xmlNodePtr edit);
+int txn_mod_queue_options(const xmlChar *resource_id, const char *option, xmlNodePtr edit, struct nc_err **e);
 
-void txn_add_flow_table(xmlNodePtr node);
-void txn_del_flow_table(xmlNodePtr node);
-void txn_mod_flowtable_name(const xmlChar *table_id, xmlNodePtr node);
-void txn_mod_flowtable_resid(const xmlChar *table_id, xmlNodePtr node);
+int txn_add_flow_table(xmlNodePtr node, struct nc_err **e);
+int txn_del_flow_table(xmlNodePtr node, struct nc_err **e);
+int txn_mod_flowtable_name(const xmlChar *table_id, xmlNodePtr node, struct nc_err **e);
+int txn_mod_flowtable_resid(const xmlChar *table_id, xmlNodePtr node, struct nc_err **e);
 
-void txn_add_owned_certificate(xmlNodePtr node);
-void txn_del_owned_certificate(xmlNodePtr node);
-void txn_add_external_certificate(xmlNodePtr node);
-void txn_del_external_certificate(xmlNodePtr node);
+int txn_add_flow_table(xmlNodePtr node, struct nc_err **e);
+int txn_del_flow_table(xmlNodePtr node, struct nc_err **e);
 
-/*
- * Set port parameters
- */
-int txn_set_port(xmlNodePtr p, NC_EDIT_OP_TYPE op, struct nc_err **e);
-
-/*
- * Set bridge parameters
- */
-int txn_set_bridge(xmlNodePtr p, NC_EDIT_OP_TYPE op,  struct nc_err **e);
+int txn_add_owned_certificate(xmlNodePtr node, struct nc_err **e);
+int txn_del_owned_certificate(xmlNodePtr node, struct nc_err **e);
+int txn_add_external_certificate(xmlNodePtr node, struct nc_err **e);
+int txn_del_external_certificate(xmlNodePtr node, struct nc_err **e);
 
 /*
  * Abort the transaction being prepared.
@@ -168,6 +166,6 @@ const xmlChar *ofc_get_switchid(void);
 
 xmlChar *ofc_find_bridge_for_port(xmlNodePtr root, xmlChar *port_name);
 
-const xmlChar *ofc_find_bridge_for_port_iterative(xmlChar *port_name);
+const xmlChar *ofc_find_bridge_with_port(const xmlChar *port_name);
 
 #endif /* data.h */

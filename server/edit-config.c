@@ -30,7 +30,7 @@
 #define XPATH_BUFFER 1024
 
 static int edit_replace(xmlDocPtr, xmlNodePtr, int, struct nc_err**);
-static int edit_delete(xmlNodePtr, int);
+static int edit_delete(xmlNodePtr, int, struct nc_err**);
 static int edit_remove(xmlDocPtr, xmlNodePtr, int, struct nc_err**);
 static int edit_create(xmlDocPtr, xmlNodePtr, int, struct nc_err**);
 static int edit_merge(xmlDocPtr, xmlNodePtr, int, struct nc_err**);
@@ -200,6 +200,21 @@ go2node(xmlNodePtr parent, xmlChar *name)
     }
 
     return child;
+}
+
+const xmlChar *
+get_key(xmlNodePtr parent, const char *name)
+{
+    xmlNodePtr node;
+
+    node = go2node(parent, BAD_CAST name);
+    if (!node || !node->children || !node->children->content ||
+                    xmlIsBlankNode(node->children)) {
+        nc_verb_error("Invalid key of %s", parent->name);
+        return NULL;
+    }
+
+    return node->children->content;
 }
 
 /**
@@ -882,10 +897,10 @@ edit_operations(xmlDocPtr orig_doc, xmlDocPtr edit_doc,
                 }
                 for (; orig_node != NULL; orig_node = find_element_equiv(orig_doc, edit_node)) {
                     /* remove the edit node's equivalent from the original document */
-                    edit_delete(orig_node, running);
+                    edit_delete(orig_node, running, error);
                 }
                 /* remove the node from the edit document */
-                edit_delete(edit_node, running);
+                edit_delete(edit_node, running, error);
                 nodes->nodesetval->nodeTab[i] = NULL;
             }
         }
@@ -993,12 +1008,12 @@ error:
  * @return Zero on success, non-zero otherwise.
  */
 static int
-edit_delete(xmlNodePtr node, int running)
+edit_delete(xmlNodePtr node, int running, struct nc_err **e)
 {
-    xmlNodePtr key, aux;
-    xmlChar *value;
+    xmlNodePtr child;
     const xmlChar *bridge_name;
-    int ret;
+    const xmlChar *key, *aux;
+    int ret = EXIT_SUCCESS;
 
     if (!node) {
         return EXIT_SUCCESS;
@@ -1009,58 +1024,63 @@ edit_delete(xmlNodePtr node, int running)
     if (running) {
         if (node->parent->type == XML_DOCUMENT_NODE) { /* capable-switch node */
             /* removing root */
-            txn_del_all();
-            return EXIT_SUCCESS;
+            return txn_del_all(e);
         }
         if (xmlStrEqual(node->parent->name, BAD_CAST "capable-switch")) {
             if (xmlStrEqual(node->name, BAD_CAST "id")) {
                 ofc_set_switchid(NULL);
             } else { /* resources, logical-switches */
                 while (node->children) {
-                    ret = edit_delete(node->children, running);
-                    if (ret != EXIT_SUCCESS) {
-                        return EXIT_FAILURE;
+                    if ((ret = edit_delete(node->children, running, e))) {
+                        /* failure */
+                        break;
                     }
                 }
             }
         } else if (xmlStrEqual(node->parent->name, BAD_CAST "resources")) {
-            if (xmlStrEqual(node->parent->parent->name, BAD_CAST "capable-switch")) {
+            if (xmlStrEqual(node->parent->parent->name,
+                            BAD_CAST "capable-switch")) {
                 if (xmlStrEqual(node->name, BAD_CAST "port")) {
-                    key = go2node(node, BAD_CAST "name");
-                    txn_del_port(key->children->content);
+                    key = get_key(node, "name");
+                    ret = txn_del_port(key, e);
                 } else if (xmlStrEqual(node->name, BAD_CAST "queue")) {
-                    key = go2node(node, BAD_CAST "resource-id");
-                    value = xmlNodeGetContent(key);
-                    txn_del_queue(value);
-                    xmlFree(value);
-                } else if (xmlStrEqual(node->name, BAD_CAST "owned-certificate")) {
-                    txn_del_owned_certificate(node);
-                } else if (xmlStrEqual(node->name, BAD_CAST "external-certificate")) {
-                    txn_del_external_certificate(node);
-                } else if (xmlStrEqual(node->name, BAD_CAST "flow-table")) {
-                    txn_del_flow_table(node);
+                    key = get_key(node, "resource-id");
+                    ret = txn_del_queue(key, e);
+                } else if (xmlStrEqual(node->name,
+                                       BAD_CAST "owned-certificate")) {
+                    ret = txn_del_owned_certificate(node, e);
+                } else if (xmlStrEqual(node->name,
+                                       BAD_CAST "external-certificate")) {
+                    ret = txn_del_external_certificate(node, e);
+                } else if (xmlStrEqual(node->name,
+                                       BAD_CAST "flow-table")) {
+                    ret = txn_del_flow_table(node, e);
                 } else {
-                    /* TODO is everything covered? */
-                    nc_verb_error("Element %s is not covered in edit_delete()!!! (parent: %s)",
-                                  (const char *) node->name, (const char *) node->parent->name);
+                    nc_verb_warning("%s: unknown element %s (parent: %s)",
+                                    __func__, (const char *) node->name,
+                                    (const char *) node->parent->name);
                 }
             } else { /* logical-switch */
                 /* get bridge name */
-                key = go2node(node->parent->parent, BAD_CAST "id");
+                key = get_key(node->parent->parent,  "id");
 
-                /* remove links in the bridge */
-                if (xmlStrEqual(node->name, BAD_CAST "port")) {
-                    txn_del_bridge_port(key->children->content,
-                                           node->children->content);
+                /* get leaf-ref value */
+                aux = node->children ? node->children->content : NULL;
+                if (!aux) {
+                    *e = nc_err_new(NC_ERR_BAD_ELEM);
+                    nc_err_set(*e, NC_ERR_PARAM_MSG,
+                               "invalid resources leafref");
+                    nc_err_set(*e, NC_ERR_PARAM_INFO_BADELEM,
+                               (char*) node->name);
+                    ret = EXIT_FAILURE;
+                } else if (xmlStrEqual(node->name, BAD_CAST "port")) {
+                    ret = txn_del_bridge_port(key, aux, e);
                 } else if (xmlStrEqual(node->name, BAD_CAST "queue")) {
-                    value = node->children->content;
+               /* TODO TC handle error */
+               value = node->children->content;
                     txn_del_queue(value);
                 } else if (xmlStrEqual(node->name, BAD_CAST "flow-table")) {
-                    txn_del_flow_table(node);
-                } else {
-                    /* TODO is everything covered? */
-                    nc_verb_error("Element %s is not covered in edit_delete()!!! (parent: %s)",
-                                  (const char *) node->name, (const char *) node->parent->name);
+                    ret = txn_del_flow_table(node, e);
                 }
                 /* certificate is ignored on purpose!
                  * Once defined, it is automatically referenced
@@ -1068,30 +1088,29 @@ edit_delete(xmlNodePtr node, int running)
                  */
             }
         } else if (xmlStrEqual(node->parent->name, BAD_CAST "private-key")) {
-            txn_del_owned_certificate(node->parent->parent);
+            ret = txn_del_owned_certificate(node->parent->parent, e);
         } else if (xmlStrEqual(node->parent->name, BAD_CAST "owned-certificate")) {
-            txn_del_owned_certificate(node->parent);
+            ret = txn_del_owned_certificate(node->parent, e);
         } else if (xmlStrEqual(node->parent->name, BAD_CAST "external-certificate")) {
-            txn_del_external_certificate(node->parent);
+            ret = txn_del_external_certificate(node->parent, e);
         } else if (xmlStrEqual(node->name, BAD_CAST "switch")) {
             /* remove bridge */
-            key = go2node(node, BAD_CAST "id");
-            txn_del_bridge(key->children->content);
+            key = get_key(node, "id");
+            ret = txn_del_bridge(key, e);
         } else if (xmlStrEqual(node->parent->name, BAD_CAST "switch")) {
-            key = go2node(node->parent, BAD_CAST "id");
+            key = get_key(node->parent, "id");
 
             /* key (id) cannot be deleted */
             if (xmlStrEqual(node->name, BAD_CAST "datapath-id")) {
-                txn_mod_bridge_datapath(key->children->content, NULL);
+                ret = txn_mod_bridge_datapath(key, NULL, e);
             } else if (xmlStrEqual(node->name, BAD_CAST "controllers")) {
                 while (node->children) { /* controller */
-                    ret = edit_delete(node->children, running);
-                    if (ret != EXIT_SUCCESS) {
-                        return EXIT_FAILURE;
+                    if ((ret = edit_delete(node->children, running, e))) {
+                        break;
                     }
                 }
             } else if (xmlStrEqual(node->name, BAD_CAST "lost-connection-behavior")) {
-                txn_mod_bridge_failmode(key->children->content, NULL);
+                ret = txn_mod_bridge_failmode(key, NULL, e);
             }
             /* enabled is not handled:
              * it is too complicated to handle it in combination with the
@@ -1099,99 +1118,80 @@ edit_delete(xmlNodePtr node, int running)
              */
         } else if (xmlStrEqual(node->parent->name, BAD_CAST "queue")) {
             if (xmlStrEqual(node->name, BAD_CAST "id")) {
-                key = go2node(node->parent, BAD_CAST "resource-id");
-                value = xmlNodeGetContent(key);
-                txn_del_queue_id(value, node);
-                xmlFree(value);
+                key = get_key(node->parent, "resource-id");
+                ret = txn_del_queue_id(key, node, e);
             } else if (xmlStrEqual(node->name, BAD_CAST "port")) {
-                key = go2node(node->parent, BAD_CAST "resource-id");
-                value = xmlNodeGetContent(key);
-                txn_del_queue_port(value, node);
-                xmlFree(value);
+                key = get_key(node->parent, "resource-id");
+                ret = txn_del_queue_port(key, node, e);
             } else if (xmlStrEqual(node->name, BAD_CAST "properties")) {
                 while (node->children) {
-                    ret = edit_delete(node->children, running);
-                    if (ret != EXIT_SUCCESS) {
-                        return EXIT_FAILURE;
+                    if ((ret = edit_delete(node->children, running, e))) {
+                        break;
                     }
                 }
             }
         } else if (xmlStrEqual(node->parent->name, BAD_CAST "properties")) {
-            key = go2node(node->parent->parent, BAD_CAST "resource-id");
-            value = xmlNodeGetContent(key);
-            if (xmlStrEqual(node->name, BAD_CAST "min-rate")) {
-                txn_mod_queue_options(value, "min-rate", NULL);
-            } else if (xmlStrEqual(node->name, BAD_CAST "max-rate")) {
-                txn_mod_queue_options(value, "max-rate", NULL);
-            } else if (xmlStrEqual(node->name, BAD_CAST "experimenter-id")) {
-                txn_mod_queue_options(value, "experimenter-id", NULL);
-            } else if (xmlStrEqual(node->name, BAD_CAST "experimenter-data")) {
-                txn_mod_queue_options(value, "experimenter-data", NULL);
-            }
-            xmlFree(value);
+            key = get_key(node->parent->parent, "resource-id");
+            ret = txn_mod_queue_options(key, (char*) node->name, NULL, e);
         } else if (xmlStrEqual(node->parent->name, BAD_CAST "flow-table")) {
             /* TODO TC: flow-table/resource-id, table-id, name  */
-            key = go2node(node->parent, BAD_CAST "table-id");
-            value = xmlNodeGetContent(key);
+            key = get_key(node->parent, "table-id");
             if (xmlStrEqual(node->name, BAD_CAST "name")) {
-                txn_mod_flowtable_name(value, NULL);
+                ret = txn_mod_flowtable_name(key, NULL, e);
             } else if (xmlStrEqual(node->name, BAD_CAST "resource-id")) {
-                txn_mod_flowtable_resid(value, NULL);
+                ret = txn_mod_flowtable_resid(key, NULL, e);
             }
-            xmlFree(value);
         } else if (xmlStrEqual(node->name, BAD_CAST "controller")) {
-            key = go2node(node, BAD_CAST "id");
-            aux = go2node(node->parent->parent, BAD_CAST "id");
-            txn_del_contr(key->children->content, aux->children->content);
+            key = get_key(node, "id"); /* controller id */
+            aux = get_key(node->parent->parent, "id"); /* bridge id */
+            ret = txn_del_contr(key, aux, e);
         } else if (xmlStrEqual(node->parent->name, BAD_CAST "controller")) {
-            key = go2node(node->parent, BAD_CAST "id");
+            key = get_key(node->parent, "id");
             /* key 'id' cannot be deleted */
             if (xmlStrEqual(node->name, BAD_CAST "local-ip-address")) {
-                txn_mod_contr_lip(key->children->content, NULL);
+                ret = txn_mod_contr_lip(key, NULL, e);
             } else if (xmlStrEqual(node->name, BAD_CAST "ip-address") ||
                             xmlStrEqual(node->name, BAD_CAST "port") ||
                             xmlStrEqual(node->name, BAD_CAST "protocol")) {
-                txn_mod_contr_target(key->children->content, node->name, NULL);
+                ret = txn_mod_contr_target(key, node->name, NULL, e);
             }
         } else if (xmlStrEqual(node->name, BAD_CAST "requested-number")) {
-            key = go2node(node->parent, BAD_CAST "name");
-            txn_mod_port_reqnumber(key->children->content, NULL);
+            key = get_key(node->parent, "name");
+            ret = txn_mod_port_reqnumber(key, NULL, e);
         } else if (xmlStrEqual(node->name, BAD_CAST "ipgre-tunnel")
                    || xmlStrEqual(node->name, BAD_CAST "vxlan-tunnel")
                    || xmlStrEqual(node->name, BAD_CAST "tunnel")) {
-            key = go2node(node->parent, BAD_CAST "name");
-            value = xmlNodeGetContent(key);
-            txn_del_port_tunnel(value, node);
-            xmlFree(value);
+            key = get_key(node->parent, "name");
+            ret = txn_del_port_tunnel(key, node, e);
         } else if (xmlStrEqual(node->name, BAD_CAST "no-receive")
                    || xmlStrEqual(node->name, BAD_CAST "no-forward")
                    || xmlStrEqual(node->name, BAD_CAST "no-packet-in")
                    || xmlStrEqual(node->name, BAD_CAST "admin-state")) {
-
-            nc_verb_verbose("Modify port configuration (%s:%d)", __FILE__, __LINE__);
-            key = go2node(node->parent->parent, BAD_CAST "name");
-            bridge_name = ofc_find_bridge_for_port_iterative(xmlNodeGetContent(key));
+            key = get_key(node->parent->parent, "name");
+            bridge_name = ofc_find_bridge_with_port(key);
 
             /* delete -> set to default */
-            ofc_of_mod_port(bridge_name, xmlNodeGetContent(key), node->name, BAD_CAST "");
+            ret = ofc_of_mod_port(bridge_name, key, node->name, BAD_CAST "", e);
         } else if (xmlStrEqual(node->name, BAD_CAST "features")) {
-            edit_delete(go2node(node, BAD_CAST "advertised"), running);
+            ret = edit_delete(go2node(node, BAD_CAST "advertised"), running, e);
         } else if (xmlStrEqual(node->name, BAD_CAST "advertised")) {
-            key = go2node(node->parent->parent, BAD_CAST "name");
-            for (aux = node->children; aux; aux = aux->next) {
-                txn_del_port_advert(key->children->content, aux);
+            key = get_key(node->parent->parent, "name");
+            for (child = node->children; child; child = child->next) {
+                if ((ret = txn_del_port_advert(key, child, e))) {
+                    break;
+                }
             }
         } else if (xmlStrEqual(node->parent->name, BAD_CAST "advertised")) {
-            key = go2node(node->parent->parent->parent, BAD_CAST "name");
-            txn_del_port_advert(key->children->content, node);
+            key = get_key(node->parent->parent->parent, "name");
+            ret = txn_del_port_advert(key, node, e);
         } else if (xmlStrEqual(node->name, BAD_CAST "local-endpoint-ipv4-adress")) {
             /* TODO TC */
         } else if (xmlStrEqual(node->name, BAD_CAST "remote-endpoint-ipv4-adress")) {
             /* TODO TC */
         } else {
-            /* TODO is everything covered? */
-            nc_verb_error("Element %s is not covered in edit_delete()!!! (parent: %s)",
-                    (const char *) node->name, (const char *) node->parent->name);
+            nc_verb_warning("%s: Unknown element %s (parent: %s)", __func__,
+                            (const char *) node->name,
+                            (const char *) node->parent->name);
         }
     }
 
@@ -1220,11 +1220,11 @@ edit_remove(xmlDocPtr orig_doc, xmlNodePtr edit_node, int running,
     old = find_element_equiv(orig_doc, edit_node);
 
     /* remove the node from the edit document */
-    edit_delete(edit_node, 0);
+    edit_delete(edit_node, 0, error);
 
     if (old) {
         /* remove the edit node's equivalent from the original document */
-        edit_delete(old, running);
+        edit_delete(old, running, error);
     }
     return (EXIT_SUCCESS);
 }
@@ -1252,11 +1252,10 @@ edit_replace(xmlDocPtr orig_doc, xmlNodePtr edit_node, int running,
     if (edit_node == NULL) {
         /* replace by empty data */
         if (orig_doc->children) {
-            return (edit_delete(orig_doc->children, running));
+            return (edit_delete(orig_doc->children, running, error));
         } else {
             /* initial cleanup */
-            txn_del_all();
-            return EXIT_SUCCESS;
+            return txn_del_all(error);
         }
     }
 
@@ -1271,7 +1270,9 @@ edit_replace(xmlDocPtr orig_doc, xmlNodePtr edit_node, int running,
          * "moving" of the instance of the list/leaf-list using YANG's insert
          * attribute
          */
-        edit_delete(old, running);
+        if (edit_delete(old, running, error)) {
+            return EXIT_FAILURE;
+        }
         return edit_create(orig_doc, edit_node, running, error);
     }
 }
@@ -1336,13 +1337,11 @@ edit_create_r(xmlDocPtr orig_doc, xmlNodePtr edit, struct nc_err** error)
  * \return Zero on success, non-zero otherwise.
  */
 static int
-edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running,
-            struct nc_err** error)
+edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running, struct nc_err **e)
 {
-    xmlNodePtr key, parent, aux;
-    const xmlChar *bridge_name;
-    xmlChar *value;
-    int ret;
+    xmlNodePtr parent, child;
+    const xmlChar *bridge_name, *key, *aux;
+    int ret = EXIT_SUCCESS;
 
     /* remove operation attribute */
     xmlRemoveProp(xmlHasNsProp(edit, BAD_CAST "operation",
@@ -1356,11 +1355,12 @@ edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running,
         if (edit->parent->type == XML_DOCUMENT_NODE) {
             /* set it all */
             while (edit->children) {
-                if (edit_create(orig_doc, edit->children, running, error) != EXIT_SUCCESS) {
-                    return EXIT_FAILURE;
+                ret = edit_create(orig_doc, edit->children, running, e);
+                if (ret) {
+                    break;
                 }
             }
-            return EXIT_SUCCESS;
+            return ret;
         }
         if (xmlStrEqual(edit->parent->name, BAD_CAST "capable-switch")) {
             if (xmlStrEqual(edit->name, BAD_CAST "id")) {
@@ -1368,47 +1368,49 @@ edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running,
             } else { /* resources and local-switches */
                 /* nothing to do on this level, continue with creating children */
                 while (edit->children) {
-                    ret = edit_create(orig_doc, edit->children, running, error);
-                    if (ret != EXIT_SUCCESS) {
-                        return EXIT_FAILURE;
+                    ret = edit_create(orig_doc, edit->children, running, e);
+                    if (ret) {
+                        break;
                     }
                 }
             }
         } else if (xmlStrEqual(edit->parent->name, BAD_CAST "resources")) {
             if (xmlStrEqual(edit->parent->parent->name, BAD_CAST "capable-switch")) {
                 if (xmlStrEqual(edit->name, BAD_CAST "port")) {
-                    txn_add_port(edit);
+                    ret = txn_add_port(edit, e);
                 } else if (xmlStrEqual(edit->name, BAD_CAST "queue")) {
-                    txn_add_queue(edit);
+                    ret = txn_add_queue(edit, e);
                 } else if (xmlStrEqual(edit->name, BAD_CAST "owned-certificate")) {
-                    txn_add_owned_certificate(edit);
+                    ret = txn_add_owned_certificate(edit, e);
                 } else if (xmlStrEqual(edit->name, BAD_CAST "external-certificate")) {
-                    txn_add_external_certificate(edit);
+                    ret = txn_add_external_certificate(edit, e);
                 } else if (xmlStrEqual(edit->name, BAD_CAST "flow-table")) {
-                    txn_add_flow_table(edit);
+                    ret = txn_add_flow_table(edit, e);
                 } else {
-                    /* TODO is everything covered? */
-                    nc_verb_error("Element %s is not covered in edit_create()!!! (parent: %s) (%s:%d)",
-                                  (const char *) edit->name, (const char *) edit->parent->name, __FILE__, __LINE__);
+                    nc_verb_warning("%s: unknown element %s (parent: %s)",
+                                    __func__, (const char *) edit->name,
+                                    (const char *) edit->parent->name);
                 }
             } else { /* logical-switch */
                 /* get bridge name */
-                key = go2node(edit->parent->parent, BAD_CAST "id");
+                key = get_key(edit->parent->parent, "id");
 
-                /* create links in the bridge */
-                if (xmlStrEqual(edit->name, BAD_CAST "port")) {
-                    txn_add_bridge_port(key->children->content,
-                                        edit->children->content);
+                /* get leaf-ref value */
+                aux = edit->children ? edit->children->content : NULL;
+                if (!aux) {
+                    *e = nc_err_new(NC_ERR_BAD_ELEM);
+                    nc_err_set(*e, NC_ERR_PARAM_MSG,
+                               "invalid resources leafref");
+                    nc_err_set(*e, NC_ERR_PARAM_INFO_BADELEM,
+                               (char*) edit->name);
+                    ret = EXIT_FAILURE;
+                } else if (xmlStrEqual(edit->name, BAD_CAST "port")) {
+                    ret = txn_add_bridge_port(key, aux, e);
                 // TODO useless?: queue is connected to port (port is placed inside <queue>) -> use this only for delete
                 //} else if (xmlStrEqual(edit->name, BAD_CAST "queue")) {
-                //    txn_add_bridge_queue(key->children->content,
-                //                         edit->children->content);
+                //    ret = txn_add_bridge_queue(key, aux, e);
                 } else if (xmlStrEqual(edit->name, BAD_CAST "flow-table")) {
                     /* TODO TC: flow-table: add link, do nothing if flow-table does not exist */
-                } else {
-                    /* TODO is everything covered? */
-                    nc_verb_error("Element %s is not covered in edit_create()!!! (parent: %s) (%s:%d)",
-                                  (const char *) edit->name, (const char *) edit->parent->name, __FILE__, __LINE__);
                 }
                 /* certificate is ignored on purpose!
                  * Once defined, it is automatically referenced
@@ -1416,31 +1418,31 @@ edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running,
                  */
             }
         } else if (xmlStrEqual(edit->parent->name, BAD_CAST "private-key")) {
-            txn_add_owned_certificate(edit->parent->parent);
+            ret = txn_add_owned_certificate(edit->parent->parent, e);
         } else if (xmlStrEqual(edit->parent->name, BAD_CAST "owned-certificate")) {
-            txn_add_owned_certificate(edit->parent);
+            ret = txn_add_owned_certificate(edit->parent, e);
         } else if (xmlStrEqual(edit->parent->name, BAD_CAST "external-certificate")) {
-            txn_add_external_certificate(edit->parent);
+            ret = txn_add_external_certificate(edit->parent, e);
         } else if (xmlStrEqual(edit->name, BAD_CAST "switch")) {
             /* create bridge */
-            txn_add_bridge(edit);
+            ret = txn_add_bridge(edit, e);
         } else if (xmlStrEqual(edit->parent->name, BAD_CAST "switch")) {
-            key = go2node(edit->parent, BAD_CAST "id");
+            key = get_key(edit->parent, "id");
 
             /* key (id) cannot be added separately */
             if (xmlStrEqual(edit->name, BAD_CAST "datapath-id")) {
-                txn_mod_bridge_datapath(key->children->content,
-                                        edit->children->content);
+                aux = edit->children ? edit->children->content : NULL;
+                ret = txn_mod_bridge_datapath(key, aux, e);
             } else if (xmlStrEqual(edit->name, BAD_CAST "controllers")) {
                 while (edit->children) { /* controller */
-                    ret = edit_create(orig_doc, edit->children, running, error);
-                    if (ret != EXIT_SUCCESS) {
-                        return EXIT_FAILURE;
+                    ret = edit_create(orig_doc, edit->children, running, e);
+                    if (ret) {
+                        break;
                     }
                 }
             } else if (xmlStrEqual(edit->name, BAD_CAST "lost-connection-behavior")) {
-                txn_mod_bridge_failmode(key->children->content,
-                                        edit->children->content);
+                aux = edit->children ? edit->children->content : NULL;
+                ret = txn_mod_bridge_failmode(key, aux, e);
             }
             /* enabled is not handled:
              * it is too complicated to handle it in combination with the
@@ -1448,102 +1450,86 @@ edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running,
              */
         } else if (xmlStrEqual(edit->parent->name, BAD_CAST "queue")) {
             if (xmlStrEqual(edit->name, BAD_CAST "id")) {
-                key = go2node(edit->parent, BAD_CAST "resource-id");
-                value = xmlNodeGetContent(key);
-                txn_add_queue_id(value, edit);
-                xmlFree(value);
+                key = get_key(edit->parent, "resource-id");
+                ret = txn_add_queue_id(key, edit, e);
             } else if (xmlStrEqual(edit->name, BAD_CAST "port")) {
-                key = go2node(edit->parent, BAD_CAST "resource-id");
-                value = xmlNodeGetContent(key);
-                txn_add_queue_port(value, edit);
-                xmlFree(value);
+                key = get_key(edit->parent, "resource-id");
+                ret = txn_add_queue_port(key, edit, e);
             } else if (xmlStrEqual(edit->name, BAD_CAST "properties")) {
                 while (edit->children) {
-                    ret = edit_create(orig_doc, edit->children, running, error);
-                    if (ret != EXIT_SUCCESS) {
-                        return EXIT_FAILURE;
+                    ret = edit_create(orig_doc, edit->children, running, e);
+                    if (ret) {
+                        break;
                     }
                 }
             }
         } else if (xmlStrEqual(edit->parent->name, BAD_CAST "properties")) {
-            key = go2node(edit->parent->parent, BAD_CAST "resource-id");
-            value = xmlNodeGetContent(key);
-            if (xmlStrEqual(edit->name, BAD_CAST "min-rate")) {
-                txn_mod_queue_options(value, "min-rate", edit);
-            } else if (xmlStrEqual(edit->name, BAD_CAST "max-rate")) {
-                txn_mod_queue_options(value, "max-rate", edit);
-            } else if (xmlStrEqual(edit->name, BAD_CAST "experimenter-id")) {
-                txn_mod_queue_options(value, "experimenter-id", edit);
-            } else if (xmlStrEqual(edit->name, BAD_CAST "experimenter-data")) {
-                txn_mod_queue_options(value, "experimenter-data", edit);
-            }
-            xmlFree(value);
+            key = get_key(edit->parent->parent, "resource-id");
+            ret = txn_mod_queue_options(key, (char*) edit->name, edit, e);
         } else if (xmlStrEqual(edit->parent->name, BAD_CAST "flow-table")) {
             /* TODO TC: resource-id, table-id, name  */
-            key = go2node(edit->parent, BAD_CAST "table-id");
-            value = xmlNodeGetContent(key);
+            key = get_key(edit->parent, "table-id");
             if (xmlStrEqual(edit->name, BAD_CAST "name")) {
-                txn_mod_flowtable_name(value, edit);
+                ret = txn_mod_flowtable_name(key, edit, e);
             } else if (xmlStrEqual(edit->name, BAD_CAST "resource-id")) {
-                txn_mod_flowtable_resid(value, edit);
+                ret = txn_mod_flowtable_resid(key, edit, e);
             }
-            xmlFree(value);
         } else if (xmlStrEqual(edit->name, BAD_CAST "controller")) {
-            key = go2node(edit->parent->parent, BAD_CAST "id");
-            txn_add_contr(edit, key->children->content);
+            key = get_key(edit->parent->parent, "id");
+            ret = txn_add_contr(edit, key, e);
         } else if (xmlStrEqual(edit->parent->name, BAD_CAST "controller")) {
-            key = go2node(edit->parent, BAD_CAST "id");
+            key = get_key(edit->parent, "id");
             /* key 'id' cannot be deleted */
             if (xmlStrEqual(edit->name, BAD_CAST "local-ip-address")) {
-                txn_mod_contr_lip(key->children->content, NULL);
+                ret = txn_mod_contr_lip(key, NULL, e);
             } else if (xmlStrEqual(edit->name, BAD_CAST "ip-address") ||
                             xmlStrEqual(edit->name, BAD_CAST "port") ||
                             xmlStrEqual(edit->name, BAD_CAST "protocol")) {
-                txn_mod_contr_target(key->children->content, edit->name,
-                                edit->children->content);
+                aux = edit->children ? edit->children->content : NULL;
+                ret = txn_mod_contr_target(key, edit->name, aux, e);
             }
         } else if (xmlStrEqual(edit->name, BAD_CAST "requested-number")) {
-            key = go2node(edit->parent, BAD_CAST "name");
-            txn_mod_port_reqnumber(key->children->content,
-                                   edit->children->content);
+            key = get_key(edit->parent, "name");
+            aux = edit->children ? edit->children->content : NULL;
+            ret = txn_mod_port_reqnumber(key, aux, e);
         } else if (xmlStrEqual(edit->name, BAD_CAST "no-receive")
                    || xmlStrEqual(edit->name, BAD_CAST "no-forward")
                    || xmlStrEqual(edit->name, BAD_CAST "no-packet-in")
                    || xmlStrEqual(edit->name, BAD_CAST "admin-state")) {
 
             nc_verb_verbose("Modify port configuration (%s:%d)", __FILE__, __LINE__);
-            key = go2node(edit->parent->parent, BAD_CAST "name");
-            bridge_name = ofc_find_bridge_for_port_iterative(xmlNodeGetContent(key));
+            key = get_key(edit->parent->parent, "name");
+            aux = edit->children ? edit->children->content : NULL;
+            bridge_name = ofc_find_bridge_with_port(key);
 
-            ofc_of_mod_port(bridge_name, xmlNodeGetContent(key), edit->name, edit->children->content);
+            ret = ofc_of_mod_port(bridge_name, key, edit->name, aux, e);
         } else if (xmlStrEqual(edit->name, BAD_CAST "features")) {
             ret = edit_create(orig_doc, go2node(edit, BAD_CAST "advertised"),
-                              running, error);
-            if (ret != EXIT_SUCCESS) {
-                return EXIT_FAILURE;
-            }
+                              running, e);
         } else if (xmlStrEqual(edit->name, BAD_CAST "advertised")) {
-            key = go2node(edit->parent->parent, BAD_CAST "name");
-            for (aux = edit->children; aux; aux = aux->next) {
-                txn_add_port_advert(key->children->content, aux);
+            key = get_key(edit->parent->parent, "name");
+            for (child = edit->children; child; child = child->next) {
+                if ((ret = txn_add_port_advert(key, child, e))) {
+                    break;
+                }
             }
         } else if (xmlStrEqual(edit->parent->name, BAD_CAST "advertised")) {
-            key = go2node(edit->parent->parent->parent, BAD_CAST "name");
-            txn_add_port_advert(key->children->content, edit);
+            key = get_key(edit->parent->parent->parent, "name");
+            ret = txn_add_port_advert(key, edit, e);
         } else if (xmlStrEqual(edit->name, BAD_CAST "local-endpoint-ipv4-adress")) {
             /* TODO TC */
         } else if (xmlStrEqual(edit->name, BAD_CAST "remote-endpoint-ipv4-adress")) {
             /* TODO TC */
         } else {
-            /* TODO is everything covered? */
-            nc_verb_error("Element %s is not covered in edit_create()!!! (parent: %s) (%s:%d)",
-                    (const char *) edit->name, (const char *) edit->parent->name, __FILE__, __LINE__);
+            nc_verb_warning("%s: unknown element %s (parent: %s)", __func__,
+                            (const char *) edit->name,
+                            (const char *) edit->parent->name);
         }
     } else {
         /* XML */
         if (edit->parent->type != XML_DOCUMENT_NODE) {
-            parent = edit_create_r(orig_doc, edit->parent, error);
-            if (parent == NULL) {
+            parent = edit_create_r(orig_doc, edit->parent, e);
+            if (!parent) {
                 return EXIT_FAILURE;
             }
         } else {
@@ -1562,7 +1548,7 @@ edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running,
     }
 
     /* remove the node from the edit document */
-    edit_delete(edit, 0);
+    edit_delete(edit, 0, NULL);
 
     return EXIT_SUCCESS;
 }
@@ -1616,7 +1602,7 @@ edit_merge(xmlDocPtr orig_doc, xmlNodePtr edit_node, int running,
     }
 
     /* remove the node from the edit document */
-    edit_delete(edit_node, 0);
+    edit_delete(edit_node, 0, NULL);
 
     return EXIT_SUCCESS;
 }

@@ -1053,10 +1053,9 @@ edit_delete(xmlNodePtr node, int running)
                     txn_del_bridge_port(key->children->content,
                                            node->children->content);
                 } else if (xmlStrEqual(node->name, BAD_CAST "queue")) {
-                    txn_del_bridge_queue(key->children->content,
-                                           node->children->content);
+                    value = node->children->content;
+                    txn_del_queue(value);
                 } else if (xmlStrEqual(node->name, BAD_CAST "flow-table")) {
-                    /* TODO TC: flow-table delete from bridge */
                     txn_del_flow_table(node);
                 } else {
                     /* TODO is everything covered? */

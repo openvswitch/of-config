@@ -2461,7 +2461,14 @@ txn_del_flow_table(xmlNodePtr node)
     const struct ovsrec_bridge *row;
     size_t i, n_flow_tables;
 
-    table_id_txt = xmlNodeGetContent(go2node(node, BAD_CAST "table-id"));
+    if (xmlStrEqual(node->parent->parent->name, BAD_CAST "capable-switch")) {
+        table_id_txt = xmlNodeGetContent(go2node(node, BAD_CAST "table-id"));
+        nc_verb_verbose("Deleting flow-table from resources.");
+    } else {
+        /* expecting that we are in 'switch' */
+        table_id_txt = xmlNodeGetContent(node);
+        nc_verb_verbose("Deleting flow-table from switch.");
+    }
     nc_verb_verbose("!!!!Deleting flow-table %s", (const char *) table_id_txt);
 
     if (sscanf((const char *) table_id_txt, "%"SCNi64, &table_id) != 1) {

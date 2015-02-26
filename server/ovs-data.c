@@ -1276,7 +1276,7 @@ get_external_certificates_config(void)
 
     ssl = ovsrec_ssl_first(ovsdb_handler->idl);
     if (ssl != NULL && ssl->ca_cert != NULL) {
-        resid = smap_get(&ssl->external_ids, OFC_RESOURCE_ID);
+        resid = smap_get(&ssl->external_ids, OFC_RESOURCE_ID_2);
         if (!resid) {
             ds_destroy(&str);
             return NULL;
@@ -2684,7 +2684,7 @@ txn_add_owned_certificate(xmlNodePtr node, struct nc_err **e)
     xmlNodePtr aux, leaf;
     xmlChar *xmlval;
     const xmlChar *new_resid;
-    int fd;
+    int fd, ret;
     char *key_type, *key_data;
     const char *resid = NULL;
 
@@ -2698,10 +2698,11 @@ txn_add_owned_certificate(xmlNodePtr node, struct nc_err **e)
     ssl = ovsrec_ssl_first(ovsdb_handler->idl);
     if (ssl) {
         resid = smap_get(&ssl->external_ids, OFC_RESOURCE_ID);
-        new_resid = get_key(node->parent->parent, "id");
+        new_resid = get_key(node, "resource-id");
 
-        if (!xmlStrEqual(new_resid, BAD_CAST resid)) {
-            /* TODO error, this SSL table UUID does not match the saved one */
+        if (resid != NULL && !xmlStrEqual(new_resid, BAD_CAST resid)) {
+            nc_verb_error("%s: saved res-id does not match the new one.", __func__);
+            *e = nc_err_new(NC_ERR_OP_FAILED);
             return EXIT_FAILURE;
         }
     } else {
@@ -2721,14 +2722,24 @@ txn_add_owned_certificate(xmlNodePtr node, struct nc_err **e)
             ovsrec_ssl_set_external_ids(ssl, &ssl->external_ids);
             xmlFree(xmlval);
         } else if (xmlStrEqual(aux->name, BAD_CAST "certificate")) {
-            /* TODO error check */
             fd = creat(OFC_DATADIR "/cert.pem", 0644);
+            if (fd == -1) {
+                nc_verb_error("%s: creating the certificate file failed (%s).", __func__, strerror(errno));
+                *e = nc_err_new(NC_ERR_OP_FAILED);
+                return EXIT_FAILURE;
+            }
             write(fd, "-----BEGIN CERTIFICATE-----\n", 28);
             xmlval = xmlNodeGetContent(aux);
             write(fd, (char*) xmlval, xmlStrlen(xmlval));
             xmlFree(xmlval);
-            write(fd, "\n-----END CERTIFICATE-----", 26);
+            ret = write(fd, "\n-----END CERTIFICATE-----", 26);
             close(fd);
+            if (ret < 26) {
+                /* if some of the previous writes failed, this one will too */
+                nc_verb_error("%s: writing the certificate failed.", __func__);
+                *e = nc_err_new(NC_ERR_OP_FAILED);
+                return EXIT_FAILURE;
+            }
             ovsrec_ssl_verify_certificate(ssl);
             ovsrec_ssl_set_certificate(ssl, OFC_DATADIR "/cert.pem");
         } else if (xmlStrEqual(aux->name, BAD_CAST "private-key")) {
@@ -2740,18 +2751,28 @@ txn_add_owned_certificate(xmlNodePtr node, struct nc_err **e)
                 }
             }
 
-            /* TODO error check */
             fd = creat(OFC_DATADIR "/key.pem", 0600);
+            if (fd == -1) {
+                nc_verb_error("%s: creating the private key file failed (%s).", __func__, strerror(errno));
+                *e = nc_err_new(NC_ERR_OP_FAILED);
+                return EXIT_FAILURE;
+            }
             write(fd, "-----BEGIN ", 11);
             write(fd, key_type, strlen(key_type));
             write(fd, " PRIVATE KEY-----\n", 18);
             write(fd, key_data, strlen(key_data));
             write(fd, "\n-----END ", 10);
             write(fd, key_type, strlen(key_type));
-            write(fd, " PRIVATE KEY-----", 17);
+            ret = write(fd, " PRIVATE KEY-----", 17);
             close(fd);
             free(key_type);
             free(key_data);
+            if (ret < 17) {
+                /* if some of the previous writes failed, this one will too */
+                nc_verb_error("%s: writing the private key failed.", __func__);
+                *e = nc_err_new(NC_ERR_OP_FAILED);
+                return EXIT_FAILURE;
+            }
             ovsrec_ssl_verify_private_key(ssl);
             ovsrec_ssl_set_private_key(ssl, OFC_DATADIR "/key.pem");
         }
@@ -2779,7 +2800,7 @@ txn_add_external_certificate(xmlNodePtr node, struct nc_err **e)
     xmlNodePtr aux;
     xmlChar *xmlval;
     const xmlChar *new_resid;
-    int fd, mod;
+    int fd, mod, ret;
 
     if (!node) {
         nc_verb_error("%s: invalid input parameters.", __func__);
@@ -2794,11 +2815,12 @@ txn_add_external_certificate(xmlNodePtr node, struct nc_err **e)
         ssl = ovsrec_ssl_insert(ovsdb_handler->txn);
     } else {
         mod = 1;
-        resid = smap_get(&ssl->external_ids, OFC_RESOURCE_ID);
+        resid = smap_get(&ssl->external_ids, OFC_RESOURCE_ID_2);
         new_resid = get_key(node, "resource-id");
 
-        if (!xmlStrEqual(new_resid, BAD_CAST resid)) {
-            /* TODO error, this SSL table UUID does not match the saved one */
+        if (resid != NULL && !xmlStrEqual(new_resid, BAD_CAST resid)) {
+            nc_verb_error("%s: saved res-id does not match the new one.", __func__);
+            *e = nc_err_new(NC_ERR_OP_FAILED);
             return EXIT_FAILURE;
         }
     }
@@ -2810,20 +2832,30 @@ txn_add_external_certificate(xmlNodePtr node, struct nc_err **e)
 
         if (xmlStrEqual(aux->name, BAD_CAST "resource-id")) {
             xmlval = xmlNodeGetContent(aux);
-            smap_replace((struct smap *) &ssl->external_ids, OFC_RESOURCE_ID,
+            smap_replace((struct smap *) &ssl->external_ids, OFC_RESOURCE_ID_2,
                          (const char *) xmlval);
             ovsrec_ssl_verify_external_ids(ssl);
             ovsrec_ssl_set_external_ids(ssl, &ssl->external_ids);
             xmlFree(xmlval);
         } else if (xmlStrEqual(aux->name, BAD_CAST "certificate")) {
-            /* TODO error check */
             fd = creat(OFC_DATADIR "/ca_cert.pem", 0644);
+            if (fd == -1) {
+                nc_verb_error("%s: creating the CA certificate file failed (%s).", __func__, strerror(errno));
+                *e = nc_err_new(NC_ERR_OP_FAILED);
+                return EXIT_FAILURE;
+            }
             write(fd, "-----BEGIN CERTIFICATE-----\n", 28);
             xmlval = xmlNodeGetContent(aux);
             write(fd, (char*) xmlval, xmlStrlen(xmlval));
             xmlFree(xmlval);
-            write(fd, "\n-----END CERTIFICATE-----", 26);
+            ret = write(fd, "\n-----END CERTIFICATE-----", 26);
             close(fd);
+            if (ret < 26) {
+                /* if some of the previous writes failed, this one will too */
+                nc_verb_error("%s: writing the CA certificate failed.", __func__);
+                *e = nc_err_new(NC_ERR_OP_FAILED);
+                return EXIT_FAILURE;
+            }
             ovsrec_ssl_verify_ca_cert(ssl);
             ovsrec_ssl_set_ca_cert(ssl, OFC_DATADIR "/ca_cert.pem");
         }
@@ -2873,7 +2905,6 @@ txn_del_owned_certificate(xmlNodePtr node, struct nc_err **e)
     xmlNodePtr aux;
     const xmlChar *resid;
 
-    /* TODO TC return errors */
     if (!node) {
         nc_verb_error("%s: invalid input parameters.", __func__);
         *e = nc_err_new(NC_ERR_OP_FAILED);
@@ -2881,8 +2912,8 @@ txn_del_owned_certificate(xmlNodePtr node, struct nc_err **e)
     }
 
     aux = go2node(node, BAD_CAST "resource-id");
-    if (aux && aux->content) {
-        resid = aux->content;
+    if (aux && aux->children && aux->children->content) {
+        resid = aux->children->content;
     } else {
         *e = nc_err_new(NC_ERR_OP_FAILED);
         return EXIT_FAILURE;
@@ -2890,7 +2921,8 @@ txn_del_owned_certificate(xmlNodePtr node, struct nc_err **e)
 
     ssl = find_ssl(resid);
     if (!ssl) {
-        /* TODO error, cannot delete, no SSL table */
+        nc_verb_error("%s: could not find the SSL table.", __func__);
+        *e = nc_err_new(NC_ERR_OP_FAILED);
         return EXIT_FAILURE;
     }
 
@@ -2899,26 +2931,29 @@ txn_del_owned_certificate(xmlNodePtr node, struct nc_err **e)
             continue;
         }
 
-        if (xmlStrEqual(aux->name, BAD_CAST "certificate")) {
-            /* TODO error check */
+        if (xmlStrEqual(aux->name, BAD_CAST "resource-id")) {
+            smap_remove((struct smap*)&ssl->external_ids, OFC_RESOURCE_ID);
+        } else if (xmlStrEqual(aux->name, BAD_CAST "certificate")) {
             unlink(OFC_DATADIR "/cert.pem");
             ovsrec_ssl_set_certificate(ssl, "");
         } else if (xmlStrEqual(aux->name, BAD_CAST "private-key")) {
-            /* TODO error check */
             unlink(OFC_DATADIR "/key.pem");
             ovsrec_ssl_set_private_key(ssl, "");
         }
     }
 
-    /* get the Open_vSwitch table for linking the SSL structure into */
-    ovs = ovsrec_open_vswitch_first(ovsdb_handler->idl);
-    if (!ovs) {
-        /* TODO error, no vswitch structure to delete from, how come? */
-        return EXIT_FAILURE;
+    /* remove the SSL table if ext-cert was removed as well */
+    if (smap_get(&ssl->external_ids, OFC_RESOURCE_ID_2) == NULL) {
+        ovs = ovsrec_open_vswitch_first(ovsdb_handler->idl);
+        if (!ovs) {
+            nc_verb_error("%s: could not find the Open vSwitch table.", __func__);
+            *e = nc_err_new(NC_ERR_OP_FAILED);
+            return EXIT_FAILURE;
+        }
+        ovsrec_open_vswitch_verify_ssl(ovs);
+        ovsrec_open_vswitch_set_ssl(ovs, NULL);
+        ovsrec_ssl_delete(ssl);
     }
-    ovsrec_open_vswitch_verify_ssl(ovs);
-    ovsrec_open_vswitch_set_ssl(ovs, NULL);
-    ovsrec_ssl_delete(ssl);
 
     return EXIT_SUCCESS;
 }
@@ -2931,7 +2966,6 @@ txn_del_external_certificate(xmlNodePtr node, struct nc_err **e)
     xmlNodePtr aux;
     const xmlChar *resid;
 
-    /* TODO TC return errors */
     if (!node) {
         nc_verb_error("%s: invalid input parameters.", __func__);
         *e = nc_err_new(NC_ERR_OP_FAILED);
@@ -2939,8 +2973,8 @@ txn_del_external_certificate(xmlNodePtr node, struct nc_err **e)
     }
 
     aux = go2node(node, BAD_CAST "resource-id");
-    if (aux && aux->content) {
-        resid = aux->content;
+    if (aux && aux->children && aux->children->content) {
+        resid = aux->children->content;
     } else {
         *e = nc_err_new(NC_ERR_OP_FAILED);
         return EXIT_FAILURE;
@@ -2948,7 +2982,8 @@ txn_del_external_certificate(xmlNodePtr node, struct nc_err **e)
 
     ssl = find_ssl(resid);
     if (!ssl) {
-        /* TODO error, cannot delete, no SSL table */
+        nc_verb_error("%s: could not find the SSL table.", __func__);
+        *e = nc_err_new(NC_ERR_OP_FAILED);
         return EXIT_FAILURE;
     }
 
@@ -2957,22 +2992,26 @@ txn_del_external_certificate(xmlNodePtr node, struct nc_err **e)
             continue;
         }
 
-        if (xmlStrEqual(aux->name, BAD_CAST "certificate")) {
-            /* TODO error check */
+        if (xmlStrEqual(aux->name, BAD_CAST "resource-id")) {
+            smap_remove((struct smap*)&ssl->external_ids, OFC_RESOURCE_ID_2);
+        } else if (xmlStrEqual(aux->name, BAD_CAST "certificate")) {
             unlink(OFC_DATADIR "/ca_cert.pem");
             ovsrec_ssl_set_ca_cert(ssl, "");
         }
     }
 
-    /* get the Open_vSwitch table for linking the SSL structure into */
-    ovs = ovsrec_open_vswitch_first(ovsdb_handler->idl);
-    if (!ovs) {
-        /* TODO error, no vswitch structure to delete from, how come? */
-        return EXIT_FAILURE;
+    /* remove the SSL table if own-cert was removed as well */
+    if (smap_get(&ssl->external_ids, OFC_RESOURCE_ID) == NULL) {
+        ovs = ovsrec_open_vswitch_first(ovsdb_handler->idl);
+        if (!ovs) {
+            nc_verb_error("%s: could not find the Open vSwitch table.", __func__);
+            *e = nc_err_new(NC_ERR_OP_FAILED);
+            return EXIT_FAILURE;
+        }
+        ovsrec_open_vswitch_verify_ssl(ovs);
+        ovsrec_open_vswitch_set_ssl(ovs, NULL);
+        ovsrec_ssl_delete(ssl);
     }
-    ovsrec_open_vswitch_verify_ssl(ovs);
-    ovsrec_open_vswitch_set_ssl(ovs, NULL);
-    ovsrec_ssl_delete(ssl);
 
     return EXIT_SUCCESS;
 }

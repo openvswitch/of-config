@@ -2668,7 +2668,7 @@ txn_add_owned_certificate(xmlNodePtr node, struct nc_err **e)
     xmlNodePtr aux, leaf;
     xmlChar *xmlval;
     const xmlChar *new_resid;
-    int fd, ret;
+    int fd, ret, node_map;
     char *key_type, *key_data;
     const char *resid = NULL;
 
@@ -2693,12 +2693,15 @@ txn_add_owned_certificate(xmlNodePtr node, struct nc_err **e)
         ssl = ovsrec_ssl_insert(ovsdb_handler->txn);
     }
 
+    node_map = 0;
     for (aux = node->children; aux; aux = aux->next) {
         if (aux->type != XML_ELEMENT_NODE) {
             continue;
         }
 
         if (xmlStrEqual(aux->name, BAD_CAST "resource-id")) {
+            node_map |= 1;
+
             xmlval = xmlNodeGetContent(aux);
             smap_replace((struct smap *) &ssl->external_ids, OFC_RESOURCE_ID,
                          (const char *) xmlval);
@@ -2706,6 +2709,8 @@ txn_add_owned_certificate(xmlNodePtr node, struct nc_err **e)
             ovsrec_ssl_set_external_ids(ssl, &ssl->external_ids);
             xmlFree(xmlval);
         } else if (xmlStrEqual(aux->name, BAD_CAST "certificate")) {
+            node_map |= 2;
+
             fd = creat(OFC_DATADIR "/cert.pem", 0644);
             if (fd == -1) {
                 nc_verb_error("%s: creating the certificate file failed (%s).", __func__, strerror(errno));
@@ -2727,6 +2732,8 @@ txn_add_owned_certificate(xmlNodePtr node, struct nc_err **e)
             ovsrec_ssl_verify_certificate(ssl);
             ovsrec_ssl_set_certificate(ssl, OFC_DATADIR "/cert.pem");
         } else if (xmlStrEqual(aux->name, BAD_CAST "private-key")) {
+            node_map |= 4;
+
             for (leaf = aux->children; leaf; leaf = leaf->next) {
                 if (xmlStrEqual(leaf->name, BAD_CAST "key-type")) {
                     key_type = (char*) xmlNodeGetContent(leaf);
@@ -2762,6 +2769,16 @@ txn_add_owned_certificate(xmlNodePtr node, struct nc_err **e)
         }
     }
 
+    if (node_map != 7) {
+        nc_verb_error("%s: some mandatory nodes missing.", __func__);
+        *e = nc_err_new(NC_ERR_OP_FAILED);
+
+        smap_remove((struct smap*) &ssl->external_ids, OFC_RESOURCE_ID);
+        ovsrec_ssl_set_certificate(ssl, "");
+        ovsrec_ssl_set_private_key(ssl, "");
+        return EXIT_FAILURE;
+    }
+
     /* Get the Open_vSwitch table for linking the SSL structure into and
      * thus force all the bridges to use it.
      */
@@ -2784,7 +2801,7 @@ txn_add_external_certificate(xmlNodePtr node, struct nc_err **e)
     xmlNodePtr aux;
     xmlChar *xmlval;
     const xmlChar *new_resid;
-    int fd, mod, ret;
+    int fd, mod, ret, node_map;
 
     if (!node) {
         nc_verb_error("%s: invalid input parameters.", __func__);
@@ -2809,12 +2826,15 @@ txn_add_external_certificate(xmlNodePtr node, struct nc_err **e)
         }
     }
 
+    node_map = 0;
     for (aux = node->children; aux; aux = aux->next) {
         if (aux->type != XML_ELEMENT_NODE) {
             continue;
         }
 
         if (xmlStrEqual(aux->name, BAD_CAST "resource-id")) {
+            node_map |= 1;
+
             xmlval = xmlNodeGetContent(aux);
             smap_replace((struct smap *) &ssl->external_ids, OFC_RESOURCE_ID_2,
                          (const char *) xmlval);
@@ -2822,6 +2842,8 @@ txn_add_external_certificate(xmlNodePtr node, struct nc_err **e)
             ovsrec_ssl_set_external_ids(ssl, &ssl->external_ids);
             xmlFree(xmlval);
         } else if (xmlStrEqual(aux->name, BAD_CAST "certificate")) {
+            node_map |= 2;
+
             fd = creat(OFC_DATADIR "/ca_cert.pem", 0644);
             if (fd == -1) {
                 nc_verb_error("%s: creating the CA certificate file failed (%s).", __func__, strerror(errno));
@@ -2843,6 +2865,15 @@ txn_add_external_certificate(xmlNodePtr node, struct nc_err **e)
             ovsrec_ssl_verify_ca_cert(ssl);
             ovsrec_ssl_set_ca_cert(ssl, OFC_DATADIR "/ca_cert.pem");
         }
+    }
+
+    if (node_map != 3) {
+        nc_verb_error("%s: some mandatory nodes missing.", __func__);
+        *e = nc_err_new(NC_ERR_OP_FAILED);
+
+        smap_remove((struct smap*) &ssl->external_ids, OFC_RESOURCE_ID_2);
+        ovsrec_ssl_set_ca_cert(ssl, "");
+        return EXIT_FAILURE;
     }
 
     /* Get the Open_vSwitch table for linking the SSL structure into and

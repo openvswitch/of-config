@@ -1303,7 +1303,7 @@ edit_delete(xmlNodePtr node, int running, struct nc_err **e)
     xmlUnlinkNode(node);
     xmlFreeNode(node);
 
-    return EXIT_SUCCESS;
+    return ret;
 }
 
 /**
@@ -1673,7 +1673,7 @@ edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running, struct nc_err **e)
     /* remove the node from the edit document */
     edit_delete(edit, 0, NULL);
 
-    return EXIT_SUCCESS;
+    return ret;
 }
 
 /**

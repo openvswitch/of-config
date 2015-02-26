@@ -3984,7 +3984,7 @@ txn_add_bridge(xmlNodePtr node, struct nc_err **e)
         }
     }
 
-    return EXIT_FAILURE;
+    return EXIT_SUCCESS;
 }
 
 const xmlChar *

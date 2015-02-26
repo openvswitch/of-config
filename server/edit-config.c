@@ -1147,7 +1147,8 @@ edit_delete(xmlNodePtr node, int running, struct nc_err **e)
                     ret = txn_del_external_certificate(node, e);
                 } else if (xmlStrEqual(node->name,
                                        BAD_CAST "flow-table")) {
-                    ret = txn_del_flow_table(node, e);
+                    key = get_key(node, "table-id");
+                    ret = txn_del_flow_table(key, e);
                 } else {
                     nc_verb_warning("%s: unknown element %s (parent: %s)",
                                     __func__, (const char *) node->name,
@@ -1171,7 +1172,7 @@ edit_delete(xmlNodePtr node, int running, struct nc_err **e)
                 } else if (xmlStrEqual(node->name, BAD_CAST "queue")) {
                     ret = txn_del_queue(node, e);
                 } else if (xmlStrEqual(node->name, BAD_CAST "flow-table")) {
-                    ret = txn_del_flow_table(node, e);
+                    ret = txn_del_bridge_flowtable(key, aux, e);
                 }
                 /* certificate is ignored on purpose!
                  * Once defined, it is automatically referenced
@@ -1515,7 +1516,7 @@ edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running, struct nc_err **e)
                  *    -> use this only element only for delete
                  */
                 } else if (xmlStrEqual(edit->name, BAD_CAST "flow-table")) {
-                    /* TODO TC: flow-table: add link, do nothing if flow-table does not exist */
+                    ret = txn_add_bridge_flowtable(key, aux, e);
                 }
                 /* certificate is ignored on purpose!
                  * Once defined, it is automatically referenced

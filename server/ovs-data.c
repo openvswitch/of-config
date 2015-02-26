@@ -2329,73 +2329,13 @@ txn_mod_queue_options(const xmlChar *resource_id, const char *option,
 /* end of Queue */
 
 
-static xmlChar *
-ofc_find_bridge_for_flowtable(xmlNodePtr root, xmlChar *flowtable)
-{
-    xmlXPathContextPtr xpathCtx;
-    xmlXPathObjectPtr xpathObj;
-    xmlDocPtr doc;
-    int ret;
-    char *xpathexpr = NULL;
-    xmlChar *bridge_name = NULL;
-    int size;
-    if (root == NULL) {
-        return NULL;
-    }
-    ret = asprintf(&xpathexpr,
-                 "//ofc:switch/ofc:resources/ofc:flow-table['%s']/../../ofc:id[1]",
-                 (const char *) flowtable);
-    if (ret == -1) {
-        return NULL;
-    }
-    doc = root->doc;
-    /* Create xpath evaluation context */
-    xpathCtx = xmlXPathNewContext(doc);
-    if(xpathCtx == NULL) {
-        nc_verb_error("Unable to create new XPath context");
-        goto cleanup;
-    }
-
-    if (xmlXPathRegisterNs(xpathCtx, BAD_CAST "ofc", BAD_CAST "urn:onf:config:yang")) {
-        nc_verb_error("Registering a namespace for XPath failed (%s).", __func__);
-        goto cleanup;
-    }
-
-    /* Evaluate xpath expression */
-    xpathObj = xmlXPathEvalExpression(BAD_CAST xpathexpr, xpathCtx);
-    free(xpathexpr);
-    if(xpathObj == NULL) {
-        nc_verb_error("Unable to evaluate xpath expression \"%s\"", xpathexpr);
-        goto cleanup;
-    }
-
-    /* Print results */
-    size = (xpathObj->nodesetval) ? xpathObj->nodesetval->nodeNr : 0;
-    if (size == 1) {
-        if (xpathObj->nodesetval->nodeTab[0]
-            && xpathObj->nodesetval->nodeTab[0]->children
-            && xpathObj->nodesetval->nodeTab[0]->children->content) {
-            bridge_name = xmlNodeGetContent(xpathObj->nodesetval->nodeTab[0]);
-        }
-    }
-
-cleanup:
-    /* Cleanup, use bridge_name that was initialized or set */
-    xmlXPathFreeObject(xpathObj);
-    xmlXPathFreeContext(xpathCtx);
-    return bridge_name;
-}
-
 int
 txn_add_flow_table(xmlNodePtr node, struct nc_err **e)
 {
     xmlNodePtr aux;
-    xmlNodePtr resource_id = NULL;
-    xmlNodePtr name = NULL;
-    xmlChar *table_id_txt, *bridge_name;
-    int64_t table_id;
-    struct ovsrec_flow_table *flowtable;
-    const struct ovsrec_bridge *bridge;
+    xmlChar *tid_s = NULL, *name = NULL, *rid = NULL;
+    int64_t tid;
+    struct ovsrec_flow_table *ft;
 
     if (!node) {
         nc_verb_error("%s: invalid input parameters.", __func__);
@@ -2403,53 +2343,50 @@ txn_add_flow_table(xmlNodePtr node, struct nc_err **e)
         return EXIT_FAILURE;
     }
 
-    /* TODO: TC - do not use xmlNodeGetContent() or check the return value */
-
     for (aux = node->children; aux; aux = aux->next) {
         if (aux->type != XML_ELEMENT_NODE) {
             continue;
         }
 
-        if (xmlStrEqual(aux->name, BAD_CAST "resource-id")) {
-            resource_id = aux;
-        } else if (xmlStrEqual(aux->name, BAD_CAST "table-id")) {
-            table_id_txt = xmlNodeGetContent(aux);
-            if (sscanf((const char *) table_id_txt, "%"SCNi64, &table_id) != 1) {
+        if (xmlStrEqual(aux->name, BAD_CAST "table-id")) {
+            tid_s = aux->children ? aux->children->content : NULL;
+            if (sscanf((const char *) tid_s, "%"SCNi64, &tid) != 1) {
                 /* parsing error, wrong number */
-                xmlFree(table_id_txt);
+                *e = nc_err_new(NC_ERR_BAD_ELEM);
+                nc_err_set(*e, NC_ERR_PARAM_INFO_BADELEM, "table_id");
+                nc_err_set(*e, NC_ERR_PARAM_MSG, "Invalid value.");
                 return EXIT_FAILURE;
             }
-            /* TODO check table_id range 0-255? */
+        } else if (xmlStrEqual(aux->name, BAD_CAST "resource-id")) {
+            rid = aux->children ? aux->children->content : NULL;
         } else if (xmlStrEqual(aux->name, BAD_CAST "name")) {
-            name = aux;
-        }
-    }
-    nc_verb_verbose("Add flow table %"PRIi64" %s with %s name.", table_id,
-                    resource_id->children->content, name->children->content);
-
-    flowtable = ovsrec_flow_table_insert(ovsdb_handler->txn);
-
-    /* TODO check if exists */
-    bridge_name = ofc_find_bridge_for_flowtable(node, table_id_txt);
-    if (bridge_name == NULL) {
-        xmlFree(table_id_txt);
-        return EXIT_FAILURE;
-    }
-    OVSREC_BRIDGE_FOR_EACH(bridge, ovsdb_handler->idl) {
-        if (xmlStrEqual(bridge_name, BAD_CAST bridge->name)) {
-            /* TODO replace with append */
-            ovsrec_bridge_set_flow_tables(bridge, (const int64_t *) &table_id,
-                    (struct ovsrec_flow_table **) &flowtable, 1);
+            name = aux->children ? aux->children->content : NULL;
         }
     }
 
-    if (txn_mod_flowtable_name(table_id_txt, name, e) ||
-                     txn_mod_flowtable_resid(table_id_txt, resource_id, e)) {
-        xmlFree(table_id_txt);
+    /* check mandatory items */
+    if (!tid_s) {
+        /* key is missing */
+        nc_verb_error("%s: missing table_id.", __func__);
+        *e = nc_err_new(NC_ERR_BAD_ELEM);
+        nc_err_set(*e, NC_ERR_PARAM_INFO_BADELEM, "flow-table");
+        nc_err_set(*e, NC_ERR_PARAM_MSG, "The list element misses key.");
         return EXIT_FAILURE;
     }
 
-    xmlFree(table_id_txt);
+    /* create flow-table record */
+    ft = ovsrec_flow_table_insert(ovsdb_handler->txn);
+    smap_replace(&ft->external_ids, "table_id", (const char *) tid_s);
+    if (rid) {
+        smap_replace(&ft->external_ids, OFC_RESOURCE_ID, (char *) rid);
+    }
+    ovsrec_flow_table_verify_external_ids(ft);
+    ovsrec_flow_table_set_external_ids(ft, &ft->external_ids);
+    if (name) {
+        ovsrec_flow_table_verify_name(ft);
+        ovsrec_flow_table_set_name(ft, (char *) name);
+    }
+
     return EXIT_SUCCESS;
 }
 
@@ -2458,25 +2395,16 @@ txn_add_flow_table(xmlNodePtr node, struct nc_err **e)
 static const struct ovsrec_flow_table *
 find_flowtable(const xmlChar *table_id)
 {
-    const struct ovsrec_bridge *r, *n;
-    size_t i;
-    int64_t key;
+    const struct ovsrec_flow_table *ft;
+    const char *tid_s;
 
-    if (sscanf((const char *) table_id, "%"SCNi64, &key) != 1) {
-        /* parsing error, wrong number, this should not happen */
-        nc_verb_error("Invalid datastore: '%s' is not valid 'table-id' value.",
-                      (const char *) table_id);
-        return NULL;
-    }
-
-    OVSREC_BRIDGE_FOR_EACH_SAFE(r, n, ovsdb_handler->idl) {
-        for (i = 0; i < r->n_flow_tables; i++) {
-            if (r->key_flow_tables[i] == key) {
-                return r->value_flow_tables[i];
-            }
+    OVSREC_FLOW_TABLE_FOR_EACH(ft, ovsdb_handler->idl) {
+        tid_s = smap_get(&(ft->external_ids), "table_id");
+        if (tid_s && xmlStrcmp(table_id, BAD_CAST tid_s)) {
+            return ft;
         }
     }
-    nc_verb_verbose("Not found.");
+
     return NULL;
 }
 
@@ -2533,16 +2461,16 @@ txn_mod_flowtable_resid(const xmlChar *table_id, xmlNodePtr node,
         nc_err_set(*e, NC_ERR_PARAM_MSG, "Flow table does not exist in OVSDB");
         return EXIT_FAILURE;
     }
+
     if (node != NULL) {
         /* add */
-        value = xmlNodeGetContent(node);
+        value = node->children ? node->children->content : NULL;
         nc_verb_verbose("Set resource-id (%s) to flow-table (%s).",
                         (const char *) value, (const char *) table_id);
         smap_replace((struct smap *) &ft->external_ids, OFC_RESOURCE_ID,
-                     (const char *) value);
+                     (char *) value);
         ovsrec_flow_table_verify_external_ids(ft);
         ovsrec_flow_table_set_external_ids(ft, &ft->external_ids);
-        xmlFree(value);
     } else {
         /* delete */
         nc_verb_verbose("Remove flow-table (%s).",
@@ -2582,57 +2510,88 @@ txn_del_port_tunnel(const xmlChar *port_name, xmlNodePtr tunnel_node,
 }
 
 int
-txn_del_flow_table(xmlNodePtr node, struct nc_err **e)
+txn_del_flow_table(const xmlChar *table_id, struct nc_err **e)
 {
-    xmlChar *table_id_txt;
-    int64_t table_id;
-    const struct ovsrec_bridge *row;
-    size_t i, n_flow_tables;
+    const struct ovsrec_flow_table *ft;
+    const char *tid_s;
 
-    /* TODO: TC - do not use xmlNodeGetContent() or check the return value */
-
-    if (xmlStrEqual(node->parent->parent->name, BAD_CAST "capable-switch")) {
-        table_id_txt = xmlNodeGetContent(go2node(node, BAD_CAST "table-id"));
-        nc_verb_verbose("Deleting flow-table from resources.");
-    } else {
-        /* expecting that we are in 'switch' */
-        table_id_txt = xmlNodeGetContent(node);
-        nc_verb_verbose("Deleting flow-table from switch.");
+    if (!table_id) {
+        nc_verb_error("%s: invalid input parameters.", __func__);
+        *e = nc_err_new(NC_ERR_OP_FAILED);
+        return EXIT_FAILURE;
     }
-    nc_verb_verbose("!!!!Deleting flow-table %s", (const char *) table_id_txt);
 
-    if (sscanf((const char *) table_id_txt, "%"SCNi64, &table_id) != 1) {
-        /* parsing error, wrong number, this should not happen */
-        xmlFree(table_id_txt);
-        nc_verb_error("Invalid datastore: '%s' is not valid 'table-id' value.",
-                      (const char *) table_id_txt);
-        goto cleanup;
-    }
-    OVSREC_BRIDGE_FOR_EACH(row, ovsdb_handler->idl) {
-        for (i = 0; i < row->n_flow_tables; i++) {
-            if (table_id != row->key_flow_tables[i]) {
-                /* skip, not matching... */
-                continue;
-            }
-            if (row->n_flow_tables <= 0) {
-                /* strange, we have nothing to remove... should not happen */
-                goto cleanup;
-            }
-            n_flow_tables = row->n_flow_tables - 1;
-            row->key_flow_tables[i] = row->key_flow_tables[n_flow_tables];
-            row->value_flow_tables[i] = row->value_flow_tables[n_flow_tables];
-            ovsrec_bridge_verify_flow_tables(row);
-            ovsrec_bridge_set_flow_tables(row, row->key_flow_tables,
-                                          row->value_flow_tables,
-                                          n_flow_tables);
-            xmlFree(table_id_txt);
+    OVSREC_FLOW_TABLE_FOR_EACH(ft, ovsdb_handler->idl) {
+        tid_s = smap_get(&ft->external_ids, "table_id");
+        if (tid_s && xmlStrEqual(table_id, BAD_CAST tid_s)) {
+            ovsrec_flow_table_delete(ft);
             return EXIT_SUCCESS;
         }
     }
 
-cleanup:
-    xmlFree(table_id_txt);
+    *e = nc_err_new(NC_ERR_BAD_ELEM);
+    nc_err_set(*e, NC_ERR_PARAM_INFO_BADELEM, "table_id");
+    nc_err_set(*e, NC_ERR_PARAM_MSG, "Flow-table does not exist in OVSDB");
     return EXIT_FAILURE;
+}
+
+/* Remove port reference from the Bridge table */
+int
+txn_del_bridge_flowtable(const xmlChar *br_name, const xmlChar *table_id,
+                         struct nc_err **e)
+{
+    const struct ovsrec_bridge *bridge;
+    const char *tid_s;
+    struct ovsrec_flow_table **fts;
+    int64_t *fts_keys;
+    size_t i, j;
+
+    if (!table_id || !br_name) {
+        nc_verb_error("%s: invalid input parameters.", __func__);
+        *e = nc_err_new(NC_ERR_OP_FAILED);
+        return EXIT_FAILURE;
+    }
+
+    OVSREC_BRIDGE_FOR_EACH(bridge, ovsdb_handler->idl) {
+        if (xmlStrEqual(br_name, BAD_CAST bridge->name)) {
+            break;
+        }
+    }
+    if (!bridge) {
+        *e = nc_err_new(NC_ERR_BAD_ELEM);
+        nc_err_set(*e, NC_ERR_PARAM_INFO_BADELEM, "id");
+        nc_err_set(*e, NC_ERR_PARAM_MSG, "Logical-switch does not exist in OVSDB");
+        return EXIT_FAILURE;
+    }
+
+    fts = malloc(sizeof *bridge->value_flow_tables * (bridge->n_flow_tables - 1));
+    fts_keys = malloc(sizeof *bridge->key_flow_tables * (bridge->n_flow_tables - 1));
+    for (i = j = 0; i < bridge->n_flow_tables; i++) {
+        tid_s = smap_get(&(bridge->value_flow_tables[i]->external_ids),
+                         "table_id");
+        if (!tid_s || !xmlStrEqual(table_id, BAD_CAST tid_s)) {
+            if (j == bridge->n_flow_tables - 1) {
+                *e = nc_err_new(NC_ERR_BAD_ELEM);
+                nc_err_set(*e, NC_ERR_PARAM_INFO_BADELEM, "teble-id");
+                nc_err_set(*e, NC_ERR_PARAM_MSG,
+                           "Table referenced from the logical-switch does not exist in OVSDB");
+                free(fts);
+                free(fts_keys);
+                return EXIT_FAILURE;
+            }
+            fts[j] = bridge->value_flow_tables[i];
+            fts_keys[j] = bridge->key_flow_tables[i];
+            j++;
+        }
+    }
+
+    ovsrec_bridge_verify_flow_tables(bridge);
+    ovsrec_bridge_set_flow_tables(bridge, fts_keys, fts,
+                                  bridge->n_flow_tables - 1);
+    free(fts);
+    free(fts_keys);
+
+    return EXIT_SUCCESS;
 }
 
 /* Remove port reference from the Bridge table */
@@ -3353,6 +3312,69 @@ txn_add_bridge_port(const xmlChar *br_name, const xmlChar *port_name,
     ovsrec_bridge_verify_ports(bridge);
     ovsrec_bridge_set_ports(bridge, ports, bridge->n_ports + 1);
     free(ports);
+
+    return EXIT_SUCCESS;
+}
+
+int
+txn_add_bridge_flowtable(const xmlChar *br_name, const xmlChar *table_id,
+                         struct nc_err **e)
+{
+    const struct ovsrec_bridge *bridge;
+    const struct ovsrec_flow_table *ft;
+    const char *tid_s;
+    int64_t tid = 0;
+    int64_t *fts_keys;
+    struct ovsrec_flow_table **fts;
+    int i;
+
+    if (!table_id || !br_name) {
+        nc_verb_error("%s: invalid input parameters.", __func__);
+        *e = nc_err_new(NC_ERR_OP_FAILED);
+        return EXIT_FAILURE;
+    }
+
+    OVSREC_BRIDGE_FOR_EACH(bridge, ovsdb_handler->idl) {
+        if (xmlStrEqual(br_name, BAD_CAST bridge->name)) {
+            break;
+        }
+    }
+    OVSREC_FLOW_TABLE_FOR_EACH(ft, ovsdb_handler->idl) {
+        tid_s = smap_get(&ft->external_ids, "table_id");
+        if (tid_s && xmlStrEqual(table_id, BAD_CAST tid_s)) {
+            sscanf((const char *) tid_s, "%"SCNi64, &tid);
+            break;
+        }
+    }
+
+    if (!ft || !bridge) {
+        nc_verb_error("%s: %s not found", __func__, ft ? "bridge" : "flow-table");
+        *e = nc_err_new(NC_ERR_BAD_ELEM);
+        if (!ft) {
+            nc_err_set(*e, NC_ERR_PARAM_INFO_BADELEM, "flow-table");
+            nc_err_set(*e, NC_ERR_PARAM_MSG, "Invalid flow-table leafref");
+        } else {
+            nc_err_set(*e, NC_ERR_PARAM_INFO_BADELEM, "id");
+            nc_err_set(*e, NC_ERR_PARAM_MSG, "Logical switch does not exist in OVSDB");
+        }
+        return EXIT_FAILURE;
+    }
+
+    fts = malloc(sizeof *bridge->value_flow_tables * (bridge->n_flow_tables + 1));
+    fts_keys = malloc(sizeof *bridge->key_flow_tables * (bridge->n_flow_tables + 1));
+    for (i = 0; i < bridge->n_flow_tables; i++) {
+        fts[i] = bridge->value_flow_tables[i];
+        fts_keys[i] = bridge->key_flow_tables[i];
+    }
+    fts[i] = (struct ovsrec_flow_table *)ft;
+    fts_keys[i] = tid;
+
+    ovsrec_bridge_verify_flow_tables(bridge);
+    ovsrec_bridge_set_flow_tables(bridge, fts_keys, fts,
+                                  bridge->n_flow_tables + 1);
+
+    free(fts);
+    free(fts_keys);
 
     return EXIT_SUCCESS;
 }

@@ -87,6 +87,8 @@ int txn_del_all(struct nc_err **e);
 /* new functions */
 int txn_del_bridge_port(const xmlChar *br_name, const xmlChar *port_name, struct nc_err **e);
 int txn_add_bridge_port(const xmlChar *br_name, const xmlChar *port_name, struct nc_err **e);
+int txn_del_bridge_flowtable(const xmlChar *br_name, const xmlChar *table_id, struct nc_err **e);
+int txn_add_bridge_flowtable(const xmlChar *br_name, const xmlChar *table_id, struct nc_err **e);
 int txn_del_bridge(const xmlChar *br_name, struct nc_err **e);
 int txn_add_bridge(xmlNodePtr node, struct nc_err **e);
 int txn_mod_bridge_datapath(const xmlChar *br_name, const xmlChar* value, struct nc_err **e);
@@ -121,12 +123,9 @@ int txn_del_queue_id(const xmlChar *resource_id, xmlNodePtr edit, struct nc_err 
 int txn_mod_queue_options(const xmlChar *resource_id, const char *option, xmlNodePtr edit, struct nc_err **e);
 
 int txn_add_flow_table(xmlNodePtr node, struct nc_err **e);
-int txn_del_flow_table(xmlNodePtr node, struct nc_err **e);
+int txn_del_flow_table(const xmlChar *table_id, struct nc_err **e);
 int txn_mod_flowtable_name(const xmlChar *table_id, xmlNodePtr node, struct nc_err **e);
 int txn_mod_flowtable_resid(const xmlChar *table_id, xmlNodePtr node, struct nc_err **e);
-
-int txn_add_flow_table(xmlNodePtr node, struct nc_err **e);
-int txn_del_flow_table(xmlNodePtr node, struct nc_err **e);
 
 int txn_add_owned_certificate(xmlNodePtr node, struct nc_err **e);
 int txn_del_owned_certificate(xmlNodePtr node, struct nc_err **e);

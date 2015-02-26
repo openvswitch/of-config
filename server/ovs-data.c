@@ -902,19 +902,29 @@ get_ports_state(const struct ovsrec_bridge *bridge)
 static void
 get_controller_state(struct ds *string, const struct ovsrec_controller *row)
 {
-    ds_put_format(string, "<controller>");
-    /* TODO?
-       <id>%s</id>
-       */
+    const char *val;
+
+    val = smap_get(&(row->external_ids), "ofconfig-id");
+    if (!val) {
+        /* skip this record */
+        return;
+    }
+
+    ds_put_format(string, "<controller><id>%s</id>", val);
     ds_put_format(string, "<state>");
-    ds_put_format(string, "<connection-state>%s</connection-state>",
-                  (row->is_connected ? "up" : "down"));
-    /* XXX not mapped: ds_put_format(string,
-     * "<current-version>%s</current-version>", ); ds_put_format(string,
-     * "<supported-versions>%s</supported-versions>", ); */
-    /* XXX local-*-in-use  - TODO use netstat */
-    ds_put_format(string, "<local-ip-address-in-use>%s</local-ip-address-in-use>", "XXX");
-    ds_put_format(string, "<local-port-in-use>%s</local-port-in-use>", "XXX");
+    if (row->is_connected) {
+        ds_put_format(string, "<connection-state>up</connection-state>");
+        /* XXX not mapped:
+         * ds_put_format(string, "<current-version>%s</current-version>", );
+         * ds_put_format(string, "<supported-versions>%s</supported-versions>", );
+         */
+        /* XXX local-*-in-use  - TODO use netstat
+         * ds_put_format(string, "<local-ip-address-in-use>%s</local-ip-address-in-use>", );
+         * ds_put_format(string, "<local-port-in-use>%s</local-port-in-use>", );
+         */
+    } else {
+        ds_put_format(string, "<connection-state>down</connection-state>");
+    }
     ds_put_format(string, "</state>");
 
     ds_put_format(string, "</controller>");

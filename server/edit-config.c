@@ -1441,7 +1441,6 @@ edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running, struct nc_err **e)
                   BAD_CAST NC_NS_BASE10));
     clrns(edit);
 
-    /* TODO: follow edit-delete structure */
     nc_verb_verbose("Creating the node %s", (char*)edit->name);
     if (running) {
         /* OVS */

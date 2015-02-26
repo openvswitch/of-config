@@ -543,6 +543,100 @@ find_element_equiv(xmlDocPtr orig_doc, xmlNodePtr edit)
     return (NULL);
 }
 
+/*
+ * Check, that all list instances include thair key necessary to identify them.
+ *
+ * @param[in] doc XML to check
+ * @param[out] e NETCONF error structure to fill in case of error
+ *
+ * @return EXIT_SUCCESS or EXIT_FAILURE
+ */
+int
+check_keys(xmlDocPtr doc, struct nc_err **e)
+{
+    xmlNodePtr l1, l2, l3, root, enode;
+
+    if (!doc || !(root = xmlDocGetRootElement(doc))) {
+        return EXIT_SUCCESS;
+    }
+
+    for (l1 = root->children; l1; l1 = l1->next) {
+        if (l1->type != XML_ELEMENT_NODE) {
+            continue;
+        }
+
+        if (xmlStrEqual(l1->name, BAD_CAST "resources")) {
+            for (l2 = l1->children; l2; l2 = l2->next) {
+                if (l2->type != XML_ELEMENT_NODE) {
+                    continue;
+                }
+
+                if (xmlStrEqual(l2->name, BAD_CAST "port")) {
+                    /* port must have name */
+                    if (!go2node(l2, BAD_CAST "name")) {
+                        enode = l2;
+                        goto error;
+                    }
+                } else if (xmlStrEqual(l2->name, BAD_CAST "queue") ||
+                        xmlStrEqual(l2->name, BAD_CAST "owned-certificate") ||
+                        xmlStrEqual(l2->name, BAD_CAST "external-certificate")) {
+                    /* here must be resource-id */
+                    if (!go2node(l2, BAD_CAST "resource-id")) {
+                        enode = l2;
+                        goto error;
+                    }
+                } else if (xmlStrEqual(l2->name, BAD_CAST "flow-table")) {
+                    /* flow-table must have table-id */
+                    if (!go2node(l2, BAD_CAST "table-id")) {
+                        enode = l2;
+                        goto error;
+                    }
+                }
+            }
+        } else if (xmlStrEqual(l1->name, BAD_CAST "logical-switches")) {
+            for (l2 = l1->children; l2; l2 = l2->next) {
+                if (l2->type != XML_ELEMENT_NODE ||
+                        !xmlStrEqual(l2->name, BAD_CAST "switch")) {
+                    continue;
+                }
+
+                /* switch must have id */
+                if (!go2node(l2, BAD_CAST "id")) {
+                    enode = l2;
+                    goto error;
+                }
+
+                /* check controllers if any */
+                l3 = go2node(l2, BAD_CAST "controllers");
+                if (!l3) {
+                    continue;
+                }
+
+                for (l3 = l3->children; l3; l3 = l3->next) {
+                    if (l3->type != XML_ELEMENT_NODE ||
+                            !xmlStrEqual(l3->name, BAD_CAST "controller")) {
+                        continue;
+                    }
+
+                    /* controller must have id */
+                    if (!go2node(l3, BAD_CAST "id")) {
+                        enode = l3;
+                        goto error;
+                    }
+                }
+            }
+        }
+    }
+
+    return EXIT_SUCCESS;
+
+error:
+    *e = nc_err_new(NC_ERR_BAD_ELEM);
+    nc_err_set(*e, NC_ERR_PARAM_INFO_BADELEM, (char*)enode->name);
+    nc_err_set(*e, NC_ERR_PARAM_MSG, "The list element misses key.");
+    return EXIT_FAILURE;
+}
+
 /**
  * \brief Check edit-config's node operations hierarchy.
  *

@@ -338,6 +338,12 @@ ofcds_editconfig(void *UNUSED(data), const nc_rpc * UNUSED(rpc),
         goto error_cleanup;
     }
 
+    /* check keys in config's lists */
+    ret = check_keys(cfg, error);
+    if (ret != EXIT_SUCCESS) {
+        goto error_cleanup;
+    }
+
     /* check operations */
     ret = check_edit_ops(NC_EDIT_OP_DELETE, defop, cfgds, cfg, error);
     if (ret != EXIT_SUCCESS) {

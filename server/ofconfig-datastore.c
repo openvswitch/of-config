@@ -303,8 +303,7 @@ ofcds_editconfig(void *UNUSED(data), const nc_rpc * UNUSED(rpc),
 
     cfg = xmlReadMemory(config, strlen(config), NULL, NULL, XML_READ_OPT);
     rootcfg = xmlDocGetRootElement(cfg);
-    if (!cfg || (rootcfg && !xmlStrEqual(rootcfg->name,
-    BAD_CAST "capable-switch"))) {
+    if (!cfg || (rootcfg && !xmlStrEqual(rootcfg->name, BAD_CAST "capable-switch"))) {
         nc_verb_error("Invalid <edit-config> configuration data.");
         *error = nc_err_new(NC_ERR_BAD_ELEM);
         nc_err_set(*error, NC_ERR_PARAM_INFO_BADELEM, "config");

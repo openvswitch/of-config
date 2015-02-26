@@ -2513,7 +2513,11 @@ int
 txn_del_flow_table(const xmlChar *table_id, struct nc_err **e)
 {
     const struct ovsrec_flow_table *ft;
+    const struct ovsrec_bridge *bridge;
     const char *tid_s;
+    size_t i, j, found_index;
+    struct ovsrec_flow_table **fts;
+    int64_t *fts_keys;
 
     if (!table_id) {
         nc_verb_error("%s: invalid input parameters.", __func__);
@@ -2521,6 +2525,35 @@ txn_del_flow_table(const xmlChar *table_id, struct nc_err **e)
         return EXIT_FAILURE;
     }
 
+    bridge = ofc_find_bridge_with_flowtable(table_id, &found_index);
+    if (!bridge) {
+        /* no bridge with reference to this flow-table found */
+        goto delete_flow_table;
+    }
+    fts = malloc(sizeof *bridge->value_flow_tables * (bridge->n_flow_tables - 1));
+    fts_keys = malloc(sizeof *bridge->key_flow_tables * (bridge->n_flow_tables - 1));
+    for (i = j = 0; i < bridge->n_flow_tables; i++) {
+        if (i != found_index) {
+            if (j == bridge->n_flow_tables - 1) {
+                *e = nc_err_new(NC_ERR_BAD_ELEM);
+                nc_err_set(*e, NC_ERR_PARAM_INFO_BADELEM, "table-id");
+                nc_err_set(*e, NC_ERR_PARAM_MSG,
+                           "Table referenced from the logical-switch does not exist in OVSDB");
+                free(fts);
+                free(fts_keys);
+                return EXIT_FAILURE;
+            }
+            fts[j] = bridge->value_flow_tables[i];
+            fts_keys[j] = bridge->key_flow_tables[i];
+            j++;
+        }
+    }
+    ovsrec_bridge_verify_flow_tables(bridge);
+    ovsrec_bridge_set_flow_tables(bridge, fts_keys, fts,
+                                  bridge->n_flow_tables - 1);
+    free(fts);
+    free(fts_keys);
+delete_flow_table:
     OVSREC_FLOW_TABLE_FOR_EACH(ft, ovsdb_handler->idl) {
         tid_s = smap_get(&ft->external_ids, "table_id");
         if (tid_s && xmlStrEqual(table_id, BAD_CAST tid_s)) {
@@ -4056,6 +4089,27 @@ ofc_find_bridge_with_port(const xmlChar *port_name)
                 if (!strncmp(interface->name, (char *) port_name, strlen(interface->name)+1)) {
                     return BAD_CAST bridge->name;
                 }
+            }
+        }
+    }
+    return NULL;
+}
+
+const struct ovsrec_bridge *
+ofc_find_bridge_with_flowtable(const xmlChar *table_id, size_t *index)
+{
+    const struct ovsrec_bridge *bridge, *next;
+    const struct ovsrec_flow_table *flow_table;
+    const char *tid_s;
+    int ft_i;
+
+    OVSREC_BRIDGE_FOR_EACH_SAFE(bridge, next, ovsdb_handler->idl) {
+        for (ft_i = 0; ft_i < bridge->n_flow_tables; ft_i++) {
+            flow_table = bridge->value_flow_tables[ft_i];
+            tid_s = smap_get(&(flow_table->external_ids), "table_id");
+            if (xmlStrEqual(BAD_CAST tid_s, table_id)) {
+                *index = ft_i;
+                return bridge;
             }
         }
     }

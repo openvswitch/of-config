@@ -43,6 +43,14 @@ extern int ofc_daemonize;
 /* OVSDB socket path shared with server.c */
 char *ovsdb_path = NULL;
 
+/* The last valid running for rollback */
+struct rollback_s {
+    xmlDocPtr doc;
+    NC_DATASTORE type;
+};
+static struct rollback_s rollback = {NULL, NC_DATASTORE_ERROR};
+volatile static int rollbacking = 0;
+
 /* local locks info */
 struct {
     int running;
@@ -108,7 +116,23 @@ ofcds_free(void *UNUSED(data))
     free(locks.startup_sid);
     free(locks.cand_sid);
 
+    if (rollback.doc) {
+        xmlFreeDoc(rollback.doc);
+        rollback.doc = NULL;
+    }
+
     return;
+}
+
+static void
+store_rollback(const xmlDocPtr doc, NC_DATASTORE type)
+{
+    if (rollback.doc) {
+        xmlFreeDoc(rollback.doc);
+    }
+
+    rollback.doc = doc;
+    rollback.type = type;
 }
 
 int
@@ -119,13 +143,6 @@ ofcds_changed(void *UNUSED(data))
      * purposes, but for now the datastore content is synced continuously
      */
     return (0);
-}
-
-int
-ofcds_rollback(void *UNUSED(data))
-{
-    /* TODO */
-    return EXIT_SUCCESS;
 }
 
 int
@@ -260,19 +277,16 @@ ofcds_deleteconfig(void *UNUSED(data), NC_DATASTORE target,
 {
     switch(target) {
     case NC_DATASTORE_RUNNING:
-        txn_init();
-        if (txn_del_all(error)) {
-            txn_abort();
-            return EXIT_FAILURE;
-        }
-        ofc_set_switchid(NULL);
-        return txn_commit(error);
+        *error = nc_err_new (NC_ERR_OP_FAILED);
+        nc_err_set (*error, NC_ERR_PARAM_MSG,
+                    "Cannot delete a running datastore.");
+        return EXIT_FAILURE;
     case NC_DATASTORE_STARTUP:
-        xmlFreeDoc(gds_startup);
+        store_rollback(gds_startup, NC_DATASTORE_STARTUP);
         gds_startup = NULL;
         break;
     case NC_DATASTORE_CANDIDATE:
-        xmlFreeDoc(gds_cand);
+        store_rollback(gds_cand, NC_DATASTORE_CANDIDATE);
         gds_cand = NULL;
         break;
     default:
@@ -323,6 +337,7 @@ ofcds_editconfig(void *UNUSED(data), const nc_rpc * UNUSED(rpc),
         }
         cfgds = xmlReadMemory(aux, strlen(aux), NULL, NULL, XML_READ_OPT);
         free(aux);
+
         running = 1;
         break;
     case NC_DATASTORE_STARTUP:
@@ -337,6 +352,7 @@ ofcds_editconfig(void *UNUSED(data), const nc_rpc * UNUSED(rpc),
         nc_err_set(*error, NC_ERR_PARAM_INFO_BADELEM, "target");
         goto error_cleanup;
     }
+    store_rollback(xmlCopyDoc(cfgds, 1), target);
 
     /* check keys in config's lists */
     ret = check_keys(cfg, error);
@@ -483,6 +499,9 @@ ofcds_copyconfig(void *UNUSED(data), NC_DATASTORE target,
             /* create envelope */
             dst_doc = xmlNewDoc(BAD_CAST "1.0");
         }
+        if (!rollbacking) {
+            store_rollback(xmlCopyDoc(dst_doc, 1), target);
+        }
 
         txn_init();
         if (edit_replace(dst_doc, root, 1, error)) {
@@ -503,10 +522,18 @@ ofcds_copyconfig(void *UNUSED(data), NC_DATASTORE target,
 
         /* store the copy */
         if (target == NC_DATASTORE_STARTUP) {
-            xmlFreeDoc(gds_startup);
+            if (!rollbacking) {
+                store_rollback(gds_startup, target);
+            } else {
+                xmlFreeDoc(gds_startup);
+            }
             gds_startup = dst_doc;
         } else { /* NC_DATASTORE_CANDIDATE */
-            xmlFreeDoc(gds_cand);
+            if (!rollbacking) {
+                store_rollback(gds_cand, target);
+            } else {
+                xmlFreeDoc(gds_cand);
+            }
             gds_cand = dst_doc;
         }
 
@@ -522,6 +549,33 @@ ofcds_copyconfig(void *UNUSED(data), NC_DATASTORE target,
 
 cleanup:
     xmlFreeDoc(src_doc);
+
+    return ret;
+}
+
+int
+ofcds_rollback(void *UNUSED(data))
+{
+    xmlChar *data;
+    int size, ret;
+    struct nc_err *e;
+
+    if (!rollback.doc || rollback.type == NC_DATASTORE_ERROR) {
+        nc_verb_error("No data to rollback");
+        return EXIT_FAILURE;
+    }
+
+    /* dump data for copy-config */
+    xmlDocDumpMemory(rollback.doc, &data, &size);
+    rollbacking = 1;
+    ret = ofcds_copyconfig(NULL, rollback.type, NC_DATASTORE_CONFIG,
+                           (char*)data, &e);
+    rollbacking = 0;
+
+    if (ret) {
+        nc_err_free(e);
+    }
+    xmlFree(data);
 
     return ret;
 }

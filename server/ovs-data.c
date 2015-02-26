@@ -664,9 +664,12 @@ static int
 dev_set_ethtool(const char* ifname, struct ethtool_cmd *ecmd)
 {
     struct ifreq ethreq;
+
+    memset(&ethreq, 0, sizeof ethreq);
+
     strncpy(ethreq.ifr_name, ifname, sizeof ethreq.ifr_name);
-    ethreq.ifr_data = ecmd;
     ecmd->cmd = ETHTOOL_SSET;
+    ethreq.ifr_data = ecmd;
 
     return ioctl(ioctlfd, SIOCETHTOOL, &ethreq);
 }
@@ -1079,14 +1082,13 @@ get_bridges_config(void)
 
     ds_init(&string);
     OVSREC_BRIDGE_FOR_EACH_SAFE(row, next, ovsdb_handler->idl) {
-        /* char *uuid = print_uuid(&row->header_.uuid); */
-        /* ds_put_format(&string, "<resource-id>%s</resource-id>", uuid);
-         * free(uuid); */
         ds_put_format(&string, "<switch>");
         ds_put_format(&string, "<id>%s</id>", row->name);
         /* enabled is not handled:
          * it is too complicated to handle it in combination with the
-         * OVSDB's garbage collection.
+         * OVSDB's garbage collection. We would have to store almost complete
+         * configuration data locally including applying edit-config to it
+         * temporarily while the bridge is disabled.
          */
         find_and_append_smap_val(&row->other_config, "datapath-id",
                                  "datapath-id", &string);

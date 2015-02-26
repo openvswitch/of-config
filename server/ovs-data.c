@@ -68,7 +68,7 @@ ovsdb_t *ovsdb_handler = NULL;
 
 int ioctlfd = -1;
 
-struct u32_str_map{
+struct u32_str_map {
     uint32_t value;
     const char *str;
 };
@@ -84,29 +84,29 @@ print_uuid_ro(const struct uuid *uuid)
 }
 
 static const struct u32_str_map rates[] = {
-    { ADVERTISED_10baseT_Half,       "10Mb-HD" },
-    { ADVERTISED_10baseT_Full,       "10Mb-FD" },
-    { ADVERTISED_100baseT_Half,      "100Mb-HD" },
-    { ADVERTISED_100baseT_Full,      "100Mb-FD" },
-    { ADVERTISED_1000baseT_Half,     "1Gb-HD" },
-    { ADVERTISED_1000baseT_Full,     "1Gb-FD" },
-    { ADVERTISED_1000baseKX_Full,    "1Gb-FD" },
+    {ADVERTISED_10baseT_Half, "10Mb-HD"},
+    {ADVERTISED_10baseT_Full, "10Mb-FD"},
+    {ADVERTISED_100baseT_Half, "100Mb-HD"},
+    {ADVERTISED_100baseT_Full, "100Mb-FD"},
+    {ADVERTISED_1000baseT_Half, "1Gb-HD"},
+    {ADVERTISED_1000baseT_Full, "1Gb-FD"},
+    {ADVERTISED_1000baseKX_Full, "1Gb-FD"},
 //      { ADVERTISED_2500baseX_Full,     "2500baseX/Full" },
-    { ADVERTISED_10000baseT_Full,    "10Gb" },
-    { ADVERTISED_10000baseKX4_Full,  "10Gb" },
-    { ADVERTISED_10000baseKR_Full,   "10Gb" },
+    {ADVERTISED_10000baseT_Full, "10Gb"},
+    {ADVERTISED_10000baseKX4_Full, "10Gb"},
+    {ADVERTISED_10000baseKR_Full, "10Gb"},
 //      { ADVERTISED_20000baseMLD2_Full, "20000baseMLD2/Full" },
 //      { ADVERTISED_20000baseKR2_Full,  "20000baseKR2/Full" },
-    { ADVERTISED_40000baseKR4_Full,  "40Gb" },
-    { ADVERTISED_40000baseCR4_Full,  "40Gb" },
-    { ADVERTISED_40000baseSR4_Full,  "40Gb" },
-    { ADVERTISED_40000baseLR4_Full,  "40Gb" },
-};
-static const struct u32_str_map medium[] = {
-    { ADVERTISED_TP,    "copper" },
-    { ADVERTISED_FIBRE, "fiber" },
+    {ADVERTISED_40000baseKR4_Full, "40Gb"},
+    {ADVERTISED_40000baseCR4_Full, "40Gb"},
+    {ADVERTISED_40000baseSR4_Full, "40Gb"},
+    {ADVERTISED_40000baseLR4_Full, "40Gb"},
 };
 
+static const struct u32_str_map medium[] = {
+    {ADVERTISED_TP, "copper"},
+    {ADVERTISED_FIBRE, "fiber"},
+};
 
 /* OpenFlow helpers to get information about interfaces */
 
@@ -124,6 +124,7 @@ open_vconn_socket(const char *name, struct vconn **vconnp)
 {
     int error;
     char *vconn_name;
+
     if (asprintf(&vconn_name, "unix:%s", name) == -1) {
         return ENOMEM;
     }
@@ -239,7 +240,7 @@ ofc_of_get_ports(struct vconn *vconnp)
  */
 static void
 ofc_of_mod_port_internal(struct vconn *vconnp, const char *port_name,
-                enum ofputil_port_config bit, char value)
+                         enum ofputil_port_config bit, char value)
 {
     enum ofptype type;
     int ofp_version;
@@ -268,7 +269,7 @@ ofc_of_mod_port_internal(struct vconn *vconnp, const char *port_name,
     /* find port by name */
     while (!ofputil_pull_phy_port(oh->version, &b, &pp)) {
         /* modify port */
-        if (!strncmp(pp.name, port_name, strlen(pp.name)+1)) {
+        if (!strncmp(pp.name, port_name, strlen(pp.name) + 1)) {
             /* prepare port for transaction */
             pm.port_no = pp.port_no;
             pm.config = 0;
@@ -289,8 +290,8 @@ ofc_of_mod_port_internal(struct vconn *vconnp, const char *port_name,
 }
 
 int
-ofc_of_mod_port(const xmlChar *bridge_name, const xmlChar *port_name,
-                const xmlChar *bit_xchar, const xmlChar *value,
+ofc_of_mod_port(const xmlChar * bridge_name, const xmlChar * port_name,
+                const xmlChar * bit_xchar, const xmlChar * value,
                 struct nc_err **e)
 {
     struct vconn *vconnp;
@@ -304,13 +305,13 @@ ofc_of_mod_port(const xmlChar *bridge_name, const xmlChar *port_name,
     } else if (xmlStrEqual(value, BAD_CAST "true")) {
         val = 1;
     } else if (xmlStrEqual(value, BAD_CAST "down")) {
-        val = 1; /* inverse logic for admin-state */
+        val = 1;                /* inverse logic for admin-state */
     } else if (xmlStrEqual(value, BAD_CAST "up")) {
-        val = 0; /* inverse logic for admin-state */
+        val = 0;                /* inverse logic for admin-state */
     } else {
         *e = nc_err_new(NC_ERR_BAD_ELEM);
-        nc_err_set(*e, NC_ERR_PARAM_INFO_BADELEM, (char*) bit_xchar);
-        nc_err_set(*e,NC_ERR_PARAM_MSG, "Invalid element value.");
+        nc_err_set(*e, NC_ERR_PARAM_INFO_BADELEM, (char *) bit_xchar);
+        nc_err_set(*e, NC_ERR_PARAM_MSG, "Invalid element value.");
         return EXIT_FAILURE;
     }
     if (xmlStrEqual(bit_xchar, BAD_CAST "no-receive")) {
@@ -323,7 +324,7 @@ ofc_of_mod_port(const xmlChar *bridge_name, const xmlChar *port_name,
         bit = OFPUTIL_PC_PORT_DOWN;
     } else {
         *e = nc_err_new(NC_ERR_BAD_ELEM);
-        nc_err_set(*e, NC_ERR_PARAM_INFO_BADELEM, (char*)bit_xchar);
+        nc_err_set(*e, NC_ERR_PARAM_INFO_BADELEM, (char *) bit_xchar);
         nc_err_set(*e, NC_ERR_PARAM_MSG, "Invalid element name.");
         return EXIT_FAILURE;
     }
@@ -334,7 +335,8 @@ ofc_of_mod_port(const xmlChar *bridge_name, const xmlChar *port_name,
         nc_verb_error("OpenFlow: could not connect to '%s' bridge.",
                       bridge_name);
         *e = nc_err_new(NC_ERR_OP_FAILED);
-        nc_err_set(*e, NC_ERR_PARAM_MSG, "Unable to connect to the bridge via openFlow.");
+        nc_err_set(*e, NC_ERR_PARAM_MSG,
+                   "Unable to connect to the bridge via openFlow.");
         return EXIT_FAILURE;
     }
     ofc_of_mod_port_internal(vconnp, (char *) port_name, bit, val);
@@ -374,14 +376,13 @@ ofc_of_getport_byname(struct ofpbuf *reply, const char *name)
 
     while (!ofputil_pull_phy_port(oh->version, &b, &pp)) {
         /* this is the point where we have information about state and
-           configuration of interface */
-        if (!strncmp(pp.name, name, strlen(pp.name)+1)) {
+         * configuration of interface */
+        if (!strncmp(pp.name, name, strlen(pp.name) + 1)) {
             return &pp;
         }
     }
     return NULL;
 }
-
 
 /*
  * If key is in the string map s, append the it's value into string,
@@ -400,10 +401,11 @@ find_and_append_smap_val(const struct smap *s, const char *key,
     char dpid[24];
 
     const char *value = smap_get(s, key);
+
     if (value != NULL) {
         /* exception for datapath-id format conversion */
         if (!strcmp(elem, "datapath-id")) {
-            for(i = 0, j = 1; j < 24; j++) {
+            for (i = 0, j = 1; j < 24; j++) {
                 if (!(j % 3)) {
                     dpid[j - 1] = ':';
                 } else {
@@ -417,7 +419,6 @@ find_and_append_smap_val(const struct smap *s, const char *key,
         ds_put_format(string, "<%s>%s</%s>", elem, value, elem);
     }
 }
-
 
 /* Returns true and sets key of flow-table if found.  Otherwise it
  * returns false.
@@ -428,6 +429,7 @@ find_flowtable_id(const struct ovsrec_flow_table *flowtable, int64_t *key)
     const struct ovsrec_bridge *row;
     size_t i;
     int cmp;
+
     OVSREC_BRIDGE_FOR_EACH(row, ovsdb_handler->idl) {
         for (i = 0; i < row->n_flow_tables; i++) {
             cmp = uuid_equals(&flowtable->header_.uuid,
@@ -457,9 +459,10 @@ get_flow_tables_state(void)
             continue;
         }
         ds_put_format(&string, "<flow-table>"
-                      "<table-id>%"PRIi64"</table-id>"
-                      "<max-entries>%"PRId64"</max-entries></flow-table>",
-                      table_id, (row->n_flow_limit > 0 ? row->flow_limit[0] : 0));
+                      "<table-id>%" PRIi64 "</table-id>"
+                      "<max-entries>%" PRId64 "</max-entries></flow-table>",
+                      table_id,
+                      (row->n_flow_limit > 0 ? row->flow_limit[0] : 0));
     }
     return ds_steal_cstr(&string);
 }
@@ -478,10 +481,11 @@ get_flow_tables_config(void)
         if (!find_flowtable_id(row, &table_id)) {
             continue;
         }
-        ds_put_format(&string, "<flow-table><table-id>%"PRIi64"</table-id>",
+        ds_put_format(&string, "<flow-table><table-id>%" PRIi64 "</table-id>",
                       table_id);
         if (resource_id != NULL && strcmp(resource_id, "")) {
-            ds_put_format(&string, "<resource-id>%s</resource-id>", resource_id);
+            ds_put_format(&string, "<resource-id>%s</resource-id>",
+                          resource_id);
         }
         ds_put_format(&string, "<name>%s</name></flow-table>", row->name);
     }
@@ -494,6 +498,7 @@ find_queue_id(const struct ovsrec_queue *queue, int64_t *id)
     const struct ovsrec_qos *row;
     size_t i;
     int cmp;
+
     OVSREC_QOS_FOR_EACH(row, ovsdb_handler->idl) {
         for (i = 0; i < row->n_queues; i++) {
             cmp = uuid_equals(&queue->header_.uuid,
@@ -515,6 +520,7 @@ find_queue_port(const struct ovsrec_queue *queue, const char **port_name)
     const struct ovsrec_qos *qos;
     size_t q;
     int cmp;
+
     OVSREC_PORT_FOR_EACH(row, ovsdb_handler->idl) {
         qos = row->qos;
         if (qos == NULL) {
@@ -537,14 +543,9 @@ find_queue_port(const struct ovsrec_queue *queue, const char **port_name)
 static char *
 get_queues_config(void)
 {
-    /* TODO
-       "<queue><id>%s</id>"
-       "<port>%s</port>"
-       "<properties>"
-       "<experimenter-id>%s</experimenter-id>"
-       "<experimenter-data>%s</experimenter-data>"
-       "</properties></queue>"
-       */
+    /* TODO "<queue><id>%s</id>" "<port>%s</port>" "<properties>"
+     * "<experimenter-id>%s</experimenter-id>"
+     * "<experimenter-data>%s</experimenter-data>" "</properties></queue>" */
     const struct ovsrec_queue *row, *next;
     struct ds string;
     const char *resource_id, *port_name;
@@ -557,10 +558,9 @@ get_queues_config(void)
             continue;
         }
         ds_put_format(&string,
-                      "<queue><resource-id>%s</resource-id>",
-                      resource_id);
+                      "<queue><resource-id>%s</resource-id>", resource_id);
         if (find_queue_id(row, &id)) {
-            ds_put_format(&string, "<id>%"PRIi64"</id>", id);
+            ds_put_format(&string, "<id>%" PRIi64 "</id>", id);
         }
         find_queue_port(row, &port_name);
         if (port_name != NULL) {
@@ -612,9 +612,10 @@ dump_port_features(struct ds *s, uint32_t mask)
 }
 
 static unsigned int
-dev_get_flags(const char* ifname)
+dev_get_flags(const char *ifname)
 {
     struct ifreq ethreq;
+
     strncpy(ethreq.ifr_name, ifname, sizeof ethreq.ifr_name);
 
     if (ioctl(ioctlfd, SIOCGIFFLAGS, &ethreq)) {
@@ -627,9 +628,10 @@ dev_get_flags(const char* ifname)
 }
 
 static int
-dev_set_flags(const char* ifname, unsigned int flags)
+dev_set_flags(const char *ifname, unsigned int flags)
 {
     struct ifreq ethreq;
+
     strncpy(ethreq.ifr_name, ifname, sizeof ethreq.ifr_name);
 
     ethreq.ifr_flags = flags;
@@ -643,7 +645,7 @@ dev_set_flags(const char* ifname, unsigned int flags)
 }
 
 static struct ethtool_cmd *
-dev_get_ethtool(const char* ifname)
+dev_get_ethtool(const char *ifname)
 {
     static struct ethtool_cmd ecmd;
     struct ifreq ethreq;
@@ -661,7 +663,7 @@ dev_get_ethtool(const char* ifname)
 }
 
 static int
-dev_set_ethtool(const char* ifname, struct ethtool_cmd *ecmd)
+dev_set_ethtool(const char *ifname, struct ethtool_cmd *ecmd)
 {
     struct ifreq ethreq;
 
@@ -685,6 +687,7 @@ get_ports_config(const struct ovsrec_bridge *bridge)
     struct ofpbuf *of_ports = NULL;
     struct ofputil_phy_port *of_port = NULL;
     enum ofputil_port_config c;
+
     if (ofc_of_open_vconn(bridge_name, &vconnp) == true) {
         of_ports = ofc_of_get_ports(vconnp);
     } else {
@@ -700,8 +703,10 @@ get_ports_config(const struct ovsrec_bridge *bridge)
 
             ds_put_format(&string, "<port>");
             ds_put_format(&string, "<name>%s</name>", row->name);
-            ds_put_format(&string, "<requested-number>%" PRIu64 "</requested-number>",
-                          (row->n_ofport_request > 0 ? row->ofport_request[0] : 0));
+            ds_put_format(&string,
+                          "<requested-number>%" PRIu64 "</requested-number>",
+                          (row->n_ofport_request >
+                           0 ? row->ofport_request[0] : 0));
             ds_put_format(&string, "<configuration>");
 
             /* get interface status */
@@ -719,13 +724,15 @@ get_ports_config(const struct ovsrec_bridge *bridge)
             } else {
                 /* port was not found in OpenFlow reply, but we have ethtool */
                 ds_put_format(&string, "<admin-state>%s</admin-state>",
-                              (dev_get_flags(row->name) & IFF_UP) ? "up" : "down");
+                              (dev_get_flags(row->name) & IFF_UP) ? "up" :
+                              "down");
             }
 
             ds_put_format(&string, "</configuration>");
 
             /* get interface features via ioctl() */
             struct ethtool_cmd *ecmd;
+
             ecmd = dev_get_ethtool(row->name);
 
             ds_put_format(&string, "<features><advertised>");
@@ -735,30 +742,36 @@ get_ports_config(const struct ovsrec_bridge *bridge)
             if (!strcmp(row->type, "gre")) {
                 ds_put_format(&string, "<ipgre-tunnel>");
                 find_and_append_smap_val(&row->options, "local_ip",
-                        "local-endpoint-ipv4-adress", &string);
+                                         "local-endpoint-ipv4-adress",
+                                         &string);
                 find_and_append_smap_val(&row->options, "remote_ip",
-                        "remote-endpoint-ipv4-adress", &string);
+                                         "remote-endpoint-ipv4-adress",
+                                         &string);
                 find_and_append_smap_val(&row->options, "csum",
-                        "checksum-present", &string);
+                                         "checksum-present", &string);
                 find_and_append_smap_val(&row->options, "key", "key", &string);
                 ds_put_format(&string, "</ipgre-tunnel>");
             } else if (!strcmp(row->type, "vxlan")) {
                 ds_put_format(&string, "<vxlan-tunnel>");
                 find_and_append_smap_val(&row->options, "local_ip",
-                        "local-endpoint-ipv4-adress", &string);
+                                         "local-endpoint-ipv4-adress",
+                                         &string);
                 find_and_append_smap_val(&row->options, "remote_ip",
-                        "remote-endpoint-ipv4-adress", &string);
+                                         "remote-endpoint-ipv4-adress",
+                                         &string);
 
                 find_and_append_smap_val(&row->options, "key", "vni", &string);
                 ds_put_format(&string, "</vxlan-tunnel>");
             } else if ((!strcmp(row->type, "gre64"))
-                    || (!strcmp(row->type, "geneve"))
-                    || (!strcmp(row->type, "lisp"))) {
+                       || (!strcmp(row->type, "geneve"))
+                       || (!strcmp(row->type, "lisp"))) {
                 ds_put_format(&string, "<tunnel>");
                 find_and_append_smap_val(&row->options, "local_ip",
-                        "local-endpoint-ipv4-adress", &string);
+                                         "local-endpoint-ipv4-adress",
+                                         &string);
                 find_and_append_smap_val(&row->options, "remote_ip",
-                        "remote-endpoint-ipv4-adress", &string);
+                                         "remote-endpoint-ipv4-adress",
+                                         &string);
                 ds_put_format(&string, "</tunnel>");
             }
             ds_put_format(&string, "</port>");
@@ -799,80 +812,83 @@ get_ports_state(const struct ovsrec_bridge *bridge)
 
             /* get interface status via ioctl() */
             struct ethtool_cmd *ecmd;
+
             ecmd = dev_get_ethtool(row->name);
 
             ds_put_format(&string, "<port>");
             ds_put_format(&string, "<name>%s</name>", row->name);
             ds_put_format(&string, "<number>%" PRIu64 "</number>",
-                    (row->n_ofport > 0 ? row->ofport[0] : 0));
+                          (row->n_ofport > 0 ? row->ofport[0] : 0));
             of_port = ofc_of_getport_byname(of_ports, row->name);
             if (of_port != NULL) {
-                ds_put_format(&string, "<current-rate>%"PRIu32"</current-rate>"
-                        "<max-rate>%"PRIu32"</max-rate>",
-                        of_port->curr_speed, of_port->max_speed);
+                ds_put_format(&string,
+                              "<current-rate>%" PRIu32 "</current-rate>"
+                              "<max-rate>%" PRIu32 "</max-rate>",
+                              of_port->curr_speed, of_port->max_speed);
             }
             ds_put_format(&string, "<state>");
             ds_put_format(&string, "<oper-state>%s</oper-state>",
-                    (row->link_state != NULL ? row->link_state : "down"));
+                          (row->link_state !=
+                           NULL ? row->link_state : "down"));
 
-            find_and_append_smap_val(&row->other_config, "stp_state", "blocked",
-                    &string);
+            find_and_append_smap_val(&row->other_config, "stp_state",
+                                     "blocked", &string);
             if (of_port != NULL) {
                 ds_put_format(&string, "<live>%s</live>",
-                        OFC_PORT_CONF_BIT(of_port->state, OFPUTIL_PS_LIVE));
+                              OFC_PORT_CONF_BIT(of_port->state,
+                                                OFPUTIL_PS_LIVE));
             }
 
             ds_put_format(&string, "</state>");
 
             ds_put_format(&string, "<features><current>");
-            /* rate
-             * - get speed and convert it with duplex value to OFPortRateType
-             */
+            /* rate - get speed and convert it with duplex value to
+             * OFPortRateType */
             switch ((ecmd->speed_hi << 16) | ecmd->speed) {
-                case 10:
-                    ds_put_format(&string, "<rate>10Mb");
-                    break;
-                case 100:
-                    ds_put_format(&string, "<rate>100Mb");
-                    break;
-                case 1000:
-                    ds_put_format(&string, "<rate>1Gb");
-                    break;
-                case 10000:
-                    ds_put_format(&string, "<rate>10Gb");
-                    ecmd->duplex = DUPLEX_FULL + 1; /* do not print duplex suffix */
-                    break;
-                case 40000:
-                    ds_put_format(&string, "<rate>40Gb");
-                    ecmd->duplex = DUPLEX_FULL + 1; /* do not print duplex suffix */
-                    break;
-                default:
-                    ds_put_format(&string, "<rate>");
-                    ecmd->duplex = DUPLEX_FULL + 1; /* do not print duplex suffix */
+            case 10:
+                ds_put_format(&string, "<rate>10Mb");
+                break;
+            case 100:
+                ds_put_format(&string, "<rate>100Mb");
+                break;
+            case 1000:
+                ds_put_format(&string, "<rate>1Gb");
+                break;
+            case 10000:
+                ds_put_format(&string, "<rate>10Gb");
+                ecmd->duplex = DUPLEX_FULL + 1; /* do not print duplex suffix */
+                break;
+            case 40000:
+                ds_put_format(&string, "<rate>40Gb");
+                ecmd->duplex = DUPLEX_FULL + 1; /* do not print duplex suffix */
+                break;
+            default:
+                ds_put_format(&string, "<rate>");
+                ecmd->duplex = DUPLEX_FULL + 1; /* do not print duplex suffix */
             }
             switch (ecmd->duplex) {
-                case DUPLEX_HALF:
-                    ds_put_format(&string, "-HD</rate>");
-                    break;
-                case DUPLEX_FULL:
-                    ds_put_format(&string, "-FD</rate>");
-                    break;
-                default:
-                    ds_put_format(&string, "</rate>");
-                    break;
+            case DUPLEX_HALF:
+                ds_put_format(&string, "-HD</rate>");
+                break;
+            case DUPLEX_FULL:
+                ds_put_format(&string, "-FD</rate>");
+                break;
+            default:
+                ds_put_format(&string, "</rate>");
+                break;
             }
 
             /* auto-negotiation */
             ds_put_format(&string, "<auto-negotiate>%s</auto-negotiate>",
-                    ecmd->autoneg ? "true" : "false");
+                          ecmd->autoneg ? "true" : "false");
             /* medium */
-            switch(ecmd->port) {
-                case PORT_TP:
-                    ds_put_format(&string, "<medium>copper</medium>");
-                    break;
-                case PORT_FIBRE:
-                    ds_put_format(&string, "<medium>fiber</medium>");
-                    break;
+            switch (ecmd->port) {
+            case PORT_TP:
+                ds_put_format(&string, "<medium>copper</medium>");
+                break;
+            case PORT_FIBRE:
+                ds_put_format(&string, "<medium>fiber</medium>");
+                break;
             }
 
             /* pause is filled with the same value as in advertised */
@@ -917,14 +933,13 @@ get_controller_state(struct ds *string, const struct ovsrec_controller *row)
     ds_put_format(string, "<state>");
     if (row->is_connected) {
         ds_put_format(string, "<connection-state>up</connection-state>");
-        /* XXX not mapped:
-         * ds_put_format(string, "<current-version>%s</current-version>", );
-         * ds_put_format(string, "<supported-versions>%s</supported-versions>", );
-         */
-        /* XXX local-*-in-use  - TODO use netstat
-         * ds_put_format(string, "<local-ip-address-in-use>%s</local-ip-address-in-use>", );
-         * ds_put_format(string, "<local-port-in-use>%s</local-port-in-use>", );
-         */
+        /* XXX not mapped: ds_put_format(string,
+         * "<current-version>%s</current-version>", ); ds_put_format(string,
+         * "<supported-versions>%s</supported-versions>", ); */
+        /* XXX local-*-in-use - TODO use netstat ds_put_format(string,
+         * "<local-ip-address-in-use>%s</local-ip-address-in-use>", );
+         * ds_put_format(string, "<local-port-in-use>%s</local-port-in-use>",
+         * ); */
     } else {
         ds_put_format(string, "<connection-state>down</connection-state>");
     }
@@ -939,6 +954,7 @@ parse_target_to_addr(char *t, char **protocol, char **address, char **port)
 {
     /* XXX write some test for this... */
     char *is_ipv6 = NULL;
+
     if (t == NULL) {
         (*protocol) = NULL;
         (*address) = NULL;
@@ -1084,12 +1100,10 @@ get_bridges_config(void)
     OVSREC_BRIDGE_FOR_EACH_SAFE(row, next, ovsdb_handler->idl) {
         ds_put_format(&string, "<switch>");
         ds_put_format(&string, "<id>%s</id>", row->name);
-        /* enabled is not handled:
-         * it is too complicated to handle it in combination with the
-         * OVSDB's garbage collection. We would have to store almost complete
-         * configuration data locally including applying edit-config to it
-         * temporarily while the bridge is disabled.
-         */
+        /* enabled is not handled: it is too complicated to handle it in
+         * combination with the OVSDB's garbage collection. We would have to
+         * store almost complete configuration data locally including applying
+         * edit-config to it temporarily while the bridge is disabled. */
         find_and_append_smap_val(&row->other_config, "datapath-id",
                                  "datapath-id", &string);
         if (row->fail_mode) {
@@ -1111,7 +1125,7 @@ get_bridges_config(void)
         }
 
         ds_put_format(&string, "<resources>");
-        for (i=0; i<row->n_ports; i++) {
+        for (i = 0; i < row->n_ports; i++) {
             port = row->ports[i];
             if (port == NULL) {
                 continue;
@@ -1122,7 +1136,7 @@ get_bridges_config(void)
         /* flow-table is linked using table-id */
         for (i = 0; i < row->n_flow_tables; i++) {
             /* OVS uses 64b keys */
-            ds_put_format(&string, "<flow-table>%"PRId64"</flow-table>",
+            ds_put_format(&string, "<flow-table>%" PRId64 "</flow-table>",
                           row->key_flow_tables[i]);
         }
 
@@ -1140,9 +1154,7 @@ get_bridges_config(void)
                 }
             }
         }
-        /* TODO:
-           "<certificate>%s</certificate>"
-           */
+        /* TODO: "<certificate>%s</certificate>" */
         ds_put_format(&string, "</resources></switch>");
     }
 
@@ -1182,7 +1194,7 @@ get_owned_certificates_config(void)
         }
         size = lseek(fd, 0, SEEK_END);
         lseek(fd, 0, SEEK_SET);
-        pem = malloc(size+1);
+        pem = malloc(size + 1);
         if (pem == NULL) {
             ds_destroy(&str);
             close(fd);
@@ -1220,7 +1232,7 @@ get_owned_certificates_config(void)
         }
         size = lseek(fd, 0, SEEK_END);
         lseek(fd, 0, SEEK_SET);
-        pem = malloc(size+1);
+        pem = malloc(size + 1);
         if (pem == NULL) {
             ds_destroy(&str);
             close(fd);
@@ -1249,7 +1261,7 @@ get_owned_certificates_config(void)
         pem_start += 32;
         *pem_end = '\0';
         pem_end += 10;
-        *(pem_end+3) = '\0';
+        *(pem_end + 3) = '\0';
 
         ds_put_format(&str, "<key-type>%s</key-type>", pem_end);
         ds_put_format(&str, "<key-data>%s</key-data>", pem_start);
@@ -1267,7 +1279,7 @@ get_external_certificates_config(void)
 {
     struct ds str;
     off_t size;
-    char* pem, *pem_start, *pem_end;
+    char *pem, *pem_start, *pem_end;
     const char *resid = NULL;
     const struct ovsrec_ssl *ssl;
     int fd;
@@ -1293,7 +1305,7 @@ get_external_certificates_config(void)
         }
         size = lseek(fd, 0, SEEK_END);
         lseek(fd, 0, SEEK_SET);
-        pem = malloc(size+1);
+        pem = malloc(size + 1);
         if (pem == NULL) {
             ds_destroy(&str);
             close(fd);
@@ -1332,12 +1344,13 @@ static void
 ofconf_update(ovsdb_t *p)
 {
     int retval, i;
-    for (i=0; i<4; i++) {
+
+    for (i = 0; i < 4; i++) {
         ovsdb_idl_run(p->idl);
         if (!ovsdb_idl_is_alive(p->idl)) {
             retval = ovsdb_idl_get_last_error(p->idl);
             nc_verb_error("OVS database connection failed (%s)",
-                   ovs_retval_to_string(retval));
+                          ovs_retval_to_string(retval));
         }
 
         if (p->seqno != ovsdb_idl_get_seqno(p->idl)) {
@@ -1347,12 +1360,11 @@ ofconf_update(ovsdb_t *p)
 
         if (p->seqno == ovsdb_idl_get_seqno(p->idl)) {
             ovsdb_idl_wait(p->idl);
-            poll_timer_wait(100); /* wait for 100ms (at most) */
+            poll_timer_wait(100);       /* wait for 100ms (at most) */
             poll_block();
         }
     }
 }
-
 
 char *
 ofc_get_config_data(void)
@@ -1384,7 +1396,7 @@ ofc_get_config_data(void)
 
     ds_init(&ports_ds);
 
-    id = (const char*)ofc_get_switchid();
+    id = (const char *) ofc_get_switchid();
     if (!id) {
         /* no id -> no data */
         return strdup("");
@@ -1409,22 +1421,25 @@ ofc_get_config_data(void)
     flow_tables = get_flow_tables_config();
     if (flow_tables == (NULL)) {
         flow_tables = strdup("");
-    } bridges = get_bridges_config();
+    }
+    bridges = get_bridges_config();
     if (bridges == (NULL)) {
         bridges = strdup("");
-    } owned_certificates = get_owned_certificates_config();
+    }
+    owned_certificates = get_owned_certificates_config();
     if (owned_certificates == (NULL)) {
         owned_certificates = strdup("");
-    } external_certificates = get_external_certificates_config();
+    }
+    external_certificates = get_external_certificates_config();
     if (external_certificates == (NULL)) {
         external_certificates = strdup("");
     }
 
     ds_init(&state_data);
 
-    ds_put_format(&state_data, config_data_format, id, ds_cstr(&ports_ds), queues,
-                  flow_tables, owned_certificates, external_certificates,
-                  bridges);
+    ds_put_format(&state_data, config_data_format, id, ds_cstr(&ports_ds),
+                  queues, flow_tables, owned_certificates,
+                  external_certificates, bridges);
 
     free(queues);
     ds_destroy(&ports_ds);
@@ -1591,7 +1606,8 @@ txn_commit(struct nc_err **e)
         case TXN_TRY_AGAIN:
         case TXN_ERROR:
             nc_verb_error("OVSDB transaction failed (%s)",
-                          errmsg = ovsdb_idl_txn_get_error(ovsdb_handler->txn));
+                          errmsg =
+                          ovsdb_idl_txn_get_error(ovsdb_handler->txn));
             nc_err_set(*e, NC_ERR_PARAM_MSG, errmsg);
             break;
         case TXN_NOT_LOCKED:
@@ -1620,12 +1636,12 @@ txn_del_all(struct nc_err **UNUSED(e))
     const struct ovsrec_queue *queue;
     const struct ovsrec_port *port;
     const struct ovsrec_ssl *ssl;
+
     nc_verb_verbose("Delete all (%s:%d)", __FILE__, __LINE__);
 
     /* remove all settings - we need only to remove two base tables
      * Open_vSwitch and Flow_Sample_Collector_set, the rest will be done by
-     * garbage collection
-     */
+     * garbage collection */
     OVSREC_OPEN_VSWITCH_FOR_EACH(ovs, ovsdb_handler->idl) {
         ovsrec_open_vswitch_set_bridges(ovs, NULL, 0);
         ovsrec_open_vswitch_set_ssl(ovs, NULL);
@@ -1709,7 +1725,7 @@ txn_mod_port_reqnumber(const xmlChar *port_name, const xmlChar* value,
     if (iface) {
         ovsrec_interface_verify_ofport_request(iface);
         if (value) {
-            rn = strtol((char*)value, NULL, 10);
+            rn = strtol((char *) value, NULL, 10);
             ovsrec_interface_set_ofport_request(iface, &rn, 1);
         } else {
             ovsrec_interface_set_ofport_request(iface, NULL, 0);
@@ -1725,7 +1741,7 @@ txn_mod_port_reqnumber(const xmlChar *port_name, const xmlChar* value,
 }
 
 int
-txn_mod_port_admin_state(const xmlChar *port_name, const xmlChar* value,
+txn_mod_port_admin_state(const xmlChar *port_name, const xmlChar *value,
                          struct nc_err **e)
 {
     unsigned int flags;
@@ -1738,20 +1754,20 @@ txn_mod_port_admin_state(const xmlChar *port_name, const xmlChar* value,
 
     if (!value) {
         /* delete -> set default value (up) */
-        flags = dev_get_flags((char*) port_name) & IFF_UP;
-        dev_set_flags((char*) port_name, flags);
+        flags = dev_get_flags((char *) port_name) & IFF_UP;
+        dev_set_flags((char *) port_name, flags);
     } else {
         if (xmlStrEqual(value, BAD_CAST "up")) {
-            flags = dev_get_flags((char*) port_name) & IFF_UP;
+            flags = dev_get_flags((char *) port_name) & IFF_UP;
         } else if (xmlStrEqual(value, BAD_CAST "down")) {
-            flags = dev_get_flags((char*) port_name) & ~IFF_UP;
+            flags = dev_get_flags((char *) port_name) & ~IFF_UP;
         } else {
             *e = nc_err_new(NC_ERR_BAD_ELEM);
             nc_err_set(*e, NC_ERR_PARAM_INFO_BADELEM, "admin-state");
             nc_err_set(*e, NC_ERR_PARAM_MSG, "Invalid value to set.");
             return EXIT_FAILURE;
         }
-        dev_set_flags((char*) port_name, flags);
+        dev_set_flags((char *) port_name, flags);
     }
 
     return EXIT_SUCCESS;
@@ -1768,6 +1784,7 @@ txn_mod_port_configuration(xmlNodePtr cfg, struct nc_err **error)
     xmlNodePtr port, aux;
     const char *xpathexpr = "//ofc:port/ofc:configuration/..";
     size_t size, i;
+
     if (cfg == NULL) {
         return EXIT_SUCCESS;
     }
@@ -1781,19 +1798,21 @@ txn_mod_port_configuration(xmlNodePtr cfg, struct nc_err **error)
 
     /* Create xpath evaluation context */
     xpathCtx = xmlXPathNewContext(doc);
-    if(xpathCtx == NULL) {
+    if (xpathCtx == NULL) {
         nc_verb_error("Unable to create new XPath context");
         goto cleanup;
     }
 
-    if (xmlXPathRegisterNs(xpathCtx, BAD_CAST "ofc", BAD_CAST "urn:onf:config:yang")) {
-        nc_verb_error("Registering a namespace for XPath failed (%s).", __func__);
+    if (xmlXPathRegisterNs
+        (xpathCtx, BAD_CAST "ofc", BAD_CAST "urn:onf:config:yang")) {
+        nc_verb_error("Registering a namespace for XPath failed (%s).",
+                      __func__);
         goto cleanup;
     }
 
     /* Evaluate xpath expression */
     xpathObj = xmlXPathEvalExpression(BAD_CAST xpathexpr, xpathCtx);
-    if(xpathObj == NULL) {
+    if (xpathObj == NULL) {
         nc_verb_error("Unable to evaluate xpath expression \"%s\"", xpathexpr);
         goto cleanup;
     }
@@ -1808,7 +1827,8 @@ txn_mod_port_configuration(xmlNodePtr cfg, struct nc_err **error)
             aux = go2node(port, BAD_CAST "configuration");
             for (aux = aux->children; aux; aux = aux->next) {
                 value = aux->children ? aux->children->content : NULL;
-                if (ofc_of_mod_port(bridge_name, port_name, aux->name, value, error)) {
+                if (ofc_of_mod_port
+                    (bridge_name, port_name, aux->name, value, error)) {
                     return EXIT_FAILURE;
                 }
             }
@@ -1841,7 +1861,7 @@ txn_add_port(xmlNodePtr node, struct nc_err **e)
     /* prepare new structures to set content of the port configuration */
     port = ovsrec_port_insert(ovsdb_handler->txn);
     iface = ovsrec_interface_insert(ovsdb_handler->txn);
-    ovsrec_port_set_interfaces(port, (struct ovsrec_interface**)&iface, 1);
+    ovsrec_port_set_interfaces(port, (struct ovsrec_interface **) &iface, 1);
 
     for (aux = node->children; aux; aux = aux->next) {
         if (aux->type != XML_ELEMENT_NODE) {
@@ -1852,9 +1872,9 @@ txn_add_port(xmlNodePtr node, struct nc_err **e)
             xmlval = aux->children ? aux->children->content : NULL;
             if (xmlval) {
                 ovsrec_interface_verify_name(iface);
-                ovsrec_interface_set_name(iface, (char*) xmlval);
+                ovsrec_interface_set_name(iface, (char *) xmlval);
                 ovsrec_port_verify_name(port);
-                ovsrec_port_set_name(port, (char*) xmlval);
+                ovsrec_port_set_name(port, (char *) xmlval);
             } else {
                 return EXIT_FAILURE;
             }
@@ -1904,8 +1924,7 @@ txn_add_port(xmlNodePtr node, struct nc_err **e)
                         }
                     }
                 } else if (xmlStrEqual(aux2->name, BAD_CAST "auto-negotiate")) {
-                    if (xmlStrEqual(aux2->children->content,
-                                    BAD_CAST "false")) {
+                    if (xmlStrEqual(aux2->children->content, BAD_CAST "false")) {
                         ecmd->advertising &= ~ADVERTISED_Autoneg;
                     }
                 } else if (xmlStrEqual(aux2->name, BAD_CAST "pause")) {
@@ -1913,7 +1932,7 @@ txn_add_port(xmlNodePtr node, struct nc_err **e)
                                     BAD_CAST "symetric")) {
                         ecmd->advertising |= ADVERTISED_Pause;
                     } else if (xmlStrEqual(aux2->children->content,
-                                    BAD_CAST "asymetric")) {
+                                           BAD_CAST "asymetric")) {
                         ecmd->advertising |= ADVERTISED_Asym_Pause;
                     }
                 }
@@ -1939,7 +1958,7 @@ txn_add_port_advert(const xmlChar *port_name, xmlNodePtr node,
         return EXIT_FAILURE;
     }
 
-    ecmd = dev_get_ethtool((char*)port_name);
+    ecmd = dev_get_ethtool((char *) port_name);
 
     if (xmlStrEqual(node->name, BAD_CAST "rate")) {
         for (i = 0; i < (sizeof rates) / (sizeof rates[0]); i++) {
@@ -1988,7 +2007,7 @@ txn_del_port_advert(const xmlChar *port_name, xmlNodePtr node,
         return EXIT_FAILURE;
     }
 
-    ecmd = dev_get_ethtool((char*)port_name);
+    ecmd = dev_get_ethtool((char *) port_name);
 
     if (xmlStrEqual(node->name, BAD_CAST "rate")) {
         for (i = 0; i < (sizeof rates) / (sizeof rates[0]); i++) {
@@ -2075,7 +2094,8 @@ txn_add_queue(xmlNodePtr node, struct nc_err **e)
         return EXIT_FAILURE;
     }
     int64_t key;
-    if (sscanf((char *) id, "%"SCNi64, &key) != 1) {
+
+    if (sscanf((char *) id, "%" SCNi64, &key) != 1) {
         /* parsing error, wrong number */
     }
 
@@ -2085,7 +2105,7 @@ txn_add_queue(xmlNodePtr node, struct nc_err **e)
 
     if (prop != NULL) {
         for (aux = prop->children; aux; aux = aux->next) {
-            if (txn_mod_queue_options(resid, (char*)aux->name, aux, e)) {
+            if (txn_mod_queue_options(resid, (char *) aux->name, aux, e)) {
                 return EXIT_FAILURE;
             }
         }
@@ -2210,7 +2230,7 @@ txn_add_queue_port(const xmlChar *resource_id, xmlNodePtr port_elem,
     if (id_elem != NULL) {
         /* TODO: TC - do not use xmlNodeGetContent or check the result */
         xml_id = xmlNodeGetContent(id_elem);
-        if (sscanf((char *) xml_id, "%"SCNi64, &id) != 1) {
+        if (sscanf((char *) xml_id, "%" SCNi64, &id) != 1) {
             /* parsing error, wrong number */
             return EXIT_FAILURE;
         }
@@ -2224,7 +2244,8 @@ txn_add_queue_port(const xmlChar *resource_id, xmlNodePtr port_elem,
         /* create new qos */
         qos = ovsrec_qos_insert(ovsdb_handler->txn);
         ovsrec_qos_verify_queues(qos);
-        ovsrec_qos_set_queues(qos, (int64_t *) &id, (struct ovsrec_queue **) &queue, 1);
+        ovsrec_qos_set_queues(qos, (int64_t *) &id,
+                              (struct ovsrec_queue **) &queue, 1);
         ovsrec_port_verify_qos(port);
         ovsrec_port_set_qos(port, qos);
     } else {
@@ -2232,8 +2253,8 @@ txn_add_queue_port(const xmlChar *resource_id, xmlNodePtr port_elem,
 
         /* enlarge array of pairs */
         n_queues = port->qos->n_queues + 1;
-        ids = malloc(n_queues * sizeof(*ids));
-        queues = malloc(n_queues * sizeof(*queues));
+        ids = malloc(n_queues * sizeof (*ids));
+        queues = malloc(n_queues * sizeof (*queues));
         for (i = 0; i < port->qos->n_queues; i++) {
             ids[i] = port->qos->key_queues[i];
             queues[i] = port->qos->value_queues[i];
@@ -2263,7 +2284,7 @@ txn_add_queue_id(const xmlChar *resource_id, xmlNodePtr edit,
         *e = nc_err_new(NC_ERR_OP_FAILED);
         return EXIT_FAILURE;
     }
-    if (sscanf((char *) edit->children->content, "%"SCNi64, &key) != 1) {
+    if (sscanf((char *) edit->children->content, "%" SCNi64, &key) != 1) {
         /* parsing error, wrong number */
         return EXIT_FAILURE;
     }
@@ -2307,7 +2328,7 @@ txn_mod_queue_options(const xmlChar *resource_id, const char *option,
 
     if (edit) {
         /* add */
-        value = (char*) edit->children->content;
+        value = (char *) edit->children->content;
         nc_verb_verbose("add option %s with value %s to queue", option, value);
 
         smap_replace((struct smap *) &queue->other_config, option, value);
@@ -2327,7 +2348,6 @@ txn_mod_queue_options(const xmlChar *resource_id, const char *option,
 }
 
 /* end of Queue */
-
 
 int
 txn_add_flow_table(xmlNodePtr node, struct nc_err **e)
@@ -2350,7 +2370,7 @@ txn_add_flow_table(xmlNodePtr node, struct nc_err **e)
 
         if (xmlStrEqual(aux->name, BAD_CAST "table-id")) {
             tid_s = aux->children ? aux->children->content : NULL;
-            if (sscanf((const char *) tid_s, "%"SCNi64, &tid) != 1) {
+            if (sscanf((const char *) tid_s, "%" SCNi64, &tid) != 1) {
                 /* parsing error, wrong number */
                 *e = nc_err_new(NC_ERR_BAD_ELEM);
                 nc_err_set(*e, NC_ERR_PARAM_INFO_BADELEM, "table_id");
@@ -2452,6 +2472,7 @@ txn_mod_flowtable_resid(const xmlChar *table_id, xmlNodePtr node,
 {
     xmlChar *value;
     const struct ovsrec_flow_table *ft;
+
     ft = find_flowtable(table_id);
     if (ft == NULL) {
         nc_verb_error("Flow-table %s was not found, name is not set.",
@@ -2473,8 +2494,7 @@ txn_mod_flowtable_resid(const xmlChar *table_id, xmlNodePtr node,
         ovsrec_flow_table_set_external_ids(ft, &ft->external_ids);
     } else {
         /* delete */
-        nc_verb_verbose("Remove flow-table (%s).",
-                        (const char *) table_id);
+        nc_verb_verbose("Remove flow-table (%s).", (const char *) table_id);
         smap_remove((struct smap *) &ft->external_ids, OFC_RESOURCE_ID);
         ovsrec_flow_table_verify_external_ids(ft);
         ovsrec_flow_table_set_external_ids(ft, &ft->external_ids);
@@ -2482,13 +2502,13 @@ txn_mod_flowtable_resid(const xmlChar *table_id, xmlNodePtr node,
 
     return EXIT_SUCCESS;
 }
-
 
 int
 txn_del_port_tunnel(const xmlChar *port_name, xmlNodePtr tunnel_node,
                     struct nc_err **e)
 {
     const struct ovsrec_interface *found = NULL;
+
     nc_verb_verbose("Removing tunnel (%s:%d)", __FILE__, __LINE__);
 
     found = find_interface_by_name(port_name);
@@ -2530,8 +2550,11 @@ txn_del_flow_table(const xmlChar *table_id, struct nc_err **e)
         /* no bridge with reference to this flow-table found */
         goto delete_flow_table;
     }
-    fts = malloc(sizeof *bridge->value_flow_tables * (bridge->n_flow_tables - 1));
-    fts_keys = malloc(sizeof *bridge->key_flow_tables * (bridge->n_flow_tables - 1));
+    fts =
+        malloc(sizeof *bridge->value_flow_tables *
+               (bridge->n_flow_tables - 1));
+    fts_keys =
+        malloc(sizeof *bridge->key_flow_tables * (bridge->n_flow_tables - 1));
     for (i = j = 0; i < bridge->n_flow_tables; i++) {
         if (i != found_index) {
             if (j == bridge->n_flow_tables - 1) {
@@ -2593,12 +2616,16 @@ txn_del_bridge_flowtable(const xmlChar *br_name, const xmlChar *table_id,
     if (!bridge) {
         *e = nc_err_new(NC_ERR_BAD_ELEM);
         nc_err_set(*e, NC_ERR_PARAM_INFO_BADELEM, "id");
-        nc_err_set(*e, NC_ERR_PARAM_MSG, "Logical-switch does not exist in OVSDB");
+        nc_err_set(*e, NC_ERR_PARAM_MSG,
+                   "Logical-switch does not exist in OVSDB");
         return EXIT_FAILURE;
     }
 
-    fts = malloc(sizeof *bridge->value_flow_tables * (bridge->n_flow_tables - 1));
-    fts_keys = malloc(sizeof *bridge->key_flow_tables * (bridge->n_flow_tables - 1));
+    fts =
+        malloc(sizeof *bridge->value_flow_tables *
+               (bridge->n_flow_tables - 1));
+    fts_keys =
+        malloc(sizeof *bridge->key_flow_tables * (bridge->n_flow_tables - 1));
     for (i = j = 0; i < bridge->n_flow_tables; i++) {
         tid_s = smap_get(&(bridge->value_flow_tables[i]->external_ids),
                          "table_id");
@@ -2650,7 +2677,8 @@ txn_del_bridge_port(const xmlChar *br_name, const xmlChar *port_name,
     if (!bridge) {
         *e = nc_err_new(NC_ERR_BAD_ELEM);
         nc_err_set(*e, NC_ERR_PARAM_INFO_BADELEM, "id");
-        nc_err_set(*e, NC_ERR_PARAM_MSG, "Logical-switch does not exist in OVSDB");
+        nc_err_set(*e, NC_ERR_PARAM_MSG,
+                   "Logical-switch does not exist in OVSDB");
         return EXIT_FAILURE;
     }
 
@@ -2718,7 +2746,8 @@ txn_add_owned_certificate(xmlNodePtr node, struct nc_err **e)
         new_resid = get_key(node, "resource-id");
 
         if (resid != NULL && !xmlStrEqual(new_resid, BAD_CAST resid)) {
-            nc_verb_error("%s: saved res-id does not match the new one.", __func__);
+            nc_verb_error("%s: saved res-id does not match the new one.",
+                          __func__);
             *e = nc_err_new(NC_ERR_OP_FAILED);
             return EXIT_FAILURE;
         }
@@ -2746,13 +2775,14 @@ txn_add_owned_certificate(xmlNodePtr node, struct nc_err **e)
 
             fd = creat(OFC_DATADIR "/cert.pem", 0644);
             if (fd == -1) {
-                nc_verb_error("%s: creating the certificate file failed (%s).", __func__, strerror(errno));
+                nc_verb_error("%s: creating the certificate file failed (%s).",
+                              __func__, strerror(errno));
                 *e = nc_err_new(NC_ERR_OP_FAILED);
                 return EXIT_FAILURE;
             }
             write(fd, "-----BEGIN CERTIFICATE-----\n", 28);
             xmlval = xmlNodeGetContent(aux);
-            write(fd, (char*) xmlval, xmlStrlen(xmlval));
+            write(fd, (char *) xmlval, xmlStrlen(xmlval));
             xmlFree(xmlval);
             ret = write(fd, "\n-----END CERTIFICATE-----", 26);
             close(fd);
@@ -2769,15 +2799,16 @@ txn_add_owned_certificate(xmlNodePtr node, struct nc_err **e)
 
             for (leaf = aux->children; leaf; leaf = leaf->next) {
                 if (xmlStrEqual(leaf->name, BAD_CAST "key-type")) {
-                    key_type = (char*) xmlNodeGetContent(leaf);
+                    key_type = (char *) xmlNodeGetContent(leaf);
                 } else if (xmlStrEqual(leaf->name, BAD_CAST "key-data")) {
-                    key_data = (char*) xmlNodeGetContent(leaf);
+                    key_data = (char *) xmlNodeGetContent(leaf);
                 }
             }
 
             fd = creat(OFC_DATADIR "/key.pem", 0600);
             if (fd == -1) {
-                nc_verb_error("%s: creating the private key file failed (%s).", __func__, strerror(errno));
+                nc_verb_error("%s: creating the private key file failed (%s).",
+                              __func__, strerror(errno));
                 *e = nc_err_new(NC_ERR_OP_FAILED);
                 return EXIT_FAILURE;
             }
@@ -2806,15 +2837,14 @@ txn_add_owned_certificate(xmlNodePtr node, struct nc_err **e)
         nc_verb_error("%s: some mandatory nodes missing.", __func__);
         *e = nc_err_new(NC_ERR_OP_FAILED);
 
-        smap_remove((struct smap*) &ssl->external_ids, OFC_RESOURCE_ID);
+        smap_remove((struct smap *) &ssl->external_ids, OFC_RESOURCE_ID);
         ovsrec_ssl_set_certificate(ssl, "");
         ovsrec_ssl_set_private_key(ssl, "");
         return EXIT_FAILURE;
     }
 
-    /* Get the Open_vSwitch table for linking the SSL structure into and
-     * thus force all the bridges to use it.
-     */
+    /* Get the Open_vSwitch table for linking the SSL structure into and thus
+     * force all the bridges to use it. */
     ovs = ovsrec_open_vswitch_first(ovsdb_handler->idl);
     if (!ovs) {
         ovs = ovsrec_open_vswitch_insert(ovsdb_handler->txn);
@@ -2853,7 +2883,8 @@ txn_add_external_certificate(xmlNodePtr node, struct nc_err **e)
         new_resid = get_key(node, "resource-id");
 
         if (resid != NULL && !xmlStrEqual(new_resid, BAD_CAST resid)) {
-            nc_verb_error("%s: saved res-id does not match the new one.", __func__);
+            nc_verb_error("%s: saved res-id does not match the new one.",
+                          __func__);
             *e = nc_err_new(NC_ERR_OP_FAILED);
             return EXIT_FAILURE;
         }
@@ -2879,19 +2910,22 @@ txn_add_external_certificate(xmlNodePtr node, struct nc_err **e)
 
             fd = creat(OFC_DATADIR "/ca_cert.pem", 0644);
             if (fd == -1) {
-                nc_verb_error("%s: creating the CA certificate file failed (%s).", __func__, strerror(errno));
+                nc_verb_error
+                    ("%s: creating the CA certificate file failed (%s).",
+                     __func__, strerror(errno));
                 *e = nc_err_new(NC_ERR_OP_FAILED);
                 return EXIT_FAILURE;
             }
             write(fd, "-----BEGIN CERTIFICATE-----\n", 28);
             xmlval = xmlNodeGetContent(aux);
-            write(fd, (char*) xmlval, xmlStrlen(xmlval));
+            write(fd, (char *) xmlval, xmlStrlen(xmlval));
             xmlFree(xmlval);
             ret = write(fd, "\n-----END CERTIFICATE-----", 26);
             close(fd);
             if (ret < 26) {
                 /* if some of the previous writes failed, this one will too */
-                nc_verb_error("%s: writing the CA certificate failed.", __func__);
+                nc_verb_error("%s: writing the CA certificate failed.",
+                              __func__);
                 *e = nc_err_new(NC_ERR_OP_FAILED);
                 return EXIT_FAILURE;
             }
@@ -2904,14 +2938,13 @@ txn_add_external_certificate(xmlNodePtr node, struct nc_err **e)
         nc_verb_error("%s: some mandatory nodes missing.", __func__);
         *e = nc_err_new(NC_ERR_OP_FAILED);
 
-        smap_remove((struct smap*) &ssl->external_ids, OFC_RESOURCE_ID_2);
+        smap_remove((struct smap *) &ssl->external_ids, OFC_RESOURCE_ID_2);
         ovsrec_ssl_set_ca_cert(ssl, "");
         return EXIT_FAILURE;
     }
 
-    /* Get the Open_vSwitch table for linking the SSL structure into and
-     * thus force all the bridges to use it.
-     */
+    /* Get the Open_vSwitch table for linking the SSL structure into and thus
+     * force all the bridges to use it. */
     if (!mod) {
         ovs = ovsrec_open_vswitch_first(ovsdb_handler->idl);
         if (!ovs) {
@@ -2925,8 +2958,8 @@ txn_add_external_certificate(xmlNodePtr node, struct nc_err **e)
 }
 
 int
-txn_mod_own_cert_certificate(const xmlChar *res_id, xmlNodePtr node,
-                    struct nc_err **e)
+txn_mod_own_cert_certificate(const xmlChar * res_id, xmlNodePtr node,
+                             struct nc_err **e)
 {
     const struct ovsrec_ssl *ssl;
     xmlChar *xmlval;
@@ -2950,17 +2983,18 @@ txn_mod_own_cert_certificate(const xmlChar *res_id, xmlNodePtr node,
         unlink(OFC_DATADIR "/cert.pem");
         ovsrec_ssl_set_certificate(ssl, "");
 
-    /* add */
+        /* add */
     } else {
         fd = creat(OFC_DATADIR "/cert.pem", 0644);
         if (fd == -1) {
-            nc_verb_error("%s: creating the certificate file failed (%s).", __func__, strerror(errno));
+            nc_verb_error("%s: creating the certificate file failed (%s).",
+                          __func__, strerror(errno));
             *e = nc_err_new(NC_ERR_OP_FAILED);
             return EXIT_FAILURE;
         }
         write(fd, "-----BEGIN CERTIFICATE-----\n", 28);
         xmlval = xmlNodeGetContent(node);
-        write(fd, (char*) xmlval, xmlStrlen(xmlval));
+        write(fd, (char *) xmlval, xmlStrlen(xmlval));
         xmlFree(xmlval);
         ret = write(fd, "\n-----END CERTIFICATE-----", 26);
         close(fd);
@@ -2979,7 +3013,7 @@ txn_mod_own_cert_certificate(const xmlChar *res_id, xmlNodePtr node,
 
 int
 txn_mod_own_cert_key_type(const xmlChar *res_id, xmlNodePtr node,
-                    struct nc_err **e)
+                          struct nc_err **e)
 {
     const struct ovsrec_ssl *ssl;
     xmlChar *xmlval;
@@ -3007,13 +3041,14 @@ txn_mod_own_cert_key_type(const xmlChar *res_id, xmlNodePtr node,
 
     fd = open(ssl->private_key, O_RDWR);
     if (fd == -1) {
-        nc_verb_error("%s: could not open the private key file (%s).", __func__, strerror(errno));
+        nc_verb_error("%s: could not open the private key file (%s).",
+                      __func__, strerror(errno));
         *e = nc_err_new(NC_ERR_OP_FAILED);
         return EXIT_FAILURE;
     }
     size = lseek(fd, 0, SEEK_END);
     lseek(fd, 0, SEEK_SET);
-    pem = malloc(size+1);
+    pem = malloc(size + 1);
     if (pem == NULL) {
         nc_verb_error("%s: malloc failed.", __func__);
         *e = nc_err_new(NC_ERR_OP_FAILED);
@@ -3045,7 +3080,7 @@ txn_mod_own_cert_key_type(const xmlChar *res_id, xmlNodePtr node,
     xmlval = xmlNodeGetContent(node);
 
     /* so the file descriptor cursor is at the type */
-    lseek(fd, pem_start-pem, SEEK_SET);
+    lseek(fd, pem_start - pem, SEEK_SET);
 
     if (write(fd, xmlval, xmlStrlen(xmlval)) < xmlStrlen(xmlval)) {
         nc_verb_error("%s: private key is invalid.", __func__);
@@ -3063,8 +3098,8 @@ txn_mod_own_cert_key_type(const xmlChar *res_id, xmlNodePtr node,
 }
 
 int
-txn_mod_own_cert_key_data(const xmlChar *res_id, xmlNodePtr node,
-                    struct nc_err **e)
+txn_mod_own_cert_key_data(const xmlChar * res_id, xmlNodePtr node,
+                          struct nc_err **e)
 {
     const struct ovsrec_ssl *ssl;
     xmlChar *xmlval;
@@ -3092,13 +3127,14 @@ txn_mod_own_cert_key_data(const xmlChar *res_id, xmlNodePtr node,
 
     fd = open(ssl->private_key, O_RDWR);
     if (fd == -1) {
-        nc_verb_error("%s: could not open the private key file (%s).", __func__, strerror(errno));
+        nc_verb_error("%s: could not open the private key file (%s).",
+                      __func__, strerror(errno));
         *e = nc_err_new(NC_ERR_OP_FAILED);
         return EXIT_FAILURE;
     }
     size = lseek(fd, 0, SEEK_END);
     lseek(fd, 0, SEEK_SET);
-    pem = malloc(size+1);
+    pem = malloc(size + 1);
     if (pem == NULL) {
         nc_verb_error("%s: malloc failed.", __func__);
         *e = nc_err_new(NC_ERR_OP_FAILED);
@@ -3129,7 +3165,8 @@ txn_mod_own_cert_key_data(const xmlChar *res_id, xmlNodePtr node,
     }
 
     if (ftruncate(fd, 0) == -1) {
-        nc_verb_error("%s: failed to truncate the private key (%s).", __func__, strerror(errno));
+        nc_verb_error("%s: failed to truncate the private key (%s).", __func__,
+                      strerror(errno));
         *e = nc_err_new(NC_ERR_OP_FAILED);
         free(pem);
         close(fd);
@@ -3139,7 +3176,7 @@ txn_mod_own_cert_key_data(const xmlChar *res_id, xmlNodePtr node,
 
     xmlval = xmlNodeGetContent(node);
     write(fd, pem_start, 32);
-    write(fd, (char*) xmlval, xmlStrlen(xmlval));
+    write(fd, (char *) xmlval, xmlStrlen(xmlval));
     if (write(fd, pem_end, 30) < 30) {
         nc_verb_error("%s: writing the private key failed.", __func__);
         *e = nc_err_new(NC_ERR_OP_FAILED);
@@ -3157,7 +3194,7 @@ txn_mod_own_cert_key_data(const xmlChar *res_id, xmlNodePtr node,
 
 int
 txn_mod_ext_cert_certificate(const xmlChar *res_id, xmlNodePtr node,
-                    struct nc_err **e)
+                             struct nc_err **e)
 {
     const struct ovsrec_ssl *ssl;
     xmlChar *xmlval;
@@ -3181,17 +3218,18 @@ txn_mod_ext_cert_certificate(const xmlChar *res_id, xmlNodePtr node,
         unlink(OFC_DATADIR "/ca_cert.pem");
         ovsrec_ssl_set_ca_cert(ssl, "");
 
-    /* add */
+        /* add */
     } else {
         fd = creat(OFC_DATADIR "/ca_cert.pem", 0644);
         if (fd == -1) {
-            nc_verb_error("%s: creating the CA certificate file failed (%s).", __func__, strerror(errno));
+            nc_verb_error("%s: creating the CA certificate file failed (%s).",
+                          __func__, strerror(errno));
             *e = nc_err_new(NC_ERR_OP_FAILED);
             return EXIT_FAILURE;
         }
         write(fd, "-----BEGIN CERTIFICATE-----\n", 28);
         xmlval = xmlNodeGetContent(node);
-        write(fd, (char*) xmlval, xmlStrlen(xmlval));
+        write(fd, (char *) xmlval, xmlStrlen(xmlval));
         xmlFree(xmlval);
         ret = write(fd, "\n-----END CERTIFICATE-----", 26);
         close(fd);
@@ -3243,7 +3281,7 @@ txn_del_owned_certificate(xmlNodePtr node, struct nc_err **e)
         }
 
         if (xmlStrEqual(aux->name, BAD_CAST "resource-id")) {
-            smap_remove((struct smap*)&ssl->external_ids, OFC_RESOURCE_ID);
+            smap_remove((struct smap *) &ssl->external_ids, OFC_RESOURCE_ID);
         } else if (xmlStrEqual(aux->name, BAD_CAST "certificate")) {
             unlink(OFC_DATADIR "/cert.pem");
             ovsrec_ssl_set_certificate(ssl, "");
@@ -3257,7 +3295,8 @@ txn_del_owned_certificate(xmlNodePtr node, struct nc_err **e)
     if (smap_get(&ssl->external_ids, OFC_RESOURCE_ID_2) == NULL) {
         ovs = ovsrec_open_vswitch_first(ovsdb_handler->idl);
         if (!ovs) {
-            nc_verb_error("%s: could not find the Open vSwitch table.", __func__);
+            nc_verb_error("%s: could not find the Open vSwitch table.",
+                          __func__);
             *e = nc_err_new(NC_ERR_OP_FAILED);
             return EXIT_FAILURE;
         }
@@ -3304,7 +3343,7 @@ txn_del_external_certificate(xmlNodePtr node, struct nc_err **e)
         }
 
         if (xmlStrEqual(aux->name, BAD_CAST "resource-id")) {
-            smap_remove((struct smap*)&ssl->external_ids, OFC_RESOURCE_ID_2);
+            smap_remove((struct smap *) &ssl->external_ids, OFC_RESOURCE_ID_2);
         } else if (xmlStrEqual(aux->name, BAD_CAST "certificate")) {
             unlink(OFC_DATADIR "/ca_cert.pem");
             ovsrec_ssl_set_ca_cert(ssl, "");
@@ -3315,7 +3354,8 @@ txn_del_external_certificate(xmlNodePtr node, struct nc_err **e)
     if (smap_get(&ssl->external_ids, OFC_RESOURCE_ID) == NULL) {
         ovs = ovsrec_open_vswitch_first(ovsdb_handler->idl);
         if (!ovs) {
-            nc_verb_error("%s: could not find the Open vSwitch table.", __func__);
+            nc_verb_error("%s: could not find the Open vSwitch table.",
+                          __func__);
             *e = nc_err_new(NC_ERR_OP_FAILED);
             return EXIT_FAILURE;
         }
@@ -3360,7 +3400,8 @@ txn_add_bridge_port(const xmlChar *br_name, const xmlChar *port_name,
             nc_err_set(*e, NC_ERR_PARAM_MSG, "Invalid port leafref");
         } else {
             nc_err_set(*e, NC_ERR_PARAM_INFO_BADELEM, "id");
-            nc_err_set(*e, NC_ERR_PARAM_MSG, "Logical switch does not exist in OVSDB");
+            nc_err_set(*e, NC_ERR_PARAM_MSG,
+                       "Logical switch does not exist in OVSDB");
         }
         return EXIT_FAILURE;
     }
@@ -3371,7 +3412,7 @@ txn_add_bridge_port(const xmlChar *br_name, const xmlChar *port_name,
     for (i = 0; i < bridge->n_ports; i++) {
         ports[i] = bridge->ports[i];
     }
-    ports[i] = (struct ovsrec_port *)port;
+    ports[i] = (struct ovsrec_port *) port;
 
     ovsrec_bridge_verify_ports(bridge);
     ovsrec_bridge_set_ports(bridge, ports, bridge->n_ports + 1);
@@ -3406,31 +3447,36 @@ txn_add_bridge_flowtable(const xmlChar *br_name, const xmlChar *table_id,
     OVSREC_FLOW_TABLE_FOR_EACH(ft, ovsdb_handler->idl) {
         tid_s = smap_get(&ft->external_ids, "table_id");
         if (tid_s && xmlStrEqual(table_id, BAD_CAST tid_s)) {
-            sscanf((const char *) tid_s, "%"SCNi64, &tid);
+            sscanf((const char *) tid_s, "%" SCNi64, &tid);
             break;
         }
     }
 
     if (!ft || !bridge) {
-        nc_verb_error("%s: %s not found", __func__, ft ? "bridge" : "flow-table");
+        nc_verb_error("%s: %s not found", __func__,
+                      ft ? "bridge" : "flow-table");
         *e = nc_err_new(NC_ERR_BAD_ELEM);
         if (!ft) {
             nc_err_set(*e, NC_ERR_PARAM_INFO_BADELEM, "flow-table");
             nc_err_set(*e, NC_ERR_PARAM_MSG, "Invalid flow-table leafref");
         } else {
             nc_err_set(*e, NC_ERR_PARAM_INFO_BADELEM, "id");
-            nc_err_set(*e, NC_ERR_PARAM_MSG, "Logical switch does not exist in OVSDB");
+            nc_err_set(*e, NC_ERR_PARAM_MSG,
+                       "Logical switch does not exist in OVSDB");
         }
         return EXIT_FAILURE;
     }
 
-    fts = malloc(sizeof *bridge->value_flow_tables * (bridge->n_flow_tables + 1));
-    fts_keys = malloc(sizeof *bridge->key_flow_tables * (bridge->n_flow_tables + 1));
+    fts =
+        malloc(sizeof *bridge->value_flow_tables *
+               (bridge->n_flow_tables + 1));
+    fts_keys =
+        malloc(sizeof *bridge->key_flow_tables * (bridge->n_flow_tables + 1));
     for (i = 0; i < bridge->n_flow_tables; i++) {
         fts[i] = bridge->value_flow_tables[i];
         fts_keys[i] = bridge->key_flow_tables[i];
     }
-    fts[i] = (struct ovsrec_flow_table *)ft;
+    fts[i] = (struct ovsrec_flow_table *) ft;
     fts_keys[i] = tid;
 
     ovsrec_bridge_verify_flow_tables(bridge);
@@ -3632,23 +3678,24 @@ txn_add_contr(xmlNodePtr node, const xmlChar *br_name, struct nc_err **e)
 
         if (xmlStrEqual(aux->name, BAD_CAST "id")) {
             smap_replace(&(contr->external_ids), "ofconfig-id",
-                         (char*)aux->children->content);
+                         (char *) aux->children->content);
             ovsrec_controller_set_external_ids(contr, &(contr->external_ids));
         } else if (xmlStrEqual(aux->name, BAD_CAST "ip-address")) {
-            ip = (const char*)aux->children->content;
+            ip = (const char *) aux->children->content;
         } else if (xmlStrEqual(aux->name, BAD_CAST "port")) {
-            port = (const char*)aux->children->content;
+            port = (const char *) aux->children->content;
         } else if (xmlStrEqual(aux->name, BAD_CAST "protocol")) {
             if (xmlStrEqual(aux->children->content, BAD_CAST "tcp")) {
                 proto = "tcp";
             }
         } else if (xmlStrEqual(aux->name, BAD_CAST "local-ip-address")) {
             ovsrec_controller_set_local_ip(contr,
-                                           (char*) aux->children->content);
+                                           (char *) aux->children->content);
         }
     }
 
-    asprintf(&target, "%s:%s%s%s", proto, ip, port ? ":" : "", port ? port : "");
+    asprintf(&target, "%s:%s%s%s", proto, ip, port ? ":" : "",
+             port ? port : "");
     ovsrec_controller_set_target(contr, target);
     free(target);
 
@@ -3772,8 +3819,8 @@ txn_mod_contr_target(const xmlChar *contr_id, const xmlChar *name,
 
     if (xmlStrEqual(name, BAD_CAST "port")) {
         /* hide the port from the current value in controller structure */
-        aux = index(contr->target, ':'); /* protocol_:_ip */
-        aux = index(aux, ':'); /* ip_:_port */
+        aux = index(contr->target, ':');        /* protocol_:_ip */
+        aux = index(aux, ':');  /* ip_:_port */
         if (aux != NULL) {
             aux = '\0';
         }
@@ -3795,8 +3842,8 @@ txn_mod_contr_target(const xmlChar *contr_id, const xmlChar *name,
         }
     } else if (xmlStrEqual(name, BAD_CAST "ip-address")) {
         if (value) {
-            p = index(contr->target, ':'); /* protocol_:_ip */
-            p = index(p, ':'); /* ip_:_port */
+            p = index(contr->target, ':');      /* protocol_:_ip */
+            p = index(p, ':');  /* ip_:_port */
             if (p) {
                 asprintf(&aux, "xxx:%s:%s", value, p + 1);
             } else {
@@ -3923,7 +3970,9 @@ txn_ovs_insert_bridge(const struct ovsrec_open_vswitch *ovs,
 
     struct ovsrec_bridge **bridges;
     size_t i;
-    nc_verb_verbose("Add bridge %s %s", bridge->name, print_uuid_ro(&bridge->header_.uuid));
+
+    nc_verb_verbose("Add bridge %s %s", bridge->name,
+                    print_uuid_ro(&bridge->header_.uuid));
 
     bridges = malloc(sizeof *ovs->bridges * (ovs->n_bridges + 1));
     for (i = 0; i < ovs->n_bridges; i++) {
@@ -3950,7 +3999,8 @@ txn_bridge_insert_port(const struct ovsrec_bridge *bridge,
         *e = nc_err_new(NC_ERR_OP_FAILED);
         return EXIT_FAILURE;
     }
-    nc_verb_verbose("Add port %s %s", port->name, print_uuid_ro(&port->header_.uuid));
+    nc_verb_verbose("Add port %s %s", port->name,
+                    print_uuid_ro(&port->header_.uuid));
 
     ports = malloc(sizeof *bridge->ports * (bridge->n_ports + 1));
     for (i = 0; i < bridge->n_ports; i++) {
@@ -4010,7 +4060,7 @@ txn_add_bridge(xmlNodePtr node, struct nc_err **e)
 
     /* create new bridge and add it into Open_vSwitch table */
     bridge = ovsrec_bridge_insert(ovsdb_handler->txn);
-    if (txn_ovs_insert_bridge(ovs, (struct ovsrec_bridge*)bridge, e)) {
+    if (txn_ovs_insert_bridge(ovs, (struct ovsrec_bridge *) bridge, e)) {
         return EXIT_FAILURE;
     }
 
@@ -4036,14 +4086,13 @@ txn_add_bridge(xmlNodePtr node, struct nc_err **e)
                             break;
                         }
                     }
-                    if (txn_bridge_insert_port(bridge, (struct ovsrec_port *)port, e)) {
+                    if (txn_bridge_insert_port
+                        (bridge, (struct ovsrec_port *) port, e)) {
                         return EXIT_FAILURE;
                     }
                 }
-                /* TODO: queue, flow-table
-                 * certificate is already set, there is no explicit link to it
-                 * in OVSDB
-                 */
+                /* TODO: queue, flow-table certificate is already set, there
+                 * is no explicit link to it in OVSDB */
             }
         } else if (xmlStrEqual(aux->name, BAD_CAST "controllers")) {
             for (leaf = aux->children; leaf; leaf = leaf->next) {
@@ -4052,15 +4101,14 @@ txn_add_bridge(xmlNodePtr node, struct nc_err **e)
                 }
             }
         } else if (xmlStrEqual(aux->name, BAD_CAST "lost-connection-behavior")) {
-            if (txn_mod_bridge_failmode(BAD_CAST bridge->name, aux->children->content, e)) {
+            if (txn_mod_bridge_failmode
+                (BAD_CAST bridge->name, aux->children->content, e)) {
                 return EXIT_FAILURE;
             }
             failmode_flag = 1;
         }
-        /* enabled is not handled:
-         * it is too complicated to handle it in combination with the
-         * OVSDB's garbage collection.
-         */
+        /* enabled is not handled: it is too complicated to handle it in
+         * combination with the OVSDB's garbage collection. */
     }
 
     if (!failmode_flag) {
@@ -4086,7 +4134,9 @@ ofc_find_bridge_with_port(const xmlChar *port_name)
             port = bridge->ports[port_i];
             for (inter_i = 0; inter_i < port->n_interfaces; inter_i++) {
                 interface = port->interfaces[inter_i];
-                if (!strncmp(interface->name, (char *) port_name, strlen(interface->name)+1)) {
+                if (!strncmp
+                    (interface->name, (char *) port_name,
+                     strlen(interface->name) + 1)) {
                     return BAD_CAST bridge->name;
                 }
             }
@@ -4125,31 +4175,34 @@ ofc_find_bridge_for_port(xmlNodePtr root, xmlChar *port_name)
     char *xpathexpr = NULL;
     xmlChar *bridge_name = NULL;
     int size, ret;
+
     if (root == NULL) {
         return NULL;
     }
     ret = asprintf(&xpathexpr,
-                 "//ofc:switch/ofc:resources/ofc:port['%s']/../../ofc:id[1]",
-                 (char *) port_name);
+                   "//ofc:switch/ofc:resources/ofc:port['%s']/../../ofc:id[1]",
+                   (char *) port_name);
     if (ret == -1) {
         return NULL;
     }
     doc = root->doc;
     /* Create xpath evaluation context */
     xpathCtx = xmlXPathNewContext(doc);
-    if(xpathCtx == NULL) {
+    if (xpathCtx == NULL) {
         nc_verb_error("Unable to create new XPath context");
         goto cleanup;
     }
 
-    if (xmlXPathRegisterNs(xpathCtx, BAD_CAST "ofc", BAD_CAST "urn:onf:config:yang")) {
-        nc_verb_error("Registering a namespace for XPath failed (%s).", __func__);
+    if (xmlXPathRegisterNs
+        (xpathCtx, BAD_CAST "ofc", BAD_CAST "urn:onf:config:yang")) {
+        nc_verb_error("Registering a namespace for XPath failed (%s).",
+                      __func__);
         goto cleanup;
     }
 
     /* Evaluate xpath expression */
     xpathObj = xmlXPathEvalExpression(BAD_CAST xpathexpr, xpathCtx);
-    if(xpathObj == NULL) {
+    if (xpathObj == NULL) {
         nc_verb_error("Unable to evaluate xpath expression \"%s\"", xpathexpr);
         goto cleanup;
     }
@@ -4180,6 +4233,7 @@ txn_mod_port_add_tunnel(const xmlChar *port_name, xmlNodePtr tunnel_node,
     char *option, *value;
     struct smap opt_cl;
     const struct ovsrec_interface *ifc, *next, *found = NULL;
+
     nc_verb_verbose("Adding tunnel (%s:%d)", __FILE__, __LINE__);
 
     if (!port_name || !tunnel_node) {
@@ -4189,7 +4243,7 @@ txn_mod_port_add_tunnel(const xmlChar *port_name, xmlNodePtr tunnel_node,
     }
 
     OVSREC_INTERFACE_FOR_EACH_SAFE(ifc, next, ovsdb_handler->idl) {
-        if (!strncmp(ifc->name, (char *) port_name, strlen(ifc->name)+1)) {
+        if (!strncmp(ifc->name, (char *) port_name, strlen(ifc->name) + 1)) {
             found = ifc;
             break;
         }
@@ -4210,7 +4264,9 @@ txn_mod_port_add_tunnel(const xmlChar *port_name, xmlNodePtr tunnel_node,
                 option = "local_ip";
                 value = (char *) xmlNodeGetContent(iter);
 
-            } else if (xmlStrEqual(iter->name, BAD_CAST "remote-endpoint-ipv4-adress")) {
+            } else
+                if (xmlStrEqual
+                    (iter->name, BAD_CAST "remote-endpoint-ipv4-adress")) {
                 option = "remote_ip";
                 value = (char *) xmlNodeGetContent(iter);
             }
@@ -4233,7 +4289,8 @@ txn_mod_port_add_tunnel(const xmlChar *port_name, xmlNodePtr tunnel_node,
 }
 
 int
-txn_mod_port_tunnel_opt(const xmlChar *port_name, xmlNodePtr node, const xmlChar *value, struct nc_err **e)
+txn_mod_port_tunnel_opt(const xmlChar * port_name, xmlNodePtr node,
+                        const xmlChar * value, struct nc_err **e)
 {
     const struct ovsrec_interface *ifc = NULL;
     const char *opt_key = NULL;
@@ -4264,7 +4321,8 @@ txn_mod_port_tunnel_opt(const xmlChar *port_name, xmlNodePtr node, const xmlChar
 
     if (value) {
         /* replace existing */
-        smap_replace((struct smap *) &ifc->options, opt_key, (const char *) value);
+        smap_replace((struct smap *) &ifc->options, opt_key,
+                     (const char *) value);
     } else {
         /* delete */
         smap_remove((struct smap *) &ifc->options, opt_key);
@@ -4274,4 +4332,3 @@ txn_mod_port_tunnel_opt(const xmlChar *port_name, xmlNodePtr node, const xmlChar
 
     return EXIT_SUCCESS;
 }
-

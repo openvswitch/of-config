@@ -87,12 +87,12 @@ cmp_uuid_index(const void *p1, const void *p2)
     /* nothing can get here... == was tested at first */
     return 0;
 }
-
 
 ofc_resmap_t *
 ofc_resmap_init(size_t init_size)
 {
     ofc_resmap_t *t = (ofc_resmap_t *) calloc(1, sizeof *t);
+
     if (t == NULL) {
         return NULL;
     }
@@ -100,11 +100,11 @@ ofc_resmap_init(size_t init_size)
     t->records_length = MAX(256, init_size);
     t->n_records = 0;
     t->records = (ofc_tuple_t *) calloc(t->records_length,
-                                        sizeof(ofc_tuple_t));
+                                        sizeof (ofc_tuple_t));
     t->index_r = (ofc_tuple_t **) calloc(t->records_length,
-                                         sizeof(ofc_tuple_t *));
+                                         sizeof (ofc_tuple_t *));
     t->index_u = (ofc_tuple_t **) calloc(t->records_length,
-                                         sizeof(ofc_tuple_t *));
+                                         sizeof (ofc_tuple_t *));
     if ((t->records == NULL) || (t->index_r == NULL) || (t->index_u == NULL)) {
         free(t->records);
         free(t->index_r);
@@ -123,9 +123,9 @@ static void
 ofc_reindex(ofc_resmap_t *rm)
 {
     if (rm->n_records > 1) {
-        qsort(rm->index_r, rm->n_records, sizeof(ofc_tuple_t **),
+        qsort(rm->index_r, rm->n_records, sizeof (ofc_tuple_t **),
               cmp_resourceid_index);
-        qsort(rm->index_u, rm->n_records, sizeof(ofc_tuple_t **),
+        qsort(rm->index_u, rm->n_records, sizeof (ofc_tuple_t **),
               cmp_uuid_index);
     }
 }
@@ -135,16 +135,17 @@ ofc_resmap_insert(ofc_resmap_t *rm, const char *resource_id,
                   const struct uuid *uuid, const struct ovsdb_idl_row *h)
 {
     size_t new_size;
+
     if (rm->n_records == rm->records_length) {
         /* not enough space, we need to realloc */
-        new_size = rm->records_length + rm->records_length/2;
-        if (realloc(rm->records, new_size * sizeof(ofc_tuple_t)) == NULL) {
+        new_size = rm->records_length + rm->records_length / 2;
+        if (realloc(rm->records, new_size * sizeof (ofc_tuple_t)) == NULL) {
             return false;
         }
-        if (realloc(rm->index_r, new_size * sizeof(ofc_tuple_t *)) == NULL) {
+        if (realloc(rm->index_r, new_size * sizeof (ofc_tuple_t *)) == NULL) {
             return false;
         }
-        if (realloc(rm->index_u, new_size * sizeof(ofc_tuple_t *)) == NULL) {
+        if (realloc(rm->index_u, new_size * sizeof (ofc_tuple_t *)) == NULL) {
             return false;
         }
         /* successfuly enlarged or exited */
@@ -173,7 +174,7 @@ ofc_resmap_remove(ofc_resmap_t *rm, ofc_tuple_t *del)
     ofc_tuple_t key, *key_p = &key;
     size_t i;
 
-    for (i=0; i<rm->n_records; i++) {
+    for (i = 0; i < rm->n_records; i++) {
         tuple = &rm->records[i];
         if (uuid_equals(&del->uuid, &tuple->uuid)) {
             break;
@@ -186,14 +187,16 @@ ofc_resmap_remove(ofc_resmap_t *rm, ofc_tuple_t *del)
     key.resource_id = tuple->resource_id;
     key.uuid = tuple->uuid;
     index_r_p = (ofc_tuple_t **) bsearch(&key_p, rm->index_r, rm->n_records,
-                     sizeof(ofc_tuple_t **), cmp_resourceid_index);
-    index_u_p = (ofc_tuple_t **) bsearch(&key_p, rm->index_u, rm->n_records,
-                     sizeof(ofc_tuple_t **), cmp_uuid_index);
+                                         sizeof (ofc_tuple_t **),
+                                         cmp_resourceid_index);
+    index_u_p =
+        (ofc_tuple_t **) bsearch(&key_p, rm->index_u, rm->n_records,
+                                 sizeof (ofc_tuple_t **), cmp_uuid_index);
     free(tuple->resource_id);
-    (*tuple) = rm->records[rm->n_records-1];
-    tuple->resource_id = rm->records[rm->n_records-1].resource_id;
-    (*index_r_p) = rm->index_r[rm->n_records-1];
-    (*index_u_p) = rm->index_u[rm->n_records-1];
+    (*tuple) = rm->records[rm->n_records - 1];
+    tuple->resource_id = rm->records[rm->n_records - 1].resource_id;
+    (*index_r_p) = rm->index_r[rm->n_records - 1];
+    (*index_u_p) = rm->index_u[rm->n_records - 1];
     rm->n_records--;
     ofc_reindex(rm);
 
@@ -218,7 +221,8 @@ ofc_resmap_remove_r(ofc_resmap_t *rm, const char *resource_id)
     return ofc_resmap_remove(rm, tuple);
 }
 
-bool ofc_resmap_remove_u(ofc_resmap_t *rm, const struct uuid *uuid)
+bool
+ofc_resmap_remove_u(ofc_resmap_t *rm, const struct uuid *uuid)
 {
     ofc_tuple_t *tuple;
 
@@ -240,9 +244,10 @@ ofc_resmap_find_r(ofc_resmap_t *rm, const char *resource_id)
 {
     const void *result;
     ofc_tuple_t key, *key_p = &key;
+
     key.resource_id = (char *) resource_id;
     result = bsearch(&key_p, rm->index_r, rm->n_records,
-                     sizeof(ofc_tuple_t **), cmp_resourceid_index);
+                     sizeof (ofc_tuple_t **), cmp_resourceid_index);
     if (result == NULL) {
         /* not found */
         return NULL;
@@ -255,9 +260,10 @@ ofc_resmap_find_u(ofc_resmap_t *rm, const struct uuid *uuid)
 {
     const void *result;
     ofc_tuple_t key, *key_p = &key;
+
     key.uuid = *uuid;
     result = bsearch(&key_p, rm->index_u, rm->n_records,
-                     sizeof(ofc_tuple_t **), cmp_uuid_index);
+                     sizeof (ofc_tuple_t **), cmp_uuid_index);
     if (result == NULL) {
         /* not found */
         return NULL;
@@ -270,11 +276,12 @@ ofc_resmap_destroy(ofc_resmap_t **resmap)
 {
     int i;
     ofc_resmap_t *t;
+
     if (resmap == NULL) {
         return;
     }
     t = *resmap;
-    for (i=0; i<t->n_records; i++) {
+    for (i = 0; i < t->n_records; i++) {
         /* clean up stored copies of resource_id strings */
         free(t->records[i].resource_id);
     }
@@ -291,6 +298,7 @@ ofc_resmap_update_uuids(ofc_resmap_t *rm)
     size_t i;
     const struct ovsdb_idl_row *h;
     bool changed = false;
+
     for (i = 0; i < rm->n_records; i++) {
         if (rm->records[i].header != NULL) {
             h = rm->records[i].header;
@@ -306,7 +314,6 @@ ofc_resmap_update_uuids(ofc_resmap_t *rm)
         ofc_reindex(rm);
     }
 }
-
 
 #ifdef TEST_RESOURCE_MAP
 
@@ -319,7 +326,7 @@ ofc_resmap_print_u(ofc_resmap_t *rm)
 {
     size_t i;
 
-    for (i=0; i<rm->n_records; i++) {
+    for (i = 0; i < rm->n_records; i++) {
         printf("%s - %s\n", rm->index_u[i]->resource_id,
                print_uuid_ro(&rm->index_u[i]->uuid));
     }
@@ -330,11 +337,11 @@ ofc_resmap_print_u(ofc_resmap_t *rm)
  * \param[in] rm    pointer to the resource map structure
  */
 void
-ofc_resmap_print(ofc_resmap_t *rm)
+ofc_resmap_print(ofc_resmap_t * rm)
 {
     size_t i;
 
-    for (i=0; i<rm->n_records; i++) {
+    for (i = 0; i < rm->n_records; i++) {
         printf("%s - %s\n", rm->records[i].resource_id,
                print_uuid_ro(&rm->records[i].uuid));
     }
@@ -345,23 +352,23 @@ ofc_resmap_print(ofc_resmap_t *rm)
  * \param[in] rm    pointer to the resource map structure
  */
 static void
-ofc_resmap_print_r(ofc_resmap_t *rm)
+ofc_resmap_print_r(ofc_resmap_t * rm)
 {
     size_t i;
 
-    for (i=0; i<rm->n_records; i++) {
+    for (i = 0; i < rm->n_records; i++) {
         printf("%s - %s\n", rm->index_r[i]->resource_id,
                print_uuid_ro(&rm->index_r[i]->uuid));
     }
 }
-
 
 /* test of the data structure: inserts TEST_NUM_ELEMS records, removes half
  * of them from the beginning and half of them from the end, the rest is printed.
  */
 #define TEST_NUM_ELEMS  50
 
-int main(int argc, char **argv)
+int
+main(int argc, char **argv)
 {
     struct uuid u;
     char *r;
@@ -369,8 +376,9 @@ int main(int argc, char **argv)
     size_t i, bi;
     uint64_t errors = 0;
     ofc_resmap_t *rm = ofc_resmap_init(0);
+
     puts("insert");
-    for (i=0; i<=TEST_NUM_ELEMS; ++i) {
+    for (i = 0; i <= TEST_NUM_ELEMS; ++i) {
         uuid_generate(&u);
         ofc_resmap_insert(rm, print_uuid_ro(&u), &u, NULL);
     }
@@ -380,7 +388,7 @@ int main(int argc, char **argv)
     ofc_resmap_print_u(rm);
 
     puts("find resource-id");
-    for (i=0; i<rm->n_records; ++i) {
+    for (i = 0; i < rm->n_records; ++i) {
         r = rm->records[i].resource_id;
         found = ofc_resmap_find_r(rm, r);
         if (found == NULL) {
@@ -396,11 +404,11 @@ int main(int argc, char **argv)
     if (errors == 0) {
         puts("ok");
     } else {
-        printf("%"PRIu64"\n", errors);
+        printf("%" PRIu64 "\n", errors);
         errors = 0;
     }
     puts("find uuid");
-    for (i=0; i<rm->n_records; ++i) {
+    for (i = 0; i < rm->n_records; ++i) {
         u = rm->records[i].uuid;
         found = ofc_resmap_find_u(rm, &u);
         if (found == NULL) {
@@ -417,13 +425,13 @@ int main(int argc, char **argv)
     if (errors == 0) {
         puts("ok");
     } else {
-        printf("%"PRIu64"\n", errors);
+        printf("%" PRIu64 "\n", errors);
         errors = 0;
     }
     puts("remove resource-id backwards");
-    bi = rm->n_records/2;
+    bi = rm->n_records / 2;
     if (bi > 0) {
-        for (i=bi; i>=0; i--) {
+        for (i = bi; i >= 0; i--) {
             r = strdup(rm->records[0].resource_id);
             if (!ofc_resmap_remove_r(rm, r)) {
                 printf("not removed %s\n", r);
@@ -445,14 +453,14 @@ int main(int argc, char **argv)
     }
     if (errors == 0) {
         puts("ok");
-        printf("%"PRIu64"\n", bi);
+        printf("%" PRIu64 "\n", bi);
     } else {
-        printf("%"PRIu64"\n", errors);
+        printf("%" PRIu64 "\n", errors);
         errors = 0;
     }
     puts("remove resource-id");
     bi = rm->n_records;
-    for (i=0; i<bi; i++) {
+    for (i = 0; i < bi; i++) {
         r = strdup(rm->records[0].resource_id);
         if (!ofc_resmap_remove_r(rm, r)) {
             printf("not removed %s\n", r);
@@ -470,17 +478,16 @@ int main(int argc, char **argv)
     }
     if (errors == 0) {
         puts("ok");
-        printf("%"PRIu64"\n", bi);
+        printf("%" PRIu64 "\n", bi);
     } else {
-        printf("%"PRIu64"\n", errors);
+        printf("%" PRIu64 "\n", errors);
         errors = 0;
     }
     puts("records left in map");
-    printf("%"PRIu64"\n", rm->n_records);
+    printf("%" PRIu64 "\n", rm->n_records);
     ofc_resmap_print(rm);
 
     ofc_resmap_destroy(&rm);
     return 0;
 }
 #endif
-

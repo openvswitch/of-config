@@ -195,7 +195,7 @@ ofc_of_getports(struct vconn *vconnp)
     /* iteration over ports in reply */
     while (!ofputil_pull_phy_port(oh->version, &b, &pp)) {
         /* this is the point where we have information about state and
-           configuration of interface */
+         * configuration of interface */
         printf("%s: cur_speed: %" PRId32 " max_speed: %" PRId32 " "
                "admin_state: %s no-receive: %s no-forward: %s "
                "no-packet-in: %s link_state: %s blocked: %s live: %s\n",
@@ -209,11 +209,11 @@ ofc_of_getports(struct vconn *vconnp)
                (pp.state & OFPUTIL_PS_LIVE ? "Y" : "N"));
 
         // other possibilities:
-        //   OFPUTIL_PS_STP_LISTEN
-        //   OFPUTIL_PS_STP_LEARN
-        //   OFPUTIL_PS_STP_FORWARD
-        //   OFPUTIL_PS_STP_BLOCK
-        //   OFPUTIL_PS_STP_MASK
+        // OFPUTIL_PS_STP_LISTEN
+        // OFPUTIL_PS_STP_LEARN
+        // OFPUTIL_PS_STP_FORWARD
+        // OFPUTIL_PS_STP_BLOCK
+        // OFPUTIL_PS_STP_MASK
     }
 
     ofpbuf_delete(reply);
@@ -245,4 +245,3 @@ main(int argc, char **argv)
 
     return 0;
 }
-

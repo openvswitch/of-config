@@ -24,7 +24,7 @@
 #include <libnetconf.h>
 
 /* locally stored data */
-static xmlChar* cs_id = NULL; /* /capable-switch/id */
+static xmlChar *cs_id = NULL;   /* /capable-switch/id */
 
 int
 ofc_set_switchid(xmlNodePtr node)

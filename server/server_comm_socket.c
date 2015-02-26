@@ -1,3 +1,4 @@
+
 /* Copyright (c) 2015 Open Networking Foundation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -71,15 +72,17 @@ comm_init(int crashed)
     if (access(OFC_SOCK_PATH, F_OK) == 0) {
         if (crashed) {
             if (unlink(OFC_SOCK_PATH) != 0) {
-                nc_verb_error("Failed to remove leftover communication socket, please remove \'%s\' file manually.",
-                               OFC_SOCK_PATH);
+                nc_verb_error
+                    ("Failed to remove leftover communication socket, please remove \'%s\' file manually.",
+                     OFC_SOCK_PATH);
                 return (NULL);
             }
         } else {
             nc_verb_error("Communication socket \'%s\' already exists.",
-            OFC_SOCK_PATH);
-            nc_verb_error("Another instance of the ofc-server is running. If not, please remove \'%s\' file manually.",
                           OFC_SOCK_PATH);
+            nc_verb_error
+                ("Another instance of the ofc-server is running. If not, please remove \'%s\' file manually.",
+                 OFC_SOCK_PATH);
             return (NULL);
         }
     }
@@ -104,7 +107,7 @@ comm_init(int crashed)
     /* bind socket to the file path */
     if (bind(sock, (struct sockaddr *) &server, sizeof server) == -1) {
         nc_verb_error("Unable to bind to a UNIX socket \'%s\' (%s).",
-                        server.sun_path, strerror(errno));
+                      server.sun_path, strerror(errno));
         goto error_cleanup;
     }
     umask(mask);
@@ -139,7 +142,8 @@ comm_init(int crashed)
 
     return (&sock);
 
-    error_cleanup: close(sock);
+error_cleanup:
+    close(sock);
     sock = -1;
     unlink(server.sun_path);
     return (NULL);
@@ -216,7 +220,7 @@ set_session(int socket)
     cpblts = nc_cpblts_new((const char * const *) cpblts_list);
 
     /* add session to the list */
-    snprintf(id, sizeof(id), "%d", socket);
+    snprintf(id, sizeof (id), "%d", socket);
     srv_agent_new(session_id, username, cpblts, id, pid);
     nc_verb_verbose("New agent ID set to %s (PID %d, NCSID %s)", id, pid,
                     session_id);
@@ -242,7 +246,7 @@ close_session(int socket)
     struct agent_info *sender_session;
     msgtype_t result;
 
-    snprintf(id, sizeof(id), "%d", socket);
+    snprintf(id, sizeof (id), "%d", socket);
     sender_session = srv_get_agent_by_agentid(id);
     if (sender_session == NULL) {
         nc_verb_warning("Unable to close session (not found)");
@@ -284,7 +288,7 @@ kill_session(int socket)
     }
 
     /* check if the request does not relate to the current session */
-    snprintf(id, sizeof(id), "%d", socket);
+    snprintf(id, sizeof (id), "%d", socket);
     if ((sender = srv_get_agent_by_agentid(id)) != NULL) {
         if (strcmp(nc_session_get_id(sender->session), ncsid2kill) == 0) {
             nc_verb_warning("Killing own session requested");
@@ -304,7 +308,7 @@ kill_session(int socket)
 
 sendreply:
     /* send reply */
-    send(socket, &result, sizeof(result), OFC_SOCK_SENDFLAGS);
+    send(socket, &result, sizeof (result), OFC_SOCK_SENDFLAGS);
 
     if (errmsg) {
         len = strlen(errmsg) + 1;
@@ -357,7 +361,7 @@ process_operation(int socket)
     } else if (reply == NCDS_RPC_NOT_APPLICABLE) {
         err = nc_err_new(NC_ERR_OP_FAILED);
         nc_err_set(err, NC_ERR_PARAM_MSG,
-                        "There is no device/data that could be affected.");
+                   "There is no device/data that could be affected.");
         reply = nc_reply_error(err);
     }
     nc_rpc_free(rpc);
@@ -405,8 +409,7 @@ poll_restart:
         return (EXIT_SUCCESS);
     }
 
-
-        /* check agent's communication sockets */
+    /* check agent's communication sockets */
     for (i = 1; i <= AGENTS_QUEUE && connected_agents > 0; i++) {
         if (agents[i].revents & (POLLERR | POLLHUP | POLLNVAL)) {
             nc_verb_error("Communication socket is unexpectedly closed");
@@ -425,7 +428,7 @@ poll_restart:
         } else if (agents[i].revents & POLLIN) {
             ret--;
 
-            n = recv(agents[i].fd, &op, sizeof(msgtype_t), 0);
+            n = recv(agents[i].fd, &op, sizeof (msgtype_t), 0);
             if (n <= 0) {
                 continue;
             }
@@ -477,8 +480,7 @@ poll_restart:
     } else if (agents[0].revents & POLLIN) {
         while ((new_sock = accept(agents[0].fd, NULL, NULL)) != -1) {
             /* new agent connection */
-            for (i = 1; i <= AGENTS_QUEUE && agents[i].fd != -1; i++)
-                ;
+            for (i = 1; i <= AGENTS_QUEUE && agents[i].fd != -1; i++);
             agents[i].fd = new_sock;
             connected_agents++;
             if (connected_agents == AGENTS_QUEUE) {
@@ -491,13 +493,12 @@ poll_restart:
         }
         if (new_sock == -1 && errno != EAGAIN) {
             nc_verb_error("Communication failed (accept: %s).",
-                            strerror(errno));
+                          strerror(errno));
             comm_destroy(c);
             return (EXIT_FAILURE);
         }
         /* else as expected - no more new connection (or no more space for new
-         * connection), so continue
-         */
+         * connection), so continue */
         if (connected_agents < AGENTS_QUEUE) {
             agents[0].revents = 0;
         }

@@ -48,7 +48,8 @@ struct rollback_s {
     xmlDocPtr doc;
     NC_DATASTORE type;
 };
-static struct rollback_s rollback = {NULL, NC_DATASTORE_ERROR};
+static struct rollback_s rollback = { NULL, NC_DATASTORE_ERROR };
+
 volatile static int rollbacking = 0;
 
 /* local locks info */
@@ -81,8 +82,7 @@ ofcds_init(void *UNUSED(data))
 
     /* hack - OVS calls openlog() and rewrites the syslog settings of the
      * ofc-server. So we have to rewrite syslog settings back by another
-     * openlog() call
-     */
+     * openlog() call */
     if (ofc_daemonize) {
         openlog("ofc-server", LOG_PID, LOG_DAEMON);
     } else {
@@ -90,7 +90,7 @@ ofcds_init(void *UNUSED(data))
     }
 
     /* get startup data */
-    gds_startup = xmlReadFile(OFC_DATADIR"/startup.xml", NULL, XML_READ_OPT);
+    gds_startup = xmlReadFile(OFC_DATADIR "/startup.xml", NULL, XML_READ_OPT);
     /* check that there are some data, if not, continue with empty startup */
     if (!xmlDocGetRootElement(gds_startup)) {
         xmlFreeDoc(gds_startup);
@@ -108,7 +108,7 @@ ofcds_free(void *UNUSED(data))
 
     /* dump startup to persistent storage */
     if (gds_startup) {
-        xmlSaveFormatFile(OFC_DATADIR"/startup.xml", gds_startup, 1);
+        xmlSaveFormatFile(OFC_DATADIR "/startup.xml", gds_startup, 1);
     }
 
     /* cleanup locks */
@@ -138,10 +138,9 @@ store_rollback(const xmlDocPtr doc, NC_DATASTORE type)
 int
 ofcds_changed(void *UNUSED(data))
 {
-    /* always false
-     * the function is not needed now, we can implement it later for internal
-     * purposes, but for now the datastore content is synced continuously
-     */
+    /* always false the function is not needed now, we can implement it later
+     * for internal purposes, but for now the datastore content is synced
+     * continuously */
     return (0);
 }
 
@@ -179,8 +178,7 @@ ofcds_lock(void *UNUSED(data), NC_DATASTORE target, const char *session_id,
         /* remember the lock */
         *locked = 1;
         *sid = strdup(session_id);
-        nc_verb_verbose("OFC datastore %d locked by %s.", target,
-                        session_id);
+        nc_verb_verbose("OFC datastore %d locked by %s.", target, session_id);
     }
 
     return EXIT_SUCCESS;
@@ -230,7 +228,8 @@ ofcds_unlock(void *UNUSED(data), NC_DATASTORE target, const char *session_id,
     } else {
         /* not locked */
         *error = nc_err_new(NC_ERR_OP_FAILED);
-        nc_err_set(*error, NC_ERR_PARAM_MSG, "Target datastore is not locked.");
+        nc_err_set(*error, NC_ERR_PARAM_MSG,
+                   "Target datastore is not locked.");
         return EXIT_FAILURE;
     }
 
@@ -242,11 +241,10 @@ ofcds_getconfig(void *UNUSED(data), NC_DATASTORE target, struct nc_err **error)
 {
     xmlChar *config_data = NULL;
 
-    switch(target) {
+    switch (target) {
     case NC_DATASTORE_RUNNING:
         /* If there is no id of the capable-switch (no configuration data were
-         * provided), continue as there is no OVSDB
-         */
+         * provided), continue as there is no OVSDB */
         return ofc_get_config_data();
     case NC_DATASTORE_STARTUP:
         if (!gds_startup) {
@@ -268,18 +266,18 @@ ofcds_getconfig(void *UNUSED(data), NC_DATASTORE target, struct nc_err **error)
         nc_err_set(*error, NC_ERR_PARAM_INFO_BADELEM, "source");
     }
 
-    return (char*) config_data;
+    return (char *) config_data;
 }
 
 int
 ofcds_deleteconfig(void *UNUSED(data), NC_DATASTORE target,
                    struct nc_err **error)
 {
-    switch(target) {
+    switch (target) {
     case NC_DATASTORE_RUNNING:
-        *error = nc_err_new (NC_ERR_OP_FAILED);
-        nc_err_set (*error, NC_ERR_PARAM_MSG,
-                    "Cannot delete a running datastore.");
+        *error = nc_err_new(NC_ERR_OP_FAILED);
+        nc_err_set(*error, NC_ERR_PARAM_MSG,
+                   "Cannot delete a running datastore.");
         return EXIT_FAILURE;
     case NC_DATASTORE_STARTUP:
         store_rollback(gds_startup, NC_DATASTORE_STARTUP);
@@ -303,8 +301,7 @@ int
 ofcds_editconfig(void *UNUSED(data), const nc_rpc * UNUSED(rpc),
                  NC_DATASTORE target, const char *config,
                  NC_EDIT_DEFOP_TYPE defop,
-                 NC_EDIT_ERROPT_TYPE UNUSED(errop),
-                 struct nc_err **error)
+                 NC_EDIT_ERROPT_TYPE UNUSED(errop), struct nc_err **error)
 {
     int ret = EXIT_FAILURE, running = 0;
     char *aux;
@@ -317,7 +314,9 @@ ofcds_editconfig(void *UNUSED(data), const nc_rpc * UNUSED(rpc),
 
     cfg = xmlReadMemory(config, strlen(config), NULL, NULL, XML_READ_OPT);
     rootcfg = xmlDocGetRootElement(cfg);
-    if (!cfg || (rootcfg && !xmlStrEqual(rootcfg->name, BAD_CAST "capable-switch"))) {
+    if (!cfg
+        || (rootcfg
+            && !xmlStrEqual(rootcfg->name, BAD_CAST "capable-switch"))) {
         nc_verb_error("Invalid <edit-config> configuration data.");
         *error = nc_err_new(NC_ERR_BAD_ELEM);
         nc_err_set(*error, NC_ERR_PARAM_INFO_BADELEM, "config");
@@ -326,8 +325,8 @@ ofcds_editconfig(void *UNUSED(data), const nc_rpc * UNUSED(rpc),
 
     switch (target) {
     case NC_DATASTORE_RUNNING:
-        /* Make a copy of parsed config - we will find port/configuration
-         * in it.  It is used after txn_commit(). */
+        /* Make a copy of parsed config - we will find port/configuration in
+         * it.  It is used after txn_commit(). */
         cfg_clone = xmlCopyDoc(cfg, 1);
 
         aux = ofc_get_config_data();
@@ -391,9 +390,8 @@ ofcds_editconfig(void *UNUSED(data), const nc_rpc * UNUSED(rpc),
 
     /* with defaults capability */
     if (ncdflt_get_basic_mode() == NCWD_MODE_TRIM) {
-        /* server work in trim basic mode and therefore all default
-         * values must be removed from the datastore.
-         */
+        /* server work in trim basic mode and therefore all default values
+         * must be removed from the datastore. */
         /* TODO */
     }
 
@@ -428,8 +426,7 @@ error_cleanup:
 
 int
 ofcds_copyconfig(void *UNUSED(data), NC_DATASTORE target,
-                 NC_DATASTORE source, char *config,
-                 struct nc_err **error)
+                 NC_DATASTORE source, char *config, struct nc_err **error)
 {
     int ret = EXIT_FAILURE;
     char *s;
@@ -439,11 +436,12 @@ ofcds_copyconfig(void *UNUSED(data), NC_DATASTORE target,
 
     nc_verb_verbose("OFC COPY-CONFIG (from %d to %d)", source, target);
 
-    switch(source) {
+    switch (source) {
     case NC_DATASTORE_RUNNING:
         s = ofcds_getconfig(NULL, NC_DATASTORE_RUNNING, error);
         if (!s) {
-            nc_verb_error("copy-config: unable to get running source repository");
+            nc_verb_error
+                ("copy-config: unable to get running source repository");
             return EXIT_FAILURE;
         }
         src_doc = xmlReadMemory(s, strlen(s), NULL, NULL, XML_READ_OPT);
@@ -482,7 +480,7 @@ ofcds_copyconfig(void *UNUSED(data), NC_DATASTORE target,
         return EXIT_FAILURE;
     }
 
-    switch(target) {
+    switch (target) {
     case NC_DATASTORE_RUNNING:
         /* apply source to OVSDB */
 
@@ -528,7 +526,7 @@ ofcds_copyconfig(void *UNUSED(data), NC_DATASTORE target,
                 xmlFreeDoc(gds_startup);
             }
             gds_startup = dst_doc;
-        } else { /* NC_DATASTORE_CANDIDATE */
+        } else {                /* NC_DATASTORE_CANDIDATE */
             if (!rollbacking) {
                 store_rollback(gds_cand, target);
             } else {
@@ -569,7 +567,7 @@ ofcds_rollback(void *UNUSED(data))
     xmlDocDumpMemory(rollback.doc, &data, &size);
     rollbacking = 1;
     ret = ofcds_copyconfig(NULL, rollback.type, NC_DATASTORE_CONFIG,
-                           (char*)data, &e);
+                           (char *) data, &e);
     rollbacking = 0;
 
     if (ret) {
@@ -593,4 +591,3 @@ struct ncds_custom_funcs ofcds_funcs = {
     .deleteconfig = ofcds_deleteconfig,
     .editconfig = ofcds_editconfig,
 };
-

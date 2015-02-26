@@ -160,14 +160,14 @@ process_message(struct nc_session *session, comm_t *c, const nc_rpc *rpc)
     case NC_OP_KILLSESSION:
         opnode = ncxml_rpc_get_op_content(rpc);
         if (opnode == NULL || opnode->name == NULL
-                || !xmlStrEqual(opnode->name, BAD_CAST"kill-session")) {
+            || !xmlStrEqual(opnode->name, BAD_CAST "kill-session")) {
             nc_verb_error("Corrupted RPC message.");
             reply = nc_reply_error(nc_err_new(NC_ERR_OP_FAILED));
             xmlFreeNodeList(opnode);
             goto send_reply;
         }
         if (opnode->children == NULL
-                || !xmlStrEqual(opnode->children->name, BAD_CAST"session-id")) {
+            || !xmlStrEqual(opnode->children->name, BAD_CAST "session-id")) {
             nc_verb_error("No session id found.");
             err = nc_err_new(NC_ERR_MISSING_ELEM);
             nc_err_set(err, NC_ERR_PARAM_INFO_BADELEM, "session-id");
@@ -175,7 +175,7 @@ process_message(struct nc_session *session, comm_t *c, const nc_rpc *rpc)
             xmlFreeNodeList(opnode);
             goto send_reply;
         }
-        sid = (char *)xmlNodeGetContent(opnode->children);
+        sid = (char *) xmlNodeGetContent(opnode->children);
         reply = comm_kill_session(c, sid);
         xmlFreeNodeList(opnode);
         free(sid);
@@ -189,7 +189,8 @@ process_message(struct nc_session *session, comm_t *c, const nc_rpc *rpc)
 
         /* check if notifications are allowed on this session */
         if (nc_session_notif_allowed(session) == 0) {
-            nc_verb_error("Notification subscription is not allowed on this session.");
+            nc_verb_error("Notification subscription is not "
+                          "allowed on this session.");
             err = nc_err_new(NC_ERR_OP_FAILED);
             nc_err_set(err, NC_ERR_PARAM_TYPE, "protocol");
             nc_err_set(err, NC_ERR_PARAM_MSG,
@@ -252,6 +253,7 @@ int
 main(int argc, char **argv)
 {
     const char *optstring = "hv:";
+
     const struct option longopts[] = {
         {"help", no_argument, 0, 'h'},
         {"verbose", required_argument, 0, 'v'},

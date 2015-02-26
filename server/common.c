@@ -18,7 +18,8 @@
 
 #include <libnetconf.h>
 
-void clb_print(NC_VERB_LEVEL level, const char* msg)
+void
+clb_print(NC_VERB_LEVEL level, const char *msg)
 {
     switch (level) {
     case NC_VERB_ERROR:

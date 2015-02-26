@@ -31,7 +31,7 @@ recv_msg(int socket, size_t len, struct nc_err **err)
     ssize_t ret = 0;
     char *msg_dump;
 
-    msg_dump = malloc(sizeof(*msg_dump) * len);
+    msg_dump = malloc(sizeof (*msg_dump) * len);
     if (msg_dump == NULL) {
         nc_verb_error("Memory allocation failed - %s (%s:%d).",
                       strerror(errno), __FILE__, __LINE__);
@@ -49,7 +49,7 @@ recv_msg(int socket, size_t len, struct nc_err **err)
             if (ret == 0) {
                 nc_verb_error("Communication failed, socket \"%s\"is closed",
                               OFC_SOCK_PATH);
-            } else { /* ret == -1 */
+            } else {            /* ret == -1 */
                 if (errno == EAGAIN || errno == EINTR) {
                     /* ignore error and try it again */
                     continue;

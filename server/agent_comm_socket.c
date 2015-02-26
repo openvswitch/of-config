@@ -1,3 +1,4 @@
+
 /* Copyright (c) 2015 Open Networking Foundation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -87,7 +88,7 @@ comm_get_srv_cpblts(comm_t *c)
     send(*c, &op, sizeof op, OFC_SOCK_SENDFLAGS);
 
     /* done, now get the result */
-    recv(*c, &result, sizeof(result), OFC_SOCK_SENDFLAGS);
+    recv(*c, &result, sizeof (result), OFC_SOCK_SENDFLAGS);
     if (op != result) {
         nc_verb_error("Communication failed, sending %d, but received %d.", op,
                       result);
@@ -193,7 +194,8 @@ comm_operation(comm_t *c, const nc_rpc *rpc)
         nc_verb_error("Communication failed, sending %d, but received %d.", op,
                       result);
         err = nc_err_new(NC_ERR_OP_FAILED);
-        nc_err_set(err, NC_ERR_PARAM_MSG, "agent-server communication failed.");
+        nc_err_set(err, NC_ERR_PARAM_MSG,
+                   "agent-server communication failed.");
         return nc_reply_error(err);
     }
 

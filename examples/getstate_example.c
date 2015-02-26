@@ -17,14 +17,15 @@
 #include <config.h>
 #include <stdlib.h>
 
-
 #include "../server/data.h"
 
-int main(int argc, char **argv)
+int
+main(int argc, char **argv)
 {
     char *data;
+
     ofc_init(OFC_OVS_DBPATH);
-    
+
     data = ofc_get_state_data(NULL);
     if (data != NULL) {
         puts(data);
@@ -44,4 +45,3 @@ int main(int argc, char **argv)
     ofc_destroy();
     return 0;
 }
-

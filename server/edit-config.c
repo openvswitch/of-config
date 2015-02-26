@@ -29,11 +29,11 @@
 
 #define XPATH_BUFFER 1024
 
-static int edit_replace(xmlDocPtr, xmlNodePtr, int, struct nc_err**);
-static int edit_delete(xmlNodePtr, int, struct nc_err**);
-static int edit_remove(xmlDocPtr, xmlNodePtr, int, struct nc_err**);
-static int edit_create(xmlDocPtr, xmlNodePtr, int, struct nc_err**);
-static int edit_merge(xmlDocPtr, xmlNodePtr, int, struct nc_err**);
+static int edit_replace(xmlDocPtr, xmlNodePtr, int, struct nc_err **);
+static int edit_delete(xmlNodePtr, int, struct nc_err **);
+static int edit_remove(xmlDocPtr, xmlNodePtr, int, struct nc_err **);
+static int edit_create(xmlDocPtr, xmlNodePtr, int, struct nc_err **);
+static int edit_merge(xmlDocPtr, xmlNodePtr, int, struct nc_err **);
 
 /*
  * Remove leading and trailing whitespaces from the string.
@@ -44,10 +44,11 @@ static int edit_merge(xmlDocPtr, xmlNodePtr, int, struct nc_err**);
  * string.
  */
 static char *
-clrwspace (const char* in)
+clrwspace(const char *in)
 {
     int i, j = 0, len = strlen(in);
-    char* retval = strdup(in);
+    char *retval = strdup(in);
+
     if (retval == NULL) {
         nc_verb_error("Memory allocation failed (%s).", __func__);
         return (NULL);
@@ -55,7 +56,7 @@ clrwspace (const char* in)
 
     if (isspace(retval[0])) {
         /* remove leading whitespace characters */
-        for (i = 0, j = 0; i < len ; i++, j++) {
+        for (i = 0, j = 0; i < len; i++, j++) {
             while (retval[i] != '\0' && isspace(retval[i])) {
                 i++;
             }
@@ -86,17 +87,17 @@ static int
 nscmp(xmlNodePtr reference, xmlNodePtr node)
 {
     int in_ns = 1;
-    char* s = NULL;
+    char *s = NULL;
 
     if (reference->ns != NULL && reference->ns->href != NULL) {
 
         /* XML namespace wildcard mechanism:
-         * 1) no namespace defined and namespace is inherited from message so it
-         *    is NETCONF base namespace
+         * 1) no namespace defined and namespace is inherited from message
+         *    so it is NETCONF base namespace
          * 2) namespace is empty: xmlns=""
          */
-        if (!strcmp((char *)reference->ns->href, NC_NS_BASE10) ||
-                strlen(s = clrwspace((char*)(reference->ns->href))) == 0) {
+        if (!strcmp((char *) reference->ns->href, NC_NS_BASE10) ||
+            strlen(s = clrwspace((char *) (reference->ns->href))) == 0) {
             free(s);
             return 0;
         }
@@ -104,7 +105,7 @@ nscmp(xmlNodePtr reference, xmlNodePtr node)
 
         in_ns = 0;
         if (node->ns != NULL) {
-            if (!strcmp((char *)reference->ns->href, (char *)node->ns->href)) {
+            if (!strcmp((char *) reference->ns->href, (char *) node->ns->href)) {
                 in_ns = 1;
             }
         }
@@ -138,8 +139,8 @@ find_namespace_usage(xmlNodePtr node, xmlNsPtr ns)
 
         /* go recursive into children */
         for (child = node->children; child != NULL; child = child->next) {
-            if (child->type == XML_ELEMENT_NODE &&
-                            find_namespace_usage(child, ns) == 1) {
+            if (child->type == XML_ELEMENT_NODE
+                && find_namespace_usage(child, ns) == 1) {
                 return 1;
             }
         }
@@ -161,7 +162,7 @@ clrns(xmlNodePtr node)
         return;
     }
 
-    for (ns = node->nsDef; ns != NULL; ) {
+    for (ns = node->nsDef; ns != NULL;) {
         if (find_namespace_usage(node, ns) == 0) {
             /* no one use the namespace - remove it */
             if (prev == NULL) {
@@ -190,7 +191,7 @@ go2node(xmlNodePtr parent, xmlChar *name)
         return NULL;
     }
 
-    for(child = parent->children; child; child = child->next) {
+    for (child = parent->children; child; child = child->next) {
         if (child->type != XML_ELEMENT_NODE) {
             continue;
         }
@@ -208,8 +209,8 @@ get_key(xmlNodePtr parent, const char *name)
     xmlNodePtr node;
 
     node = go2node(parent, BAD_CAST name);
-    if (!node || !node->children || !node->children->content ||
-                    xmlIsBlankNode(node->children)) {
+    if (!node || !node->children || !node->children->content
+        || xmlIsBlankNode(node->children)) {
         nc_verb_error("Invalid key of %s", parent->name);
         return NULL;
     }
@@ -230,22 +231,22 @@ get_defval(xmlNodePtr node)
     }
 
     if (xmlStrEqual(node->name, BAD_CAST "lost-connection-behavior")) {
-        return (xmlChar*) "failSecureMode";
-    } else if (xmlStrEqual(node->name, BAD_CAST "port") &&
-                    xmlStrEqual(node->parent->name, BAD_CAST "controller")) {
-        return (xmlChar*) "6633";
+        return (xmlChar *) "failSecureMode";
+    } else if (xmlStrEqual(node->name, BAD_CAST "port")
+               && xmlStrEqual(node->parent->name, BAD_CAST "controller")) {
+        return (xmlChar *) "6633";
     } else if (xmlStrEqual(node->name, BAD_CAST "protocol")) {
-            return (xmlChar*) "tls";
-    } else if (xmlStrEqual(node->name, BAD_CAST "checksum-present") ||
-                    xmlStrEqual(node->name, BAD_CAST "key-present") ||
-                    xmlStrEqual(node->name, BAD_CAST "auto-negotiate")) {
-        return (xmlChar*) "true";
-    } else if (xmlStrEqual(node->name, BAD_CAST "no-receive") ||
-                    xmlStrEqual(node->name, BAD_CAST "no-forward") ||
-                    xmlStrEqual(node->name, BAD_CAST "no-packet-in")) {
-            return (xmlChar*) "false";
+        return (xmlChar *) "tls";
+    } else if (xmlStrEqual(node->name, BAD_CAST "checksum-present")
+               || xmlStrEqual(node->name, BAD_CAST "key-present")
+               || xmlStrEqual(node->name, BAD_CAST "auto-negotiate")) {
+        return (xmlChar *) "true";
+    } else if (xmlStrEqual(node->name, BAD_CAST "no-receive")
+               || xmlStrEqual(node->name, BAD_CAST "no-forward")
+               || xmlStrEqual(node->name, BAD_CAST "no-packet-in")) {
+        return (xmlChar *) "false";
     } else if (xmlStrEqual(node->name, BAD_CAST "admin-state")) {
-            return (xmlChar*) "up";
+        return (xmlChar *) "up";
     }
 
     return NULL;
@@ -331,13 +332,14 @@ get_operation_elements(NC_EDIT_OP_TYPE op, xmlDocPtr edit)
  * \return NC_OP_TYPE_ERROR on error, valid NC_OP_TYPE values otherwise
  */
 static NC_EDIT_OP_TYPE
-get_operation(xmlNodePtr node, NC_EDIT_DEFOP_TYPE defop, struct nc_err** error)
+get_operation(xmlNodePtr node, NC_EDIT_DEFOP_TYPE defop, struct nc_err **error)
 {
     xmlChar *operation = NULL;
     NC_EDIT_OP_TYPE op;
 
     /* get specific operation the node */
-    operation = xmlGetNsProp(node, BAD_CAST "operation", BAD_CAST NC_NS_BASE10);
+    operation =
+        xmlGetNsProp(node, BAD_CAST "operation", BAD_CAST NC_NS_BASE10);
     if (operation) {
         if (xmlStrEqual(operation, BAD_CAST "merge")) {
             op = NC_EDIT_OP_MERGE;
@@ -415,8 +417,8 @@ matching_elements(xmlNodePtr node1, xmlNodePtr node2)
 
     /* compare text nodes */
     if (node1->type == XML_TEXT_NODE && node2->type == XML_TEXT_NODE) {
-        aux1 = clrwspace((char*)(node1->content));
-        aux2 = clrwspace((char*)(node2->content));
+        aux1 = clrwspace((char *) (node1->content));
+        aux2 = clrwspace((char *) (node2->content));
 
         if (strcmp(aux1, aux2) == 0) {
             ret = 1;
@@ -429,8 +431,7 @@ matching_elements(xmlNodePtr node1, xmlNodePtr node2)
     }
 
     /* check element types - only element nodes are processed */
-    if ((node1->type != XML_ELEMENT_NODE) ||
-                    (node2->type != XML_ELEMENT_NODE)) {
+    if ((node1->type != XML_ELEMENT_NODE) || (node2->type != XML_ELEMENT_NODE)) {
         return 0;
     }
     /* check element names */
@@ -447,14 +448,15 @@ matching_elements(xmlNodePtr node1, xmlNodePtr node2)
      * if required, check children text node if exists, this is usually needed
      * for leaf-list's items
      */
-    if (xmlStrEqual(node2->name, BAD_CAST "queue") ||
-                    xmlStrEqual(node2->name, BAD_CAST "flow-table") ||
-                    xmlStrEqual(node2->name, BAD_CAST "rate") ||
-                    xmlStrEqual(node2->name, BAD_CAST "medium") ||
-                    (xmlStrEqual(node2->name, BAD_CAST "port") &&
-                    xmlStrEqual(node2->parent->name, BAD_CAST "resources"))) {
-        if (node1->children != NULL && node1->children->type == XML_TEXT_NODE &&
-            node2->children != NULL && node2->children->type == XML_TEXT_NODE) {
+    if (xmlStrEqual(node2->name, BAD_CAST "queue")
+        || xmlStrEqual(node2->name, BAD_CAST "flow-table")
+        || xmlStrEqual(node2->name, BAD_CAST "rate")
+        || xmlStrEqual(node2->name, BAD_CAST "medium")
+        || (xmlStrEqual(node2->name, BAD_CAST "port")
+            && xmlStrEqual(node2->parent->name, BAD_CAST "resources"))) {
+        if (node1->children != NULL && node1->children->type == XML_TEXT_NODE
+            && node2->children != NULL
+            && node2->children->type == XML_TEXT_NODE) {
             /*
              * we do not need to continue to keys checking since compared elements
              * do not contain any children that can serve as a key
@@ -465,19 +467,22 @@ matching_elements(xmlNodePtr node1, xmlNodePtr node2)
 
     /* check keys in lists */
     aux1 = NULL;
-    if (xmlStrEqual(node2->name, BAD_CAST "controller") ||
-                    xmlStrEqual(node2->name, BAD_CAST "switch")) {
+    if (xmlStrEqual(node2->name, BAD_CAST "controller")
+        || xmlStrEqual(node2->name, BAD_CAST "switch")) {
         aux1 = "id";
-    } else if (xmlStrEqual(node2->name, BAD_CAST "port") &&
-                    xmlStrEqual(node2->parent->parent->name, BAD_CAST "capable-switch")) {
+    } else if (xmlStrEqual(node2->name, BAD_CAST "port")
+               && xmlStrEqual(node2->parent->parent->name,
+                           BAD_CAST "capable-switch")) {
         aux1 = "name";
-    } else if (xmlStrEqual(node2->name, BAD_CAST "flow-table") &&
-                    xmlStrEqual(node2->parent->parent->name, BAD_CAST "capable-switch")) {
+    } else if (xmlStrEqual(node2->name, BAD_CAST "flow-table")
+               && xmlStrEqual(node2->parent->parent->name,
+                           BAD_CAST "capable-switch")) {
         aux1 = "table-id";
-    } else if ((xmlStrEqual(node2->name, BAD_CAST "queue") ||
-                    xmlStrEqual(node2->name, BAD_CAST "owned-certificate") ||
-                    xmlStrEqual(node2->name, BAD_CAST "external-certificate")) &&
-                    xmlStrEqual(node2->parent->parent->name, BAD_CAST "capable-switch")) {
+    } else if ((xmlStrEqual(node2->name, BAD_CAST "queue")
+                || xmlStrEqual(node2->name, BAD_CAST "owned-certificate")
+                || xmlStrEqual(node2->name, BAD_CAST "external-certificate"))
+               && xmlStrEqual(node2->parent->parent->name,
+                              BAD_CAST "capable-switch")) {
         aux1 = "resource-id";
     } else {
         return 1;
@@ -577,9 +582,10 @@ check_keys(xmlDocPtr doc, struct nc_err **e)
                         enode = l2;
                         goto error;
                     }
-                } else if (xmlStrEqual(l2->name, BAD_CAST "queue") ||
-                        xmlStrEqual(l2->name, BAD_CAST "owned-certificate") ||
-                        xmlStrEqual(l2->name, BAD_CAST "external-certificate")) {
+                } else if (xmlStrEqual(l2->name, BAD_CAST "queue")
+                           || xmlStrEqual(l2->name, BAD_CAST "owned-certificate")
+                           || xmlStrEqual(l2->name,
+                                          BAD_CAST "external-certificate")) {
                     /* here must be resource-id */
                     if (!go2node(l2, BAD_CAST "resource-id")) {
                         enode = l2;
@@ -595,8 +601,8 @@ check_keys(xmlDocPtr doc, struct nc_err **e)
             }
         } else if (xmlStrEqual(l1->name, BAD_CAST "logical-switches")) {
             for (l2 = l1->children; l2; l2 = l2->next) {
-                if (l2->type != XML_ELEMENT_NODE ||
-                        !xmlStrEqual(l2->name, BAD_CAST "switch")) {
+                if (l2->type != XML_ELEMENT_NODE
+                    || !xmlStrEqual(l2->name, BAD_CAST "switch")) {
                     continue;
                 }
 
@@ -613,8 +619,8 @@ check_keys(xmlDocPtr doc, struct nc_err **e)
                 }
 
                 for (l3 = l3->children; l3; l3 = l3->next) {
-                    if (l3->type != XML_ELEMENT_NODE ||
-                            !xmlStrEqual(l3->name, BAD_CAST "controller")) {
+                    if (l3->type != XML_ELEMENT_NODE
+                        || !xmlStrEqual(l3->name, BAD_CAST "controller")) {
                         continue;
                     }
 
@@ -632,7 +638,7 @@ check_keys(xmlDocPtr doc, struct nc_err **e)
 
 error:
     *e = nc_err_new(NC_ERR_BAD_ELEM);
-    nc_err_set(*e, NC_ERR_PARAM_INFO_BADELEM, (char*)enode->name);
+    nc_err_set(*e, NC_ERR_PARAM_INFO_BADELEM, (char *) enode->name);
     nc_err_set(*e, NC_ERR_PARAM_MSG, "The list element misses key.");
     return EXIT_FAILURE;
 }
@@ -662,7 +668,7 @@ check_edit_ops_hierarchy(xmlNodePtr edit, NC_EDIT_DEFOP_TYPE defop,
     NC_EDIT_OP_TYPE op, parent_op;
 
     op = get_operation(edit, NC_EDIT_DEFOP_NOTSET, error);
-    if (op == (NC_EDIT_OP_TYPE)NC_EDIT_DEFOP_NOTSET) {
+    if (op == (NC_EDIT_OP_TYPE) NC_EDIT_DEFOP_NOTSET) {
         /* no operation defined for this node */
         return EXIT_SUCCESS;
     } else if (op == NC_EDIT_OP_ERROR) {
@@ -683,8 +689,8 @@ check_edit_ops_hierarchy(xmlNodePtr edit, NC_EDIT_DEFOP_TYPE defop,
             parent_op = get_operation(parent, NC_EDIT_DEFOP_NOTSET, error);
             if (parent_op == NC_EDIT_OP_ERROR) {
                 return EXIT_FAILURE;
-            } else if (parent_op == NC_EDIT_OP_CREATE ||
-                            parent_op == NC_EDIT_OP_REPLACE) {
+            } else if (parent_op == NC_EDIT_OP_CREATE
+                       || parent_op == NC_EDIT_OP_REPLACE) {
                 if (error != NULL) {
                     *error = nc_err_new(NC_ERR_OP_FAILED);
                 }
@@ -699,8 +705,8 @@ check_edit_ops_hierarchy(xmlNodePtr edit, NC_EDIT_DEFOP_TYPE defop,
             parent_op = get_operation(parent, NC_EDIT_DEFOP_NOTSET, error);
             if (parent_op == NC_EDIT_OP_ERROR) {
                 return EXIT_FAILURE;
-            } else if (parent_op == NC_EDIT_OP_DELETE ||
-                            parent_op == NC_EDIT_OP_REMOVE) {
+            } else if (parent_op == NC_EDIT_OP_DELETE
+                       || parent_op == NC_EDIT_OP_REMOVE) {
                 if (error != NULL) {
                     *error = nc_err_new(NC_ERR_OP_FAILED);
                 }
@@ -768,12 +774,10 @@ check_edit_ops(NC_EDIT_OP_TYPE op, NC_EDIT_DEFOP_TYPE defop, xmlDocPtr orig,
         n = find_element_equiv(orig, node_to_process);
         if (op == NC_EDIT_OP_DELETE && n == NULL) {
             if (ncdflt_get_basic_mode() == NCWD_MODE_ALL) {
-                /* A valid 'delete' operation attribute for a
-                 * data node that contains its schema default
-                 * value MUST succeed, even though the data node
-                 * is immediately replaced by the server with
-                 * the default value.
-                 */
+                /* A valid 'delete' operation attribute for a data node that
+                 * contains its schema default value MUST succeed, even though
+                 * the data node is immediately replaced by the server with
+                 * the default value. */
                 defval = get_defval(node_to_process);
                 if (defval == NULL) {
                     /* no default value for this node */
@@ -790,10 +794,8 @@ check_edit_ops(NC_EDIT_OP_TYPE op, NC_EDIT_DEFOP_TYPE defop, xmlDocPtr orig,
                     *error = nc_err_new(NC_ERR_DATA_MISSING);
                     break;
                 } else {
-                    /* remove delete operation - it is valid
-                     * but there is no reason to really
-                     * perform it
-                     */
+                    /* remove delete operation - it is valid but there is no
+                     * reason to really perform it */
                     xmlUnlinkNode(node_to_process);
                     xmlFreeNode(node_to_process);
                 }
@@ -807,10 +809,8 @@ check_edit_ops(NC_EDIT_OP_TYPE op, NC_EDIT_DEFOP_TYPE defop, xmlDocPtr orig,
             }
         } else if (op == NC_EDIT_OP_CREATE && n != NULL) {
             if (ncdflt_get_basic_mode() == NCWD_MODE_TRIM) {
-                /* A valid 'create' operation attribute for a
-                 * data node that has a schema default value
-                 * defined MUST succeed.
-                 */
+                /* A valid 'create' operation attribute for a data node that
+                 * has a schema default value defined MUST succeed. */
                 defval = get_defval(node_to_process);
                 if (defval == NULL) {
                     /* no default value for this node */
@@ -827,10 +827,8 @@ check_edit_ops(NC_EDIT_OP_TYPE op, NC_EDIT_DEFOP_TYPE defop, xmlDocPtr orig,
                     *error = nc_err_new(NC_ERR_DATA_MISSING);
                     break;
                 } else {
-                    /* remove old node in configuration to
-                     * allow recreate it by the new one with
-                     * the default value
-                     */
+                    /* remove old node in configuration to allow recreate it
+                     * by the new one with the default value */
                     xmlUnlinkNode(n);
                     xmlFreeNode(n);
                 }
@@ -877,14 +875,13 @@ compact_edit_operations_r(xmlNodePtr node, NC_EDIT_OP_TYPE supreme_op)
     int ret;
 
     op = get_operation(node, NC_EDIT_DEFOP_NOTSET, NULL);
-    switch ((int)op) {
+    switch ((int) op) {
     case NC_EDIT_OP_ERROR:
         return EXIT_FAILURE;
         break;
     case 0:
-        /* no operation defined -> go recursively, but use supreme
-         * operation, it may be the default operation and in such a case
-         * remove it */
+        /* no operation defined -> go recursively, but use supreme operation,
+         * it may be the default operation and in such a case remove it */
         op = supreme_op;
         break;
     default:
@@ -893,14 +890,15 @@ compact_edit_operations_r(xmlNodePtr node, NC_EDIT_OP_TYPE supreme_op)
             /* operation duplicity -> remove subordinate duplicated operation */
             /* remove operation attribute */
             xmlRemoveProp(xmlHasNsProp(node, BAD_CAST "operation",
-                          BAD_CAST NC_NS_BASE10));
+                                       BAD_CAST NC_NS_BASE10));
             clrns(node);
         }
         break;
     }
 
     /* go recursive */
-    for (children = node->children; children != NULL; children = children->next) {
+    for (children = node->children; children != NULL;
+         children = children->next) {
         ret = compact_edit_operations_r(children, op);
         if (ret == EXIT_FAILURE) {
             return EXIT_FAILURE;
@@ -935,7 +933,7 @@ compact_edit_operations(xmlDocPtr edit_doc, NC_EDIT_DEFOP_TYPE defop)
             continue;
         }
 
-        r = compact_edit_operations_r(root, (NC_EDIT_OP_TYPE)defop);
+        r = compact_edit_operations_r(root, (NC_EDIT_OP_TYPE) defop);
         if (r != EXIT_SUCCESS) {
             return (EXIT_FAILURE);
         }
@@ -969,7 +967,7 @@ edit_operations(xmlDocPtr orig_doc, xmlDocPtr edit_doc,
     if (defop == NC_EDIT_DEFOP_REPLACE) {
         /* replace whole document */
         for (edit_node = edit_doc->children; edit_node != NULL;
-                        edit_node = edit_doc->children) {
+             edit_node = edit_doc->children) {
             edit_replace(orig_doc, edit_node, running, error);
         }
     }
@@ -989,8 +987,10 @@ edit_operations(xmlDocPtr orig_doc, xmlDocPtr edit_doc,
                     }
                     goto error;
                 }
-                for (; orig_node != NULL; orig_node = find_element_equiv(orig_doc, edit_node)) {
-                    /* remove the edit node's equivalent from the original document */
+                for (; orig_node != NULL;
+                     orig_node = find_element_equiv(orig_doc, edit_node)) {
+                    /* remove the edit node's equivalent from the original
+                     * document */
                     edit_delete(orig_node, running, error);
                 }
                 /* remove the node from the edit document */
@@ -1074,7 +1074,7 @@ edit_operations(xmlDocPtr orig_doc, xmlDocPtr edit_doc,
         /* replace whole document */
         if (edit_doc->children != NULL) {
             for (edit_node = edit_doc->children; edit_node != NULL;
-                            edit_node = edit_doc->children) {
+                 edit_node = edit_doc->children) {
                 if (edit_merge(orig_doc, edit_doc->children,
                                running, error) != EXIT_SUCCESS) {
                     goto error;
@@ -1113,17 +1113,18 @@ edit_delete(xmlNodePtr node, int running, struct nc_err **e)
         return EXIT_SUCCESS;
     }
 
-    nc_verb_verbose("Deleting the node %s%s", (char*)node->name,
-                    (running?" Running":""));
+    nc_verb_verbose("Deleting the node %s%s", (char *) node->name,
+                    (running ? " Running" : ""));
     if (running) {
-        if (node->parent->type == XML_DOCUMENT_NODE) { /* capable-switch node */
+        if (node->parent->type == XML_DOCUMENT_NODE) {  /* capable-switch node
+                                                         */
             /* removing root */
             return txn_del_all(e);
         }
         if (xmlStrEqual(node->parent->name, BAD_CAST "capable-switch")) {
             if (xmlStrEqual(node->name, BAD_CAST "id")) {
                 ofc_set_switchid(NULL);
-            } else { /* resources, logical-switches */
+            } else {            /* resources, logical-switches */
                 while (node->children) {
                     if ((ret = edit_delete(node->children, running, e))) {
                         /* failure */
@@ -1145,8 +1146,7 @@ edit_delete(xmlNodePtr node, int running, struct nc_err **e)
                 } else if (xmlStrEqual(node->name,
                                        BAD_CAST "external-certificate")) {
                     ret = txn_del_external_certificate(node, e);
-                } else if (xmlStrEqual(node->name,
-                                       BAD_CAST "flow-table")) {
+                } else if (xmlStrEqual(node->name, BAD_CAST "flow-table")) {
                     key = get_key(node, "table-id");
                     ret = txn_del_flow_table(key, e);
                 } else {
@@ -1154,9 +1154,9 @@ edit_delete(xmlNodePtr node, int running, struct nc_err **e)
                                     __func__, (const char *) node->name,
                                     (const char *) node->parent->name);
                 }
-            } else { /* logical-switch */
+            } else {            /* logical-switch */
                 /* get bridge name */
-                key = get_key(node->parent->parent,  "id");
+                key = get_key(node->parent->parent, "id");
 
                 /* get leaf-ref value */
                 aux = node->children ? node->children->content : NULL;
@@ -1165,7 +1165,7 @@ edit_delete(xmlNodePtr node, int running, struct nc_err **e)
                     nc_err_set(*e, NC_ERR_PARAM_MSG,
                                "invalid resources leafref");
                     nc_err_set(*e, NC_ERR_PARAM_INFO_BADELEM,
-                               (char*) node->name);
+                               (char *) node->name);
                     ret = EXIT_FAILURE;
                 } else if (xmlStrEqual(node->name, BAD_CAST "port")) {
                     ret = txn_del_bridge_port(key, aux, e);
@@ -1174,10 +1174,8 @@ edit_delete(xmlNodePtr node, int running, struct nc_err **e)
                 } else if (xmlStrEqual(node->name, BAD_CAST "flow-table")) {
                     ret = txn_del_bridge_flowtable(key, aux, e);
                 }
-                /* certificate is ignored on purpose!
-                 * Once defined, it is automatically referenced
-                 * and used in every bridge.
-                 */
+                /* certificate is ignored on purpose! Once defined, it is
+                 * automatically referenced and used in every bridge. */
             }
         } else if (xmlStrEqual(node->name, BAD_CAST "private-key")) {
             while (node->children) {
@@ -1198,10 +1196,14 @@ edit_delete(xmlNodePtr node, int running, struct nc_err **e)
                                 __func__, (const char *) node->name,
                                 (const char *) node->parent->name);
             }
-        } else if (xmlStrEqual(node->parent->name, BAD_CAST "owned-certificate")) {
+        } else
+            if (xmlStrEqual(node->parent->name, BAD_CAST "owned-certificate"))
+        {
             key = get_key(node->parent, "resource-id");
             ret = txn_mod_own_cert_certificate(key, NULL, e);
-        } else if (xmlStrEqual(node->parent->name, BAD_CAST "external-certificate")) {
+        } else
+            if (xmlStrEqual
+                (node->parent->name, BAD_CAST "external-certificate")) {
             key = get_key(node->parent, "resource-id");
             ret = txn_mod_ext_cert_certificate(key, NULL, e);
         } else if (xmlStrEqual(node->name, BAD_CAST "switch")) {
@@ -1215,18 +1217,18 @@ edit_delete(xmlNodePtr node, int running, struct nc_err **e)
             if (xmlStrEqual(node->name, BAD_CAST "datapath-id")) {
                 ret = txn_mod_bridge_datapath(key, NULL, e);
             } else if (xmlStrEqual(node->name, BAD_CAST "controllers")) {
-                while (node->children) { /* controller */
+                while (node->children) {        /* controller */
                     if ((ret = edit_delete(node->children, running, e))) {
                         break;
                     }
                 }
-            } else if (xmlStrEqual(node->name, BAD_CAST "lost-connection-behavior")) {
+            } else
+                if (xmlStrEqual
+                    (node->name, BAD_CAST "lost-connection-behavior")) {
                 ret = txn_mod_bridge_failmode(key, NULL, e);
             }
-            /* enabled is not handled:
-             * it is too complicated to handle it in combination with the
-             * OVSDB's garbage collection.
-             */
+            /* enabled is not handled: it is too complicated to handle it in
+             * combination with the OVSDB's garbage collection. */
         } else if (xmlStrEqual(node->parent->name, BAD_CAST "queue")) {
             if (xmlStrEqual(node->name, BAD_CAST "id")) {
                 key = get_key(node->parent, "resource-id");
@@ -1243,9 +1245,9 @@ edit_delete(xmlNodePtr node, int running, struct nc_err **e)
             }
         } else if (xmlStrEqual(node->parent->name, BAD_CAST "properties")) {
             key = get_key(node->parent->parent, "resource-id");
-            ret = txn_mod_queue_options(key, (char*) node->name, NULL, e);
+            ret = txn_mod_queue_options(key, (char *) node->name, NULL, e);
         } else if (xmlStrEqual(node->parent->name, BAD_CAST "flow-table")) {
-            /* TODO TC: flow-table/resource-id, table-id, name  */
+            /* TODO TC: flow-table/resource-id, table-id, name */
             key = get_key(node->parent, "table-id");
             if (xmlStrEqual(node->name, BAD_CAST "name")) {
                 ret = txn_mod_flowtable_name(key, NULL, e);
@@ -1253,17 +1255,17 @@ edit_delete(xmlNodePtr node, int running, struct nc_err **e)
                 ret = txn_mod_flowtable_resid(key, NULL, e);
             }
         } else if (xmlStrEqual(node->name, BAD_CAST "controller")) {
-            key = get_key(node, "id"); /* controller id */
-            aux = get_key(node->parent->parent, "id"); /* bridge id */
+            key = get_key(node, "id");  /* controller id */
+            aux = get_key(node->parent->parent, "id");  /* bridge id */
             ret = txn_del_contr(key, aux, e);
         } else if (xmlStrEqual(node->parent->name, BAD_CAST "controller")) {
             key = get_key(node->parent, "id");
             /* key 'id' cannot be deleted */
             if (xmlStrEqual(node->name, BAD_CAST "local-ip-address")) {
                 ret = txn_mod_contr_lip(key, NULL, e);
-            } else if (xmlStrEqual(node->name, BAD_CAST "ip-address") ||
-                            xmlStrEqual(node->name, BAD_CAST "port") ||
-                            xmlStrEqual(node->name, BAD_CAST "protocol")) {
+            } else if (xmlStrEqual(node->name, BAD_CAST "ip-address")
+                       || xmlStrEqual(node->name, BAD_CAST "port")
+                       || xmlStrEqual(node->name, BAD_CAST "protocol")) {
                 ret = txn_mod_contr_target(key, node->name, NULL, e);
             }
         } else if (xmlStrEqual(node->name, BAD_CAST "requested-number")) {
@@ -1282,9 +1284,11 @@ edit_delete(xmlNodePtr node, int running, struct nc_err **e)
             bridge_name = ofc_find_bridge_with_port(key);
 
             /* delete -> set to default */
-            ret = ofc_of_mod_port(bridge_name, key, node->name, BAD_CAST "", e);
+            ret =
+                ofc_of_mod_port(bridge_name, key, node->name, BAD_CAST "", e);
         } else if (xmlStrEqual(node->name, BAD_CAST "features")) {
-            ret = edit_delete(go2node(node, BAD_CAST "advertised"), running, e);
+            ret =
+                edit_delete(go2node(node, BAD_CAST "advertised"), running, e);
         } else if (xmlStrEqual(node->name, BAD_CAST "advertised")) {
             key = get_key(node->parent->parent, "name");
             for (child = node->children; child; child = child->next) {
@@ -1295,10 +1299,12 @@ edit_delete(xmlNodePtr node, int running, struct nc_err **e)
         } else if (xmlStrEqual(node->parent->name, BAD_CAST "advertised")) {
             key = get_key(node->parent->parent->parent, "name");
             ret = txn_del_port_advert(key, node, e);
-        } else if (xmlStrEqual(node->name, BAD_CAST "local-endpoint-ipv4-adress")
-                   || xmlStrEqual(node->name, BAD_CAST "remote-endpoint-ipv4-adress")
-                   || xmlStrEqual(node->name, BAD_CAST "key")
-                   || xmlStrEqual(node->name, BAD_CAST "vni")) {
+        } else
+            if (xmlStrEqual(node->name, BAD_CAST "local-endpoint-ipv4-adress")
+                || xmlStrEqual(node->name,
+                               BAD_CAST "remote-endpoint-ipv4-adress")
+                || xmlStrEqual(node->name, BAD_CAST "key")
+                || xmlStrEqual(node->name, BAD_CAST "vni")) {
             key = get_key(node->parent->parent, "name");
             ret = txn_mod_port_tunnel_opt(key, node, NULL, e);
         } else {
@@ -1326,7 +1332,7 @@ edit_delete(xmlNodePtr node, int running, struct nc_err **e)
  */
 static int
 edit_remove(xmlDocPtr orig_doc, xmlNodePtr edit_node, int running,
-            struct nc_err** error)
+            struct nc_err **error)
 {
     xmlNodePtr old;
 
@@ -1354,7 +1360,7 @@ edit_remove(xmlDocPtr orig_doc, xmlNodePtr edit_node, int running,
  */
 static int
 edit_replace(xmlDocPtr orig_doc, xmlNodePtr edit_node, int running,
-             struct nc_err** error)
+             struct nc_err **error)
 {
     xmlNodePtr old;
 
@@ -1374,7 +1380,8 @@ edit_replace(xmlDocPtr orig_doc, xmlNodePtr edit_node, int running,
 
     old = find_element_equiv(orig_doc, edit_node);
     if (old == NULL) {
-        /* node to be replaced doesn't exist, so create new configuration data */
+        /* node to be replaced doesn't exist, so create new configuration data
+         */
         return edit_create(orig_doc, edit_node, running, error);
     } else {
         /*
@@ -1403,7 +1410,7 @@ edit_replace(xmlDocPtr orig_doc, xmlNodePtr edit_node, int running,
  * \return Zero on success, non-zero otherwise.
  */
 static xmlNodePtr
-edit_create_r(xmlDocPtr orig_doc, xmlNodePtr edit, struct nc_err** error)
+edit_create_r(xmlDocPtr orig_doc, xmlNodePtr edit, struct nc_err **error)
 {
     xmlNodePtr retval = NULL;
     xmlNodePtr parent = NULL;
@@ -1414,7 +1421,7 @@ edit_create_r(xmlDocPtr orig_doc, xmlNodePtr edit, struct nc_err** error)
 
         if (edit->parent->type == XML_DOCUMENT_NODE) {
             /* original document is empty */
-            nc_verb_verbose("Creating the node %s", (char*)edit->name);
+            nc_verb_verbose("Creating the node %s", (char *) edit->name);
             retval = xmlCopyNode(edit, 0);
             if (edit->ns) {
                 ns_aux = xmlNewNs(retval, edit->ns->href, NULL);
@@ -1429,7 +1436,8 @@ edit_create_r(xmlDocPtr orig_doc, xmlNodePtr edit, struct nc_err** error)
             return (NULL);
         }
         retval = xmlAddChild(parent, xmlCopyNode(edit, 0));
-        if (edit->ns && parent->ns && xmlStrcmp(edit->ns->href, parent->ns->href) == 0) {
+        if (edit->ns && parent->ns
+            && xmlStrcmp(edit->ns->href, parent->ns->href) == 0) {
             xmlSetNs(retval, parent->ns);
         } else if (edit->ns) {
             ns_aux = xmlNewNs(retval, edit->ns->href, NULL);
@@ -1450,7 +1458,8 @@ edit_create_r(xmlDocPtr orig_doc, xmlNodePtr edit, struct nc_err** error)
  * \return Zero on success, non-zero otherwise.
  */
 static int
-edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running, struct nc_err **e)
+edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running,
+            struct nc_err **e)
 {
     xmlNodePtr parent, child;
     const xmlChar *bridge_name, *key, *aux;
@@ -1458,10 +1467,10 @@ edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running, struct nc_err **e)
 
     /* remove operation attribute */
     xmlRemoveProp(xmlHasNsProp(edit, BAD_CAST "operation",
-                  BAD_CAST NC_NS_BASE10));
+                               BAD_CAST NC_NS_BASE10));
     clrns(edit);
 
-    nc_verb_verbose("Creating the node %s", (char*)edit->name);
+    nc_verb_verbose("Creating the node %s", (char *) edit->name);
     if (running) {
         /* OVS */
         if (edit->parent->type == XML_DOCUMENT_NODE) {
@@ -1477,8 +1486,9 @@ edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running, struct nc_err **e)
         if (xmlStrEqual(edit->parent->name, BAD_CAST "capable-switch")) {
             if (xmlStrEqual(edit->name, BAD_CAST "id")) {
                 ofc_set_switchid(edit);
-            } else { /* resources and local-switches */
-                /* nothing to do on this level, continue with creating children */
+            } else {            /* resources and local-switches */
+                /* nothing to do on this level, continue with creating
+                 * children */
                 while (edit->children) {
                     ret = edit_create(orig_doc, edit->children, running, e);
                     if (ret) {
@@ -1487,14 +1497,19 @@ edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running, struct nc_err **e)
                 }
             }
         } else if (xmlStrEqual(edit->parent->name, BAD_CAST "resources")) {
-            if (xmlStrEqual(edit->parent->parent->name, BAD_CAST "capable-switch")) {
+            if (xmlStrEqual
+                (edit->parent->parent->name, BAD_CAST "capable-switch")) {
                 if (xmlStrEqual(edit->name, BAD_CAST "port")) {
                     ret = txn_add_port(edit, e);
                 } else if (xmlStrEqual(edit->name, BAD_CAST "queue")) {
                     ret = txn_add_queue(edit, e);
-                } else if (xmlStrEqual(edit->name, BAD_CAST "owned-certificate")) {
+                } else
+                    if (xmlStrEqual(edit->name, BAD_CAST "owned-certificate"))
+                {
                     ret = txn_add_owned_certificate(edit, e);
-                } else if (xmlStrEqual(edit->name, BAD_CAST "external-certificate")) {
+                } else
+                    if (xmlStrEqual
+                        (edit->name, BAD_CAST "external-certificate")) {
                     ret = txn_add_external_certificate(edit, e);
                 } else if (xmlStrEqual(edit->name, BAD_CAST "flow-table")) {
                     ret = txn_add_flow_table(edit, e);
@@ -1503,7 +1518,7 @@ edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running, struct nc_err **e)
                                     __func__, (const char *) edit->name,
                                     (const char *) edit->parent->name);
                 }
-            } else { /* logical-switch */
+            } else {            /* logical-switch */
                 /* get bridge name */
                 key = get_key(edit->parent->parent, "id");
 
@@ -1514,21 +1529,18 @@ edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running, struct nc_err **e)
                     nc_err_set(*e, NC_ERR_PARAM_MSG,
                                "invalid resources leafref");
                     nc_err_set(*e, NC_ERR_PARAM_INFO_BADELEM,
-                               (char*) edit->name);
+                               (char *) edit->name);
                     ret = EXIT_FAILURE;
                 } else if (xmlStrEqual(edit->name, BAD_CAST "port")) {
                     ret = txn_add_bridge_port(key, aux, e);
-                /*} else if (xmlStrEqual(edit->name, BAD_CAST "queue")) {
-                 * queue is connected to port (port is placed inside <queue>)
-                 *    -> use this only element only for delete
-                 */
+                    /* } else if (xmlStrEqual(edit->name, BAD_CAST "queue")) {
+                     * queue is connected to port (port is placed inside
+                     * <queue>) -> use this only element only for delete */
                 } else if (xmlStrEqual(edit->name, BAD_CAST "flow-table")) {
                     ret = txn_add_bridge_flowtable(key, aux, e);
                 }
-                /* certificate is ignored on purpose!
-                 * Once defined, it is automatically referenced
-                 * and used in every bridge.
-                 */
+                /* certificate is ignored on purpose! Once defined, it is
+                 * automatically referenced and used in every bridge. */
             }
         } else if (xmlStrEqual(edit->name, BAD_CAST "private-key")) {
             while (edit->children) {
@@ -1549,11 +1561,15 @@ edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running, struct nc_err **e)
                                 __func__, (const char *) edit->name,
                                 (const char *) edit->parent->name);
             }
-        } else if (xmlStrEqual(edit->parent->name, BAD_CAST "owned-certificate")) {
+        } else
+            if (xmlStrEqual(edit->parent->name, BAD_CAST "owned-certificate"))
+        {
             key = get_key(edit->parent, "resource-id");
 
             ret = txn_mod_own_cert_certificate(key, edit, e);
-        } else if (xmlStrEqual(edit->parent->name, BAD_CAST "external-certificate")) {
+        } else
+            if (xmlStrEqual
+                (edit->parent->name, BAD_CAST "external-certificate")) {
             key = get_key(edit->parent, "resource-id");
 
             ret = txn_mod_ext_cert_certificate(key, edit, e);
@@ -1568,20 +1584,20 @@ edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running, struct nc_err **e)
                 aux = edit->children ? edit->children->content : NULL;
                 ret = txn_mod_bridge_datapath(key, aux, e);
             } else if (xmlStrEqual(edit->name, BAD_CAST "controllers")) {
-                while (edit->children) { /* controller */
+                while (edit->children) {        /* controller */
                     ret = edit_create(orig_doc, edit->children, running, e);
                     if (ret) {
                         break;
                     }
                 }
-            } else if (xmlStrEqual(edit->name, BAD_CAST "lost-connection-behavior")) {
+            } else
+                if (xmlStrEqual
+                    (edit->name, BAD_CAST "lost-connection-behavior")) {
                 aux = edit->children ? edit->children->content : NULL;
                 ret = txn_mod_bridge_failmode(key, aux, e);
             }
-            /* enabled is not handled:
-             * it is too complicated to handle it in combination with the
-             * OVSDB's garbage collection.
-             */
+            /* enabled is not handled: it is too complicated to handle it in
+             * combination with the OVSDB's garbage collection. */
         } else if (xmlStrEqual(edit->parent->name, BAD_CAST "queue")) {
             if (xmlStrEqual(edit->name, BAD_CAST "id")) {
                 key = get_key(edit->parent, "resource-id");
@@ -1599,9 +1615,9 @@ edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running, struct nc_err **e)
             }
         } else if (xmlStrEqual(edit->parent->name, BAD_CAST "properties")) {
             key = get_key(edit->parent->parent, "resource-id");
-            ret = txn_mod_queue_options(key, (char*) edit->name, edit, e);
+            ret = txn_mod_queue_options(key, (char *) edit->name, edit, e);
         } else if (xmlStrEqual(edit->parent->name, BAD_CAST "flow-table")) {
-            /* TODO TC: resource-id, table-id, name  */
+            /* TODO TC: resource-id, table-id, name */
             key = get_key(edit->parent, "table-id");
             if (xmlStrEqual(edit->name, BAD_CAST "name")) {
                 ret = txn_mod_flowtable_name(key, edit, e);
@@ -1616,9 +1632,9 @@ edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running, struct nc_err **e)
             /* key 'id' cannot be deleted */
             if (xmlStrEqual(edit->name, BAD_CAST "local-ip-address")) {
                 ret = txn_mod_contr_lip(key, NULL, e);
-            } else if (xmlStrEqual(edit->name, BAD_CAST "ip-address") ||
-                            xmlStrEqual(edit->name, BAD_CAST "port") ||
-                            xmlStrEqual(edit->name, BAD_CAST "protocol")) {
+            } else if (xmlStrEqual(edit->name, BAD_CAST "ip-address")
+                       || xmlStrEqual(edit->name, BAD_CAST "port")
+                       || xmlStrEqual(edit->name, BAD_CAST "protocol")) {
                 aux = edit->children ? edit->children->content : NULL;
                 ret = txn_mod_contr_target(key, edit->name, aux, e);
             }
@@ -1631,7 +1647,8 @@ edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running, struct nc_err **e)
                    || xmlStrEqual(edit->name, BAD_CAST "no-packet-in")
                    || xmlStrEqual(edit->name, BAD_CAST "admin-state")) {
 
-            nc_verb_verbose("Modify port configuration (%s:%d)", __FILE__, __LINE__);
+            nc_verb_verbose("Modify port configuration (%s:%d)", __FILE__,
+                            __LINE__);
             key = get_key(edit->parent->parent, "name");
             aux = edit->children ? edit->children->content : NULL;
             bridge_name = ofc_find_bridge_with_port(key);
@@ -1650,13 +1667,17 @@ edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running, struct nc_err **e)
         } else if (xmlStrEqual(edit->parent->name, BAD_CAST "advertised")) {
             key = get_key(edit->parent->parent->parent, "name");
             ret = txn_add_port_advert(key, edit, e);
-        } else if (xmlStrEqual(edit->name, BAD_CAST "local-endpoint-ipv4-adress")
-                   || xmlStrEqual(edit->name, BAD_CAST "remote-endpoint-ipv4-adress")
-                   || xmlStrEqual(edit->name, BAD_CAST "key")
-                   || xmlStrEqual(edit->name, BAD_CAST "vni")) {
+        } else
+            if (xmlStrEqual(edit->name, BAD_CAST "local-endpoint-ipv4-adress")
+                || xmlStrEqual(edit->name,
+                               BAD_CAST "remote-endpoint-ipv4-adress")
+                || xmlStrEqual(edit->name, BAD_CAST "key")
+                || xmlStrEqual(edit->name, BAD_CAST "vni")) {
             key = get_key(edit->parent->parent, "name");
             if (edit->children && edit->children->content) {
-                ret = txn_mod_port_tunnel_opt(key, edit, edit->children->content, e);
+                ret =
+                    txn_mod_port_tunnel_opt(key, edit, edit->children->content,
+                                            e);
             }
         } else {
             nc_verb_warning("%s: unknown element %s (parent: %s)", __func__,
@@ -1672,7 +1693,7 @@ edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running, struct nc_err **e)
             }
         } else {
             /* we are in the root */
-            parent = (xmlNodePtr)(orig_doc->doc);
+            parent = (xmlNodePtr) (orig_doc->doc);
         }
 
         if (parent->type == XML_DOCUMENT_NODE) {
@@ -1703,7 +1724,7 @@ edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running, struct nc_err **e)
  */
 static int
 edit_merge(xmlDocPtr orig_doc, xmlNodePtr edit_node, int running,
-           struct nc_err** error)
+           struct nc_err **error)
 {
     xmlNodePtr orig_node;
     xmlNodePtr aux, child;
@@ -1720,10 +1741,9 @@ edit_merge(xmlDocPtr orig_doc, xmlNodePtr edit_node, int running,
 
     child = edit_node->children;
     if (child && child->type == XML_TEXT_NODE) {
-        /* we are in the leaf -> replace the previous value
-         * leaf-lists are coverede in find_element_equiv() - if edit_node is a
-         * new instance of the leaf-list, orig_node would be NULL
-         */
+        /* we are in the leaf -> replace the previous value leaf-lists are
+         * coverede in find_element_equiv() - if edit_node is a new instance
+         * of the leaf-list, orig_node would be NULL */
         return edit_replace(orig_doc, edit_node, running, error);
     } else {
         /* we can go recursive */

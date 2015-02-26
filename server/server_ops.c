@@ -54,8 +54,9 @@ srv_get_agent_by_agentid(const char *id)
 }
 
 void
-srv_agent_new(const char *ncsid, const char *username, struct nc_cpblts *cpblts,
-              const char *agentid, const uint16_t pid)
+srv_agent_new(const char *ncsid, const char *username,
+              struct nc_cpblts *cpblts, const char *agentid,
+              const uint16_t pid)
 {
     struct agent_info *agent, *agents_iter = agents;
 

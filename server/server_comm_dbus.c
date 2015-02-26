@@ -524,8 +524,7 @@ kill_session(DBusConnection *c, DBusMessage *msg)
     } else {
         /* something is wrong, the sender's session does not exist */
         nc_verb_error("Kill session requested by unknown agent (%s)", sid);
-        _dbus_error_reply(msg, c, DBUS_ERROR_FAILED,
-                          "You are unknown client");
+        _dbus_error_reply(msg, c, DBUS_ERROR_FAILED, "You are unknown client");
         return;
     }
 

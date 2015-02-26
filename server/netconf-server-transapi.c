@@ -43,6 +43,7 @@
 #define SSHDRUNNING "/sshd_config.running"
 
 /* transAPI version which must be compatible with libnetconf */
+
 /* int transapi_version = 5; */
 
 /* Signal to libnetconf that configuration data were modified by any callback.

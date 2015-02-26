@@ -2400,7 +2400,7 @@ find_flowtable(const xmlChar *table_id)
 
     OVSREC_FLOW_TABLE_FOR_EACH(ft, ovsdb_handler->idl) {
         tid_s = smap_get(&(ft->external_ids), "table_id");
-        if (tid_s && xmlStrcmp(table_id, BAD_CAST tid_s)) {
+        if (tid_s && xmlStrEqual(table_id, BAD_CAST tid_s)) {
             return ft;
         }
     }

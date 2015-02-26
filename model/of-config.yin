@@ -254,39 +254,6 @@ Logical Switch.</text>
        ignored.</text>
       </description>
     </leaf>
-    <leaf name="check-controller-certificate">
-      <type name="boolean"/>
-      <default value="false"/>
-      <description>
-        <text>This element indicates the behavior of the
-       OpenFlow Logical Switch when connecting to an OpenFlow
-       Controller.
-
-       If set to value 'false', the logical switch will connect to
-       a controller without checking any controller certificate.
-
-       If set to value 'true', then the logical switch will
-       connect to a controller with element &lt;protocol&gt; set to
-       'TLS', only if the controller provides a certificate that
-       can be verified with one of the certificates stored in the
-       list called external-certificates in the OpenFlow Capable
-       Switch.
-
-       If a certificate cannot be validated, the OpenFlow Logical
-       Switch MUST terminate communication with the corresponding
-       OpenFlow Controller, MUST NOT conduct any OpenFlow
-       processing on requests of this OpenFlow controller, and
-       SHOULD NOT further utilize any computational or network
-       resources of for dealing with this connection.
-
-       If set to value 'true', the OpenFlow Logical Switch MUST
-       NOT connect to any OpenFlow Controller that does not
-       provide a certificate. This implies that it cannot connect
-       to an OpenFlow controller that has the value of element
-       protocol set to 'TCP'. Only connections with protocol 'TLS'
-       are possible in this case.</text>
-      </description>
-    </leaf>
     <leaf name="lost-connection-behavior">
       <type name="enumeration">
         <enum name="failSecureMode"/>
@@ -556,25 +523,6 @@ Controller.</text>
        Capable Switch.</text>
       </description>
     </leaf>
-    <leaf name="role">
-      <type name="enumeration">
-        <enum name="master"/>
-        <enum name="slave"/>
-        <enum name="equal"/>
-      </type>
-      <default value="equal"/>
-      <description>
-        <text>This element indicates the role of the OpenFlow Controller. Semantics of
-       these roles are specified in the OpenFlow specifications 1.0 -
-       1.3.1.  It is RECOMMENDED that the roles of controllers are not
-       configured by OF-CONFIG 1.1.1 but determined using the OpenFlow
-       protocol.  OpenFlow Controllers configured by OF-CONFIG 1.1.1
-       have the default role 'equal'.  A role other than 'equal' MAY be
-       assigned to a controller.  Roles 'slave' and 'equal' MAY be
-       assigned to multiple controllers.  Role 'master' MUST NOT be
-       assigned to more than one controller.</text>
-      </description>
-    </leaf>
     <leaf name="ip-address">
       <type name="inet:ip-address"/>
       <mandatory value="true"/>
@@ -609,22 +557,6 @@ Controller.</text>
       the &lt;bad-element&gt; element.</text>
       </description>
     </leaf>
-    <leaf name="local-port">
-      <type name="inet:port-number"/>
-      <description>
-        <text>The local TCP port number of the OpenFlow Logical Switch when connecting
-       to this OpenFlow Controller.  It is the source TCP port number
-       of packets sent to this OpenFlow Controller.  If this element is
-       not present, then the port number is chosen arbitrarily by the
-       OpenFlow Logical Switch.
-
-       This element is optional. Attempts to set this element to a
-       port number that cannot be used by the OpenFlow Logical
-       Switch MUST result in an 'bad-element' error with type
-       'application'. The &lt;error-info&gt; element MUST contain the
-       name of this element in the &lt;bad-element&gt; element.</text>
-      </description>
-    </leaf>
     <leaf name="protocol">
       <type name="enumeration">
         <enum name="tcp"/>
@@ -650,30 +582,6 @@ Controller.</text>
        Switch to this controller.</text>
         </description>
       </leaf>
-      <leaf name="current-version">
-        <type name="OFOpenFlowVersionType"/>
-        <description>
-          <text>This object indicates the version of the OpenFlow protocol used between
-       the OpenFlow Logical Switch and this Controller.  If element
-       connection-state has value 'up', then this element indicates
-       the actual version in use.  If element connection-state has
-       value 'down', then this element indicates the version number
-       of the last established connection with this OpenFlow
-       Controller.  The value of this element MAY be persistent
-       across reboots of the OpenFlow Logical Switch in such a case.
-       If element connection-state has value 'down'and there is no
-       information about previous connections to this OpenFlow
-       controller, then this element is not present.</text>
-        </description>
-      </leaf>
-      <leaf-list name="supported-versions">
-        <type name="OFOpenFlowVersionType"/>
-        <description>
-          <text>This list of elements includes one entry for each OpenFlow protocol
-       version that this OpenFlow controller supports.  It SHOULD
-       contain all.</text>
-        </description>
-      </leaf-list>
       <leaf name="local-ip-address-in-use">
         <type name="inet:ip-address"/>
         <description>

@@ -277,6 +277,8 @@ module of-config {
      }
 */
 
+/* not implemented, OVS does not allow this
+
    leaf check-controller-certificate {
       type boolean;
       default false;
@@ -309,6 +311,7 @@ module of-config {
          protocol set to 'TCP'. Only connections with protocol 'TLS'
          are possible in this case.";
     }
+*/
 
     leaf lost-connection-behavior {
       type enumeration {
@@ -585,6 +588,8 @@ module of-config {
          Capable Switch.";
     }
 
+/* not supported by OVS
+
     leaf role {
       type enumeration {
         enum master;
@@ -604,6 +609,7 @@ module of-config {
          assigned to multiple controllers.  Role 'master' MUST NOT be
          assigned to more than one controller.";
     }
+*/
 
     leaf ip-address {
       type inet:ip-address;
@@ -639,6 +645,7 @@ module of-config {
         the <bad-element> element.";
     }
 
+/* not implemented, not supported by OVS
     leaf local-port {
       type inet:port-number;
       description
@@ -654,6 +661,7 @@ module of-config {
          'application'. The <error-info> element MUST contain the
          name of this element in the <bad-element> element.";
     }
+*/
 
     leaf protocol {
       type enumeration {
@@ -679,6 +687,8 @@ module of-config {
 	  "This object indicates the connections state of the OpenFlow Logical
            Switch to this controller.";
       }
+
+/* not implemented, not supported by OVS
       leaf current-version {
         type OFOpenFlowVersionType;
         description
@@ -702,6 +712,7 @@ module of-config {
            version that this OpenFlow controller supports.  It SHOULD
            contain all.";
       }
+*/
 
       leaf local-ip-address-in-use {
         type inet:ip-address;

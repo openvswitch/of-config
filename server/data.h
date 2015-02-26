@@ -132,6 +132,10 @@ int txn_add_owned_certificate(xmlNodePtr node, struct nc_err **e);
 int txn_del_owned_certificate(xmlNodePtr node, struct nc_err **e);
 int txn_add_external_certificate(xmlNodePtr node, struct nc_err **e);
 int txn_del_external_certificate(xmlNodePtr node, struct nc_err **e);
+int txn_mod_own_cert_certificate(const xmlChar *res_id, xmlNodePtr node, struct nc_err **e);
+int txn_mod_own_cert_key_type(const xmlChar *res_id, xmlNodePtr node, struct nc_err **e);
+int txn_mod_own_cert_key_data(const xmlChar *res_id, xmlNodePtr node, struct nc_err **e);
+int txn_mod_ext_cert_certificate(const xmlChar *res_id, xmlNodePtr node, struct nc_err **e);
 
 /*
  * Abort the transaction being prepared.

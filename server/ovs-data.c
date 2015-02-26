@@ -2676,6 +2676,31 @@ txn_del_bridge_port(const xmlChar *br_name, const xmlChar *port_name,
     return EXIT_SUCCESS;
 }
 
+/* Finds queue by resource-id and returns pointer to it.  When no queue is
+ * found, returns NULL. */
+static const struct ovsrec_ssl *
+find_ssl(const xmlChar *resource_id)
+{
+    const struct ovsrec_ssl *r, *n;
+    const char *res_id;
+
+    if (!resource_id) {
+        return NULL;
+    }
+
+    OVSREC_SSL_FOR_EACH_SAFE(r, n, ovsdb_handler->idl) {
+        res_id = smap_get(&r->external_ids, OFC_RESOURCE_ID);
+        if (xmlStrEqual(resource_id, BAD_CAST res_id)) {
+            return r;
+        }
+        res_id = smap_get(&r->external_ids, OFC_RESOURCE_ID_2);
+        if (xmlStrEqual(resource_id, BAD_CAST res_id)) {
+            return r;
+        }
+    }
+    return NULL;
+}
+
 int
 txn_add_owned_certificate(xmlNodePtr node, struct nc_err **e)
 {
@@ -2876,25 +2901,288 @@ txn_add_external_certificate(xmlNodePtr node, struct nc_err **e)
     return EXIT_SUCCESS;
 }
 
-/* Finds queue by resource-id and returns pointer to it.  When no queue is
- * found, returns NULL. */
-static const struct ovsrec_ssl *
-find_ssl(const xmlChar *resource_id)
+int
+txn_mod_own_cert_certificate(const xmlChar *res_id, xmlNodePtr node,
+                    struct nc_err **e)
 {
-    const struct ovsrec_ssl *r, *n;
-    const char *res_id;
+    const struct ovsrec_ssl *ssl;
+    xmlChar *xmlval;
+    int fd, ret;
 
-    if (!resource_id) {
-        return NULL;
+    if (!res_id) {
+        nc_verb_error("%s: invalid input parameters.", __func__);
+        *e = nc_err_new(NC_ERR_OP_FAILED);
+        return EXIT_FAILURE;
     }
 
-    OVSREC_SSL_FOR_EACH_SAFE(r, n, ovsdb_handler->idl) {
-        res_id = smap_get(&r->external_ids, OFC_RESOURCE_ID);
-        if (xmlStrEqual(resource_id, BAD_CAST res_id)) {
-            return r;
+    ssl = find_ssl(res_id);
+    if (!ssl) {
+        nc_verb_error("%s: could not find the SSL table.", __func__);
+        *e = nc_err_new(NC_ERR_OP_FAILED);
+        return EXIT_FAILURE;
+    }
+
+    /* remove */
+    if (!node) {
+        unlink(OFC_DATADIR "/cert.pem");
+        ovsrec_ssl_set_certificate(ssl, "");
+
+    /* add */
+    } else {
+        fd = creat(OFC_DATADIR "/cert.pem", 0644);
+        if (fd == -1) {
+            nc_verb_error("%s: creating the certificate file failed (%s).", __func__, strerror(errno));
+            *e = nc_err_new(NC_ERR_OP_FAILED);
+            return EXIT_FAILURE;
         }
+        write(fd, "-----BEGIN CERTIFICATE-----\n", 28);
+        xmlval = xmlNodeGetContent(node);
+        write(fd, (char*) xmlval, xmlStrlen(xmlval));
+        xmlFree(xmlval);
+        ret = write(fd, "\n-----END CERTIFICATE-----", 26);
+        close(fd);
+        if (ret < 26) {
+            /* if some of the previous writes failed, this one will too */
+            nc_verb_error("%s: writing the certificate failed.", __func__);
+            *e = nc_err_new(NC_ERR_OP_FAILED);
+            return EXIT_FAILURE;
+        }
+        ovsrec_ssl_verify_certificate(ssl);
+        ovsrec_ssl_set_certificate(ssl, OFC_DATADIR "/cert.pem");
     }
-    return NULL;
+
+    return EXIT_SUCCESS;
+}
+
+int
+txn_mod_own_cert_key_type(const xmlChar *res_id, xmlNodePtr node,
+                    struct nc_err **e)
+{
+    const struct ovsrec_ssl *ssl;
+    xmlChar *xmlval;
+    off_t size;
+    char *pem, *pem_start;
+    int fd;
+
+    if (!res_id) {
+        nc_verb_error("%s: invalid input parameters.", __func__);
+        *e = nc_err_new(NC_ERR_OP_FAILED);
+        return EXIT_FAILURE;
+    }
+
+    if (!node) {
+        /* key-type was removed, we don't care much, it will be added soon */
+        return EXIT_SUCCESS;
+    }
+
+    ssl = find_ssl(res_id);
+    if (!ssl) {
+        nc_verb_error("%s: could not find the SSL table.", __func__);
+        *e = nc_err_new(NC_ERR_OP_FAILED);
+        return EXIT_FAILURE;
+    }
+
+    fd = open(ssl->private_key, O_RDWR);
+    if (fd == -1) {
+        nc_verb_error("%s: could not open the private key file (%s).", __func__, strerror(errno));
+        *e = nc_err_new(NC_ERR_OP_FAILED);
+        return EXIT_FAILURE;
+    }
+    size = lseek(fd, 0, SEEK_END);
+    lseek(fd, 0, SEEK_SET);
+    pem = malloc(size+1);
+    if (pem == NULL) {
+        nc_verb_error("%s: malloc failed.", __func__);
+        *e = nc_err_new(NC_ERR_OP_FAILED);
+        close(fd);
+        return EXIT_FAILURE;
+    }
+    if (read(fd, pem, size) < size) {
+        nc_verb_error("%s: reading the private key failed.", __func__);
+        *e = nc_err_new(NC_ERR_OP_FAILED);
+        free(pem);
+        close(fd);
+        return EXIT_FAILURE;
+    }
+    pem[size] = '\0';
+
+    pem_start = strstr(pem, "-----BEGIN RSA PRIVATE KEY-----\n");
+    if (pem_start == NULL) {
+        pem_start = strstr(pem, "-----BEGIN DSA PRIVATE KEY-----\n");
+    }
+    if (pem_start == NULL) {
+        nc_verb_error("%s: private key is invalid.", __func__);
+        *e = nc_err_new(NC_ERR_OP_FAILED);
+        free(pem);
+        close(fd);
+        return EXIT_FAILURE;
+    }
+    /* so it points to the type */
+    pem_start += 11;
+    xmlval = xmlNodeGetContent(node);
+
+    /* so the file descriptor cursor is at the type */
+    lseek(fd, pem_start-pem, SEEK_SET);
+
+    if (write(fd, xmlval, xmlStrlen(xmlval)) < xmlStrlen(xmlval)) {
+        nc_verb_error("%s: private key is invalid.", __func__);
+        *e = nc_err_new(NC_ERR_OP_FAILED);
+        xmlFree(xmlval);
+        free(pem);
+        close(fd);
+        return EXIT_FAILURE;
+    }
+
+    xmlFree(xmlval);
+    free(pem);
+    close(fd);
+    return EXIT_SUCCESS;
+}
+
+int
+txn_mod_own_cert_key_data(const xmlChar *res_id, xmlNodePtr node,
+                    struct nc_err **e)
+{
+    const struct ovsrec_ssl *ssl;
+    xmlChar *xmlval;
+    off_t size;
+    char *pem, *pem_start, *pem_end;
+    int fd;
+
+    if (!res_id) {
+        nc_verb_error("%s: invalid input parameters.", __func__);
+        *e = nc_err_new(NC_ERR_OP_FAILED);
+        return EXIT_FAILURE;
+    }
+
+    if (!node) {
+        /* key-data were removed, we don't care much, they will be added soon */
+        return EXIT_SUCCESS;
+    }
+
+    ssl = find_ssl(res_id);
+    if (!ssl) {
+        nc_verb_error("%s: could not find the SSL table.", __func__);
+        *e = nc_err_new(NC_ERR_OP_FAILED);
+        return EXIT_FAILURE;
+    }
+
+    fd = open(ssl->private_key, O_RDWR);
+    if (fd == -1) {
+        nc_verb_error("%s: could not open the private key file (%s).", __func__, strerror(errno));
+        *e = nc_err_new(NC_ERR_OP_FAILED);
+        return EXIT_FAILURE;
+    }
+    size = lseek(fd, 0, SEEK_END);
+    lseek(fd, 0, SEEK_SET);
+    pem = malloc(size+1);
+    if (pem == NULL) {
+        nc_verb_error("%s: malloc failed.", __func__);
+        *e = nc_err_new(NC_ERR_OP_FAILED);
+        close(fd);
+        return EXIT_FAILURE;
+    }
+    if (read(fd, pem, size) < size) {
+        nc_verb_error("%s: reading the private key failed.", __func__);
+        *e = nc_err_new(NC_ERR_OP_FAILED);
+        free(pem);
+        close(fd);
+        return EXIT_FAILURE;
+    }
+    pem[size] = '\0';
+
+    pem_start = strstr(pem, "-----BEGIN RSA PRIVATE KEY-----\n");
+    pem_end = strstr(pem, "\n-----END RSA PRIVATE KEY-----");
+    if (pem_start == NULL) {
+        pem_start = strstr(pem, "-----BEGIN DSA PRIVATE KEY-----\n");
+        pem_end = strstr(pem, "\n-----END DSA PRIVATE KEY-----");
+    }
+    if (pem_start == NULL || pem_end == NULL) {
+        nc_verb_error("%s: private key is invalid.", __func__);
+        *e = nc_err_new(NC_ERR_OP_FAILED);
+        free(pem);
+        close(fd);
+        return EXIT_FAILURE;
+    }
+
+    if (ftruncate(fd, 0) == -1) {
+        nc_verb_error("%s: failed to truncate the private key (%s).", __func__, strerror(errno));
+        *e = nc_err_new(NC_ERR_OP_FAILED);
+        free(pem);
+        close(fd);
+        return EXIT_FAILURE;
+    }
+    lseek(fd, 0, SEEK_SET);
+
+    xmlval = xmlNodeGetContent(node);
+    write(fd, pem_start, 32);
+    write(fd, (char*) xmlval, xmlStrlen(xmlval));
+    if (write(fd, pem_end, 30) < 30) {
+        nc_verb_error("%s: writing the private key failed.", __func__);
+        *e = nc_err_new(NC_ERR_OP_FAILED);
+        xmlFree(xmlval);
+        free(pem);
+        close(fd);
+        return EXIT_FAILURE;
+    }
+
+    xmlFree(xmlval);
+    free(pem);
+    close(fd);
+    return EXIT_SUCCESS;
+}
+
+int
+txn_mod_ext_cert_certificate(const xmlChar *res_id, xmlNodePtr node,
+                    struct nc_err **e)
+{
+    const struct ovsrec_ssl *ssl;
+    xmlChar *xmlval;
+    int fd, ret;
+
+    if (!res_id) {
+        nc_verb_error("%s: invalid input parameters.", __func__);
+        *e = nc_err_new(NC_ERR_OP_FAILED);
+        return EXIT_FAILURE;
+    }
+
+    ssl = find_ssl(res_id);
+    if (!ssl) {
+        nc_verb_error("%s: could not find the SSL table.", __func__);
+        *e = nc_err_new(NC_ERR_OP_FAILED);
+        return EXIT_FAILURE;
+    }
+
+    /* remove */
+    if (!node) {
+        unlink(OFC_DATADIR "/ca_cert.pem");
+        ovsrec_ssl_set_ca_cert(ssl, "");
+
+    /* add */
+    } else {
+        fd = creat(OFC_DATADIR "/ca_cert.pem", 0644);
+        if (fd == -1) {
+            nc_verb_error("%s: creating the CA certificate file failed (%s).", __func__, strerror(errno));
+            *e = nc_err_new(NC_ERR_OP_FAILED);
+            return EXIT_FAILURE;
+        }
+        write(fd, "-----BEGIN CERTIFICATE-----\n", 28);
+        xmlval = xmlNodeGetContent(node);
+        write(fd, (char*) xmlval, xmlStrlen(xmlval));
+        xmlFree(xmlval);
+        ret = write(fd, "\n-----END CERTIFICATE-----", 26);
+        close(fd);
+        if (ret < 26) {
+            /* if some of the previous writes failed, this one will too */
+            nc_verb_error("%s: writing the CA certificate failed.", __func__);
+            *e = nc_err_new(NC_ERR_OP_FAILED);
+            return EXIT_FAILURE;
+        }
+        ovsrec_ssl_verify_ca_cert(ssl);
+        ovsrec_ssl_set_ca_cert(ssl, OFC_DATADIR "/ca_cert.pem");
+    }
+
+    return EXIT_SUCCESS;
 }
 
 int

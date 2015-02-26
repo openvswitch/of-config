@@ -1179,11 +1179,23 @@ edit_delete(xmlNodePtr node, int running, struct nc_err **e)
                  */
             }
         } else if (xmlStrEqual(node->parent->name, BAD_CAST "private-key")) {
-            ret = txn_del_owned_certificate(node->parent->parent, e);
+            key = get_key(node->parent->parent, "resource-id");
+
+            if (xmlStrEqual(node->name, BAD_CAST "key-type")) {
+                ret = txn_mod_own_cert_key_type(key, NULL, e);
+            } else if (xmlStrEqual(node->name, BAD_CAST "key-data")) {
+                ret = txn_mod_own_cert_key_data(key, NULL, e);
+            } else {
+                nc_verb_warning("%s: unknown element %s (parent: %s)",
+                                __func__, (const char *) node->name,
+                                (const char *) node->parent->name);
+            }
         } else if (xmlStrEqual(node->parent->name, BAD_CAST "owned-certificate")) {
-            ret = txn_del_owned_certificate(node->parent, e);
+            key = get_key(node->parent, "resource-id");
+            ret = txn_mod_own_cert_certificate(key, NULL, e);
         } else if (xmlStrEqual(node->parent->name, BAD_CAST "external-certificate")) {
-            ret = txn_del_external_certificate(node->parent, e);
+            key = get_key(node->parent, "resource-id");
+            ret = txn_mod_ext_cert_certificate(key, NULL, e);
         } else if (xmlStrEqual(node->name, BAD_CAST "switch")) {
             /* remove bridge */
             key = get_key(node, "id");
@@ -1511,11 +1523,25 @@ edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running, struct nc_err **e)
                  */
             }
         } else if (xmlStrEqual(edit->parent->name, BAD_CAST "private-key")) {
-            ret = txn_add_owned_certificate(edit->parent->parent, e);
+            key = get_key(edit->parent->parent, "resource-id");
+
+            if (xmlStrEqual(edit->name, BAD_CAST "key-type")) {
+                ret = txn_mod_own_cert_key_type(key, edit, e);
+            } else if (xmlStrEqual(edit->name, BAD_CAST "key-data")) {
+                ret = txn_mod_own_cert_key_data(key, edit, e);
+            } else {
+                nc_verb_warning("%s: unknown element %s (parent: %s)",
+                                __func__, (const char *) edit->name,
+                                (const char *) edit->parent->name);
+            }
         } else if (xmlStrEqual(edit->parent->name, BAD_CAST "owned-certificate")) {
-            ret = txn_add_owned_certificate(edit->parent, e);
+            key = get_key(edit->parent, "resource-id");
+
+            ret = txn_mod_own_cert_certificate(key, edit, e);
         } else if (xmlStrEqual(edit->parent->name, BAD_CAST "external-certificate")) {
-            ret = txn_add_external_certificate(edit->parent, e);
+            key = get_key(edit->parent, "resource-id");
+
+            ret = txn_mod_ext_cert_certificate(key, edit, e);
         } else if (xmlStrEqual(edit->name, BAD_CAST "switch")) {
             /* create bridge */
             ret = txn_add_bridge(edit, e);

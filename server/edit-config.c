@@ -1179,6 +1179,13 @@ edit_delete(xmlNodePtr node, int running, struct nc_err **e)
                  * and used in every bridge.
                  */
             }
+        } else if (xmlStrEqual(node->name, BAD_CAST "private-key")) {
+            while (node->children) {
+                ret = edit_delete(node->children, running, e);
+                if (ret) {
+                    break;
+                }
+            }
         } else if (xmlStrEqual(node->parent->name, BAD_CAST "private-key")) {
             key = get_key(node->parent->parent, "resource-id");
 
@@ -1522,6 +1529,13 @@ edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running, struct nc_err **e)
                  * Once defined, it is automatically referenced
                  * and used in every bridge.
                  */
+            }
+        } else if (xmlStrEqual(edit->name, BAD_CAST "private-key")) {
+            while (edit->children) {
+                ret = edit_create(orig_doc, edit->children, running, e);
+                if (ret) {
+                    break;
+                }
             }
         } else if (xmlStrEqual(edit->parent->name, BAD_CAST "private-key")) {
             key = get_key(edit->parent->parent, "resource-id");

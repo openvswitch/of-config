@@ -396,6 +396,7 @@ error_cleanup:
 
     if (target == NC_DATASTORE_RUNNING) {
         txn_abort();
+        xmlFreeDoc(cfg_clone);
         xmlFreeDoc(cfgds);
     }
     xmlFreeDoc(cfg);

@@ -2605,7 +2605,7 @@ txn_del_bridge_flowtable(const xmlChar *br_name, const xmlChar *table_id,
         if (!tid_s || !xmlStrEqual(table_id, BAD_CAST tid_s)) {
             if (j == bridge->n_flow_tables - 1) {
                 *e = nc_err_new(NC_ERR_BAD_ELEM);
-                nc_err_set(*e, NC_ERR_PARAM_INFO_BADELEM, "teble-id");
+                nc_err_set(*e, NC_ERR_PARAM_INFO_BADELEM, "table-id");
                 nc_err_set(*e, NC_ERR_PARAM_MSG,
                            "Table referenced from the logical-switch does not exist in OVSDB");
                 free(fts);

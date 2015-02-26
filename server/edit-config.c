@@ -994,7 +994,7 @@ edit_operations(xmlDocPtr orig_doc, xmlDocPtr edit_doc,
                     edit_delete(orig_node, running, error);
                 }
                 /* remove the node from the edit document */
-                edit_delete(edit_node, running, error);
+                edit_delete(edit_node, 0, error);
                 nodes->nodesetval->nodeTab[i] = NULL;
             }
         }

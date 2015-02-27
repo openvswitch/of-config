@@ -34,6 +34,12 @@
 #endif
 
 /*
+ * QoS type used in all QoS records, possible values are "linux-hfsc" and
+ * "linux-htb"
+ */
+#define QOS_TYPE "linux-hfsc"
+
+/*
  * OF-CONFIG uses resource-id to identify some configuration data.  It is
  * stored into OVSDB for every row that is mapped to OF-CONFIG.  Value of
  * resource-id is store in 'external_ids' string maps with key
@@ -112,15 +118,14 @@ int txn_mod_port_add_tunnel(const xmlChar *port_name, xmlNodePtr tunnel_node, st
 int txn_del_port_tunnel(const xmlChar *port_name, xmlNodePtr tunnel_node, struct nc_err **e);
 
 int txn_add_queue(xmlNodePtr node, struct nc_err **e);
-int txn_del_queue(const xmlNodePtr node, struct nc_err **e);
-int txn_add_queue_port(const xmlChar *resource_id, xmlNodePtr edit, struct nc_err **e);
-int txn_add_queue_id(const xmlChar *resource_id, xmlNodePtr edit, struct nc_err **e);
-int txn_del_queue_port(const xmlChar *resource_id, xmlNodePtr edit, struct nc_err **e);
-int txn_del_queue_id(const xmlChar *resource_id, xmlNodePtr edit, struct nc_err **e);
+int txn_del_queue(const xmlChar *rid, struct nc_err **e);
+int txn_add_queue_port(const xmlChar *rid, const xmlChar *port_name, struct nc_err **e);
+int txn_mod_queue_id(const xmlChar *rid, const xmlChar* qid_s, struct nc_err **e);
+int txn_del_queue_port(const xmlChar *rid, struct nc_err **e);
 
 /* if edit is not NULL, add max-rate / min-rate / experimenter-id / experimenter-data into other_options.
  * if edit is null, delete. */
-int txn_mod_queue_options(const xmlChar *resource_id, const char *option, xmlNodePtr edit, struct nc_err **e);
+int txn_mod_queue_options(const xmlChar *rid, const char *option, xmlNodePtr edit, struct nc_err **e);
 
 int txn_add_flow_table(xmlNodePtr node, struct nc_err **e);
 int txn_del_flow_table(const xmlChar *table_id, struct nc_err **e);

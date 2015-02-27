@@ -1139,7 +1139,8 @@ edit_delete(xmlNodePtr node, int running, struct nc_err **e)
                     key = get_key(node, "name");
                     ret = txn_del_port(key, e);
                 } else if (xmlStrEqual(node->name, BAD_CAST "queue")) {
-                    ret = txn_del_queue(node, e);
+                    key = get_key(node, "resource-id");
+                    ret = txn_del_queue(key, e);
                 } else if (xmlStrEqual(node->name,
                                        BAD_CAST "owned-certificate")) {
                     ret = txn_del_owned_certificate(node, e);
@@ -1169,13 +1170,14 @@ edit_delete(xmlNodePtr node, int running, struct nc_err **e)
                     ret = EXIT_FAILURE;
                 } else if (xmlStrEqual(node->name, BAD_CAST "port")) {
                     ret = txn_del_bridge_port(key, aux, e);
-                } else if (xmlStrEqual(node->name, BAD_CAST "queue")) {
-                    ret = txn_del_queue(node, e);
                 } else if (xmlStrEqual(node->name, BAD_CAST "flow-table")) {
                     ret = txn_del_bridge_flowtable(key, aux, e);
                 }
                 /* certificate is ignored on purpose! Once defined, it is
                  * automatically referenced and used in every bridge. */
+                /* queue is ignored on purpose! It is linked with the port,
+                 * reference here is only informative
+                 */
             }
         } else if (xmlStrEqual(node->name, BAD_CAST "private-key")) {
             while (node->children) {
@@ -1230,12 +1232,9 @@ edit_delete(xmlNodePtr node, int running, struct nc_err **e)
             /* enabled is not handled: it is too complicated to handle it in
              * combination with the OVSDB's garbage collection. */
         } else if (xmlStrEqual(node->parent->name, BAD_CAST "queue")) {
-            if (xmlStrEqual(node->name, BAD_CAST "id")) {
+            if (xmlStrEqual(node->name, BAD_CAST "port")) {
                 key = get_key(node->parent, "resource-id");
-                ret = txn_del_queue_id(key, node, e);
-            } else if (xmlStrEqual(node->name, BAD_CAST "port")) {
-                key = get_key(node->parent, "resource-id");
-                ret = txn_del_queue_port(key, node, e);
+                ret = txn_del_queue_port(key, e);
             } else if (xmlStrEqual(node->name, BAD_CAST "properties")) {
                 while (node->children) {
                     if ((ret = edit_delete(node->children, running, e))) {
@@ -1243,6 +1242,9 @@ edit_delete(xmlNodePtr node, int running, struct nc_err **e)
                     }
                 }
             }
+            /* id is ignored on purpose. It is mandatory value and delete as
+             * part of replace is not needed since the subsequent create
+             * allows to replace the current value directly */
         } else if (xmlStrEqual(node->parent->name, BAD_CAST "properties")) {
             key = get_key(node->parent->parent, "resource-id");
             ret = txn_mod_queue_options(key, (char *) node->name, NULL, e);
@@ -1314,8 +1316,10 @@ edit_delete(xmlNodePtr node, int running, struct nc_err **e)
         }
     }
 
-    xmlUnlinkNode(node);
-    xmlFreeNode(node);
+    if (!ret) {
+        xmlUnlinkNode(node);
+        xmlFreeNode(node);
+    }
 
     return ret;
 }
@@ -1533,14 +1537,14 @@ edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running,
                     ret = EXIT_FAILURE;
                 } else if (xmlStrEqual(edit->name, BAD_CAST "port")) {
                     ret = txn_add_bridge_port(key, aux, e);
-                    /* } else if (xmlStrEqual(edit->name, BAD_CAST "queue")) {
-                     * queue is connected to port (port is placed inside
-                     * <queue>) -> use this only element only for delete */
                 } else if (xmlStrEqual(edit->name, BAD_CAST "flow-table")) {
                     ret = txn_add_bridge_flowtable(key, aux, e);
                 }
                 /* certificate is ignored on purpose! Once defined, it is
                  * automatically referenced and used in every bridge. */
+                /* queue is ignored on purpose! It is linked with the port,
+                 * reference here is only informative
+                 */
             }
         } else if (xmlStrEqual(edit->name, BAD_CAST "private-key")) {
             while (edit->children) {
@@ -1601,10 +1605,12 @@ edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running,
         } else if (xmlStrEqual(edit->parent->name, BAD_CAST "queue")) {
             if (xmlStrEqual(edit->name, BAD_CAST "id")) {
                 key = get_key(edit->parent, "resource-id");
-                ret = txn_add_queue_id(key, edit, e);
+                aux = edit->children ? edit->children->content : NULL;
+                ret = txn_mod_queue_id(key, aux, e);
             } else if (xmlStrEqual(edit->name, BAD_CAST "port")) {
                 key = get_key(edit->parent, "resource-id");
-                ret = txn_add_queue_port(key, edit, e);
+                aux = edit->children ? edit->children->content : NULL;
+                ret = txn_add_queue_port(key, aux, e);
             } else if (xmlStrEqual(edit->name, BAD_CAST "properties")) {
                 while (edit->children) {
                     ret = edit_create(orig_doc, edit->children, running, e);
@@ -1707,7 +1713,9 @@ edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running,
     }
 
     /* remove the node from the edit document */
-    edit_delete(edit, 0, NULL);
+    if (!ret) {
+        edit_delete(edit, 0, NULL);
+    }
 
     return ret;
 }

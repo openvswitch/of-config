@@ -162,6 +162,4 @@ xmlChar *ofc_find_bridge_for_port(xmlNodePtr root, xmlChar *port_name);
 
 const xmlChar *ofc_find_bridge_with_port(const xmlChar *port_name);
 
-const struct ovsrec_bridge *ofc_find_bridge_with_flowtable(const xmlChar *table_id, size_t *found_index);
-
 #endif /* data.h */

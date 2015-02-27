@@ -543,9 +543,6 @@ find_queue_port(const struct ovsrec_queue *queue, const char **port_name)
 static char *
 get_queues_config(void)
 {
-    /* TODO "<queue><id>%s</id>" "<port>%s</port>" "<properties>"
-     * "<experimenter-id>%s</experimenter-id>"
-     * "<experimenter-data>%s</experimenter-data>" "</properties></queue>" */
     const struct ovsrec_queue *row, *next;
     struct ds string;
     const char *resource_id, *port_name;
@@ -571,6 +568,10 @@ get_queues_config(void)
                                  &string);
         find_and_append_smap_val(&row->other_config, "max-rate", "max-rate",
                                  &string);
+        find_and_append_smap_val(&row->other_config, "experimenter-id",
+                                 "experimenter-id", &string);
+        find_and_append_smap_val(&row->other_config, "experimenter-data",
+                                 "experimenter-data", &string);
         ds_put_format(&string, "</properties></queue>");
     }
     return ds_steal_cstr(&string);
@@ -2215,7 +2216,7 @@ txn_add_queue_port(const xmlChar *resource_id, xmlNodePtr port_elem,
     const struct ovsrec_qos *qos;
     int64_t id;
     xmlNodePtr id_elem;
-    xmlChar *xml_id, *port_name;
+    const xmlChar *xml_id, *port_name;
 
     port_name = port_elem->children ? port_elem->children->content : NULL;
     port = find_port_by_name(port_name);
@@ -2228,14 +2229,23 @@ txn_add_queue_port(const xmlChar *resource_id, xmlNodePtr port_elem,
 
     id_elem = go2node(port_elem->parent, BAD_CAST "id");
     if (id_elem != NULL) {
-        /* TODO: TC - do not use xmlNodeGetContent or check the result */
-        xml_id = xmlNodeGetContent(id_elem);
-        if (sscanf((char *) xml_id, "%" SCNi64, &id) != 1) {
-            /* parsing error, wrong number */
+        if (id_elem && id_elem->children && id_elem->children->content) {
+            xml_id = id_elem->children->content;
+        } else {
+            *e = nc_err_new(NC_ERR_DATA_MISSING);
+            nc_err_set(*e, NC_ERR_PARAM_INFO_BADELEM, "id");
             return EXIT_FAILURE;
         }
-        xmlFree(xml_id);
+        if (sscanf((char *) xml_id, "%" SCNi64, &id) != 1) {
+            /* parsing error, wrong number */
+            *e = nc_err_new(NC_ERR_BAD_ELEM);
+            nc_err_set(*e, NC_ERR_PARAM_INFO_BADELEM, "id");
+            nc_err_set(*e, NC_ERR_PARAM_MSG, "Could not parse number.");
+            return EXIT_FAILURE;
+        }
     } else {
+        *e = nc_err_new(NC_ERR_DATA_MISSING);
+        nc_err_set(*e, NC_ERR_PARAM_INFO_BADELEM, "id");
         return EXIT_FAILURE;
     }
 
@@ -3540,7 +3550,6 @@ txn_del_queue(const xmlNodePtr node, struct nc_err **e)
     const char *port_name = NULL;
     const struct ovsrec_port *port = NULL;
 
-    /* TODO: TC - do not use xmlNodeGetContent() or check the return value */
     if (!node) {
         nc_verb_error("%s: invalid input parameters.", __func__);
         *e = nc_err_new(NC_ERR_OP_FAILED);
@@ -4295,9 +4304,9 @@ txn_mod_port_tunnel_opt(const xmlChar * port_name, xmlNodePtr node,
     const struct ovsrec_interface *ifc = NULL;
     const char *opt_key = NULL;
 
-    /* TODO TC error messages */
     if (!node) {
-        *e = nc_err_new(NC_ERR_DATA_MISSING);
+        *e = nc_err_new(NC_ERR_BAD_ELEM);
+        return EXIT_FAILURE;
     }
 
     if (xmlStrEqual(node->name, BAD_CAST "local-endpoint-ipv4-adress")) {

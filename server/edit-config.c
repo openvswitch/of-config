@@ -1247,7 +1247,7 @@ edit_delete(xmlNodePtr node, int running, struct nc_err **e)
             key = get_key(node->parent->parent, "resource-id");
             ret = txn_mod_queue_options(key, (char *) node->name, NULL, e);
         } else if (xmlStrEqual(node->parent->name, BAD_CAST "flow-table")) {
-            /* TODO TC: flow-table/resource-id, table-id, name */
+            /* key 'table-id' cannot be deleted */
             key = get_key(node->parent, "table-id");
             if (xmlStrEqual(node->name, BAD_CAST "name")) {
                 ret = txn_mod_flowtable_name(key, NULL, e);
@@ -1617,7 +1617,7 @@ edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running,
             key = get_key(edit->parent->parent, "resource-id");
             ret = txn_mod_queue_options(key, (char *) edit->name, edit, e);
         } else if (xmlStrEqual(edit->parent->name, BAD_CAST "flow-table")) {
-            /* TODO TC: resource-id, table-id, name */
+            /* key 'table-id' */
             key = get_key(edit->parent, "table-id");
             if (xmlStrEqual(edit->name, BAD_CAST "name")) {
                 ret = txn_mod_flowtable_name(key, edit, e);

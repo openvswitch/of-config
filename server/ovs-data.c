@@ -1753,7 +1753,7 @@ txn_mod_port_admin_state(const xmlChar *port_name, const xmlChar *value,
 }
 
 int
-txn_mod_port_configuration(xmlNodePtr cfg, struct nc_err **error)
+of_mod_port_configuration(xmlNodePtr cfg, struct nc_err **error)
 {
     xmlXPathContextPtr xpathCtx = NULL;
     xmlXPathObjectPtr xpathObj = NULL;
@@ -1771,8 +1771,6 @@ txn_mod_port_configuration(xmlNodePtr cfg, struct nc_err **error)
     if (ovsdb_handler->added_interface == false) {
         return EXIT_SUCCESS;
     }
-
-    txn_init();
 
     doc = cfg->doc;
 
@@ -1815,7 +1813,7 @@ txn_mod_port_configuration(xmlNodePtr cfg, struct nc_err **error)
         }
     }
 
-    ret = txn_commit(error);
+    ret = EXIT_SUCCESS;
 
 cleanup:
     /* Cleanup, use bridge_name that was initialized or set */

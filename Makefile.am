@@ -7,3 +7,6 @@ SUBDIRS+=examples
 endif
 
 DISTCHECK_CONFIGURE_FLAGS="--with-ovs-srcdir=@OVS_SRCDIR@"
+
+EXTRA_DIST = README.md INSTALL AUTHORS CodingStyle.md ChangeLog NEWS COPYING
+

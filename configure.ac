@@ -5,7 +5,7 @@ AC_PREREQ([2.69])
 AC_INIT([of-config], [0.0.1], [])
 AC_CONFIG_SRCDIR([server/server.c])
 AC_CONFIG_HEADERS([config.h])
-AM_INIT_AUTOMAKE
+AM_INIT_AUTOMAKE([foreign subdir-objects])
 
 AC_CONFIG_MACRO_DIR([m4])
 

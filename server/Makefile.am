@@ -10,7 +10,6 @@ ofc_server_SOURCES=common.c \
 		ofconfig-datastore.c \
 		data.h \
 		ovs-data.c \
-		local-data.c \
 		res-map.c \
 		res-map.h
 ofc_server_LDADD=@OVS_LIBS@

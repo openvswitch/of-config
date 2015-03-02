@@ -68,6 +68,9 @@ ovsdb_t *ovsdb_handler = NULL;
 
 int ioctlfd = -1;
 
+/* locally stored data */
+static xmlChar *cs_id = NULL;   /* /capable-switch/id */
+
 struct u32_str_map {
     uint32_t value;
     const char *str;
@@ -384,6 +387,55 @@ ofc_of_getport_byname(struct ofpbuf *reply, const char *name)
     return NULL;
 }
 
+
+/*
+ * Locally stored data
+ */
+
+/*
+ * Set /capable-switch/id
+ *
+ * If this value not set, do not provide any access to the configuration data
+ */
+int
+ofc_set_switchid(xmlNodePtr node)
+{
+    xmlChar *id;
+
+    if (!node) {
+        /* delete id */
+        xmlFree(cs_id);
+        cs_id = NULL;
+        return EXIT_SUCCESS;
+    }
+
+    if (!node->children || node->children->type != XML_TEXT_NODE) {
+        nc_verb_error("%s: invalid id element", __func__);
+        return EXIT_FAILURE;
+    }
+
+    id = xmlStrdup(node->children->content);
+    if (!id) {
+        nc_verb_error("%s: invalid id element content", __func__);
+        return EXIT_FAILURE;
+    }
+
+    xmlFree(cs_id);
+    cs_id = id;
+
+    return EXIT_SUCCESS;
+}
+
+/*
+ * Read current /capable-switch/id
+ */
+const xmlChar *
+ofc_get_switchid(void)
+{
+    return cs_id;
+}
+
+
 /*
  * If key is in the string map s, append the it's value into string,
  * otherwise don't append anything.

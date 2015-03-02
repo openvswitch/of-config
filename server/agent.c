@@ -135,7 +135,7 @@ session_info(comm_t *c, struct nc_session *ncs)
 }
 
 static int
-process_message(struct nc_session *session, comm_t *c, const nc_rpc *rpc)
+process_message(struct nc_session *session, comm_t **c, const nc_rpc *rpc)
 {
 #define NOTIFCAP_URI "urn:ietf:params:netconf:capability:notification:1.0"
     nc_reply *reply = NULL;
@@ -153,7 +153,8 @@ process_message(struct nc_session *session, comm_t *c, const nc_rpc *rpc)
     /* close-session message */
     switch (nc_rpc_get_op(rpc)) {
     case NC_OP_CLOSESESSION:
-        comm_destroy(c);
+        comm_destroy(*c);
+        *c = NULL;
         reply = nc_reply_ok();
         mainloop = 1;
         break;
@@ -176,7 +177,7 @@ process_message(struct nc_session *session, comm_t *c, const nc_rpc *rpc)
             goto send_reply;
         }
         sid = (char *) xmlNodeGetContent(opnode->children);
-        reply = comm_kill_session(c, sid);
+        reply = comm_kill_session(*c, sid);
         xmlFreeNodeList(opnode);
         free(sid);
         break;
@@ -229,7 +230,7 @@ process_message(struct nc_session *session, comm_t *c, const nc_rpc *rpc)
         break;
     default:
         /* other messages */
-        reply = comm_operation(c, rpc);
+        reply = comm_operation(*c, rpc);
         break;
     }
 
@@ -264,10 +265,11 @@ main(int argc, char **argv)
     char *aux_string = NULL;
     struct sigaction action;
     sigset_t block_mask;
-    comm_t *c;
+    comm_t *c = NULL;
     struct nc_cpblts *capabilities = NULL;
-    struct nc_session *ncs;
+    struct nc_session *ncs = NULL;
     nc_rpc *rpc = NULL;
+    int ret = EXIT_FAILURE;
 
     /* initialize message system and set verbose and debug variables */
     if ((aux_string = getenv(ENVIRONMENT_VERBOSE)) == NULL) {
@@ -321,19 +323,19 @@ main(int argc, char **argv)
     if (nc_init(NC_INIT_NOTIF | NC_INIT_MONITORING
                 | NC_INIT_WD | NC_INIT_SINGLELAYER) < 0) {
         nc_verb_error("Library initialization failed");
-        return EXIT_FAILURE;
+        goto cleanup;
     }
 
     /* Initiate communication subsystem for communication with server */
     if ((c = comm_init(0)) == NULL) {
         nc_verb_error("Communication subsystem not initiated.");
-        return (EXIT_FAILURE);
+        goto cleanup;
     }
     nc_verb_verbose("Communication channel ready");
 
     /* get server capabilities */
     if ((capabilities = get_server_capabilities(c)) == NULL) {
-        return EXIT_FAILURE;
+        goto cleanup;
     }
 
     /* accept NETCONF session */
@@ -341,7 +343,7 @@ main(int argc, char **argv)
     nc_cpblts_free(capabilities);
     if (ncs == NULL) {
         nc_verb_error("Failed to connect agent.");
-        return EXIT_FAILURE;
+        goto cleanup;
     }
 
     /* monitor this session and build statistics */
@@ -350,7 +352,7 @@ main(int argc, char **argv)
     /* create the session */
     if (session_info(c, ncs)) {
         nc_verb_error("Failed to comunicate with server.");
-        return EXIT_FAILURE;
+        goto cleanup;
     }
 
     nc_verb_verbose("Init finished, starting main loop");
@@ -360,7 +362,7 @@ main(int argc, char **argv)
         switch (nc_session_recv_rpc(ncs, TIMEOUT, &rpc)) {
         case NC_MSG_RPC:
             nc_verb_verbose("Processing client message");
-            if (process_message(ncs, c, rpc) != EXIT_SUCCESS) {
+            if (process_message(ncs, &c, rpc) != EXIT_SUCCESS) {
                 nc_verb_warning("Message processing failed");
             }
             nc_rpc_free(rpc);
@@ -386,11 +388,13 @@ main(int argc, char **argv)
         }
     }
 
+    ret = EXIT_SUCCESS;
+
 cleanup:
     nc_rpc_free(rpc);
     nc_session_free(ncs);
     comm_destroy(c);
     nc_close();
 
-    return (EXIT_SUCCESS);
+    return ret;
 }

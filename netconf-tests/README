@@ -1,4 +1,0 @@
-Test scripts work with installed netopeer-cli.
-Scripts connect to localhost as current user.
-It is required to have working public-key authentization
-with key without passphrase.

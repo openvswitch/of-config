@@ -1755,14 +1755,15 @@ txn_mod_port_admin_state(const xmlChar *port_name, const xmlChar *value,
 int
 txn_mod_port_configuration(xmlNodePtr cfg, struct nc_err **error)
 {
-    xmlXPathContextPtr xpathCtx;
-    xmlXPathObjectPtr xpathObj;
+    xmlXPathContextPtr xpathCtx = NULL;
+    xmlXPathObjectPtr xpathObj = NULL;
     xmlDocPtr doc;
     const xmlChar *bridge_name = NULL;
     const xmlChar *port_name, *value;
     xmlNodePtr port, aux;
     const char *xpathexpr = "//ofc:port/ofc:configuration/..";
     size_t size, i;
+    int ret = EXIT_FAILURE;
 
     if (cfg == NULL) {
         return EXIT_SUCCESS;
@@ -1814,11 +1815,13 @@ txn_mod_port_configuration(xmlNodePtr cfg, struct nc_err **error)
         }
     }
 
+    ret = txn_commit(error);
+
 cleanup:
     /* Cleanup, use bridge_name that was initialized or set */
     xmlXPathFreeObject(xpathObj);
     xmlXPathFreeContext(xpathCtx);
-    return txn_commit(error);
+    return ret;
 }
 
 int
@@ -2792,7 +2795,7 @@ txn_add_owned_certificate(xmlNodePtr node, struct nc_err **e)
     xmlChar *xmlval;
     const xmlChar *new_resid;
     int fd, ret, node_map;
-    char *key_type, *key_data;
+    char *key_type = NULL, *key_data = NULL;
     const char *resid = NULL;
 
     if (!node) {
@@ -2865,6 +2868,15 @@ txn_add_owned_certificate(xmlNodePtr node, struct nc_err **e)
                 } else if (xmlStrEqual(leaf->name, BAD_CAST "key-data")) {
                     key_data = (char *) xmlNodeGetContent(leaf);
                 }
+            }
+
+            if (!key_type || !key_data) {
+                nc_verb_error("Missing mandatory element \"%s\"",
+                              key_type ? "key-data" : "key-type");
+                *e = nc_err_new(NC_ERR_MISSING_ELEM);
+                nc_err_set(*e, NC_ERR_PARAM_INFO_BADELEM,
+                           key_type ? "key-data" : "key-type");
+                return EXIT_FAILURE;
             }
 
             fd = creat(OFC_DATADIR "/key.pem", 0600);
@@ -3554,7 +3566,7 @@ int
 txn_del_bridge(const xmlChar *br_name, struct nc_err **e)
 {
     struct ovsrec_bridge **bridges;
-    const struct ovsrec_bridge *bridge;
+    const struct ovsrec_bridge *bridge = NULL;
     const struct ovsrec_open_vswitch *ovs;
     size_t i, j;
 
@@ -3579,12 +3591,15 @@ txn_del_bridge(const xmlChar *br_name, struct nc_err **e)
             bridge = ovs->bridges[j];
         }
     }
-    ovsrec_open_vswitch_verify_bridges(ovs);
-    ovsrec_open_vswitch_set_bridges(ovs, bridges, ovs->n_bridges - 1);
-    free(bridges);
 
-    /* remove bridge itself */
-    ovsrec_bridge_delete(bridge);
+    if (bridge) {
+        ovsrec_open_vswitch_verify_bridges(ovs);
+        ovsrec_open_vswitch_set_bridges(ovs, bridges, ovs->n_bridges - 1);
+
+        /* remove bridge itself */
+        ovsrec_bridge_delete(bridge);
+    }
+    free(bridges);
 
     return EXIT_SUCCESS;
 }
@@ -3663,7 +3678,7 @@ txn_add_contr(xmlNodePtr node, const xmlChar *br_name, struct nc_err **e)
     struct ovsrec_controller **contrs;
     const struct ovsrec_bridge *br;
     xmlNodePtr aux;
-    const char *proto = "ssl", *ip, *port = NULL;
+    const char *proto = "ssl", *ip = NULL, *port = NULL;
     char *target = NULL;
     int i;
 
@@ -3697,6 +3712,12 @@ txn_add_contr(xmlNodePtr node, const xmlChar *br_name, struct nc_err **e)
             ovsrec_controller_set_local_ip(contr,
                                            (char *) aux->children->content);
         }
+    }
+
+    if (!ip) {
+        *e = nc_err_new(NC_ERR_MISSING_ELEM);
+        nc_err_set(*e, NC_ERR_PARAM_INFO_BADELEM, "ip-address");
+        return EXIT_FAILURE;
     }
 
     asprintf(&target, "%s:%s%s%s", proto, ip, port ? ":" : "",
@@ -4153,8 +4174,8 @@ ofc_find_bridge_with_port(const xmlChar *port_name)
 xmlChar *
 ofc_find_bridge_for_port(xmlNodePtr root, xmlChar *port_name)
 {
-    xmlXPathContextPtr xpathCtx;
-    xmlXPathObjectPtr xpathObj;
+    xmlXPathContextPtr xpathCtx = NULL;
+    xmlXPathObjectPtr xpathObj = NULL;
     xmlDocPtr doc;
     char *xpathexpr = NULL;
     xmlChar *bridge_name = NULL;
@@ -4206,6 +4227,7 @@ cleanup:
     free(xpathexpr);
     xmlXPathFreeObject(xpathObj);
     xmlXPathFreeContext(xpathCtx);
+
     return bridge_name;
 }
 
@@ -4246,14 +4268,14 @@ txn_mod_port_add_tunnel(const xmlChar *port_name, xmlNodePtr tunnel_node,
         if (iter->type == XML_ELEMENT_NODE) {
             if (xmlStrEqual(iter->name, BAD_CAST "local-endpoint-ipv4-adress")) {
                 option = "local_ip";
-                value = (char *) xmlNodeGetContent(iter);
-
-            } else
-                if (xmlStrEqual
-                    (iter->name, BAD_CAST "remote-endpoint-ipv4-adress")) {
+            } else if (xmlStrEqual(iter->name,
+                                   BAD_CAST "remote-endpoint-ipv4-adress")) {
                 option = "remote_ip";
-                value = (char *) xmlNodeGetContent(iter);
+            } else {
+                /* unknown element */
+                continue;
             }
+            value = (char *) (iter->children ? iter->children->content : NULL);
             smap_add_once(&opt_cl, option, (char *) value);
         }
     }

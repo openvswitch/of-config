@@ -39,16 +39,6 @@ AC_SUBST(OVS_SRCDIR)],
 [AC_MSG_ERROR(Missing --with-ovs-srcdir that specifies path to the Open vSwitch repository.)]
 )
 
-AC_ARG_ENABLE([buildexamples],
-	AC_HELP_STRING([--enable-buildexamples], [Build examples directory (containing tests and experiments, will be removed in future).]),
-	[if test "$enableval" = "yes"; then
-		buildexamples="yes"
-	else
-		buildexamples="no"
-	fi], [buildexamples="no"])
-AM_CONDITIONAL(buildexamples, test x"$buildexamples" = x"yes")
-
-
 AC_ARG_ENABLE([dbus],
         AC_HELP_STRING([--disable-dbus], [Use UNIX sockets instead of DBus.]),
         [if test "$enableval" = "no"; then

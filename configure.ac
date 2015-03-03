@@ -130,6 +130,7 @@ if test "x$dbus" = "xyes"; then
 		AC_HELP_STRING([--with-dbus-services@<:@=DIR@:>@],
 			[path to D-Bus services directory (/usr/share/dbus-1/system-services/ by default), \
 			if this parameter is not used, service file for netopeer-server is not installed!]),
+			[
 			if test "$withval" = "yes"; then
 				DBUSSERVICES="/usr/share/dbus-1/system-services/"
 			else
@@ -147,6 +148,7 @@ if test "x$dbus" = "xyes"; then
 			DBUSSERVICESFILE="$DBUSSERVICES/org.liberouter.netopeer.server.service"
 			AC_SUBST(DBUSSERVICES)
 			AC_SUBST(DBUSSERVICESFILE)
+			]
 			,
 			# do not install DBus service file anywhere
 			DBUSSERVICES=""

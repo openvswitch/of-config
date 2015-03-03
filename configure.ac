@@ -190,8 +190,7 @@ AC_CONFIG_FILES([Makefile
 		config/Makefile
 		config/org.opennetworking.ofc.server.service
 		model/Makefile
-		server/Makefile
-		examples/Makefile])
+		server/Makefile])
 AC_OUTPUT
 echo
 echo

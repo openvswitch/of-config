@@ -9,6 +9,7 @@ ofc_conf_DATA=sshd_config
 ofcdatadir=${OFC_DATADIR}
 dist_ofcdata_DATA=startup.xml
 
+EXTRA_DIST=org.opennetworking.ofc.conf
 dbus_service_DATA=org.opennetworking.ofc.server.service
 dbus_config_DATA=org.opennetworking.ofc.conf
 

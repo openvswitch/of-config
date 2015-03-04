@@ -1179,6 +1179,27 @@ edit_delete(xmlNodePtr node, int running, struct nc_err **e)
                  * reference here is only informative
                  */
             }
+        } else if (xmlStrEqual(node->parent->name, BAD_CAST "queue")) {
+            if (xmlStrEqual(node->name, BAD_CAST "port")) {
+                key = get_key(node->parent, "resource-id");
+                ret = txn_del_queue_port(key, e);
+            } else if (xmlStrEqual(node->name, BAD_CAST "properties")) {
+                while (node->children) {
+                    if ((ret = edit_delete(node->children, running, e))) {
+                        break;
+                    }
+                }
+            }
+            /* id is ignored on purpose. It is mandatory value and delete as
+             * part of replace is not needed since the subsequent create
+             * allows to replace the current value directly */
+        } else if (xmlStrEqual(node->parent->name, BAD_CAST "properties")) {
+            key = get_key(node->parent->parent, "resource-id");
+            ret = txn_mod_queue_options(key, (char *) node->name, NULL, e);
+        } else if (xmlStrEqual(node->parent->name,
+                               BAD_CAST "owned-certificate")) {
+            key = get_key(node->parent, "resource-id");
+            ret = txn_mod_own_cert_certificate(key, NULL, e);
         } else if (xmlStrEqual(node->name, BAD_CAST "private-key")) {
             while (node->children) {
                 ret = edit_delete(node->children, running, e);
@@ -1198,16 +1219,18 @@ edit_delete(xmlNodePtr node, int running, struct nc_err **e)
                                 __func__, (const char *) node->name,
                                 (const char *) node->parent->name);
             }
-        } else
-            if (xmlStrEqual(node->parent->name, BAD_CAST "owned-certificate"))
-        {
-            key = get_key(node->parent, "resource-id");
-            ret = txn_mod_own_cert_certificate(key, NULL, e);
-        } else
-            if (xmlStrEqual
-                (node->parent->name, BAD_CAST "external-certificate")) {
+        } else if (xmlStrEqual(node->parent->name,
+                               BAD_CAST "external-certificate")) {
             key = get_key(node->parent, "resource-id");
             ret = txn_mod_ext_cert_certificate(key, NULL, e);
+        } else if (xmlStrEqual(node->parent->name, BAD_CAST "flow-table")) {
+            /* key 'table-id' cannot be deleted */
+            key = get_key(node->parent, "table-id");
+            if (xmlStrEqual(node->name, BAD_CAST "name")) {
+                ret = txn_mod_flowtable_name(key, NULL, e);
+            } else if (xmlStrEqual(node->name, BAD_CAST "resource-id")) {
+                ret = txn_mod_flowtable_resid(key, NULL, e);
+            }
         } else if (xmlStrEqual(node->name, BAD_CAST "switch")) {
             /* remove bridge */
             key = get_key(node, "id");
@@ -1231,31 +1254,6 @@ edit_delete(xmlNodePtr node, int running, struct nc_err **e)
             }
             /* enabled is not handled: it is too complicated to handle it in
              * combination with the OVSDB's garbage collection. */
-        } else if (xmlStrEqual(node->parent->name, BAD_CAST "queue")) {
-            if (xmlStrEqual(node->name, BAD_CAST "port")) {
-                key = get_key(node->parent, "resource-id");
-                ret = txn_del_queue_port(key, e);
-            } else if (xmlStrEqual(node->name, BAD_CAST "properties")) {
-                while (node->children) {
-                    if ((ret = edit_delete(node->children, running, e))) {
-                        break;
-                    }
-                }
-            }
-            /* id is ignored on purpose. It is mandatory value and delete as
-             * part of replace is not needed since the subsequent create
-             * allows to replace the current value directly */
-        } else if (xmlStrEqual(node->parent->name, BAD_CAST "properties")) {
-            key = get_key(node->parent->parent, "resource-id");
-            ret = txn_mod_queue_options(key, (char *) node->name, NULL, e);
-        } else if (xmlStrEqual(node->parent->name, BAD_CAST "flow-table")) {
-            /* key 'table-id' cannot be deleted */
-            key = get_key(node->parent, "table-id");
-            if (xmlStrEqual(node->name, BAD_CAST "name")) {
-                ret = txn_mod_flowtable_name(key, NULL, e);
-            } else if (xmlStrEqual(node->name, BAD_CAST "resource-id")) {
-                ret = txn_mod_flowtable_resid(key, NULL, e);
-            }
         } else if (xmlStrEqual(node->name, BAD_CAST "controller")) {
             key = get_key(node, "id");  /* controller id */
             aux = get_key(node->parent->parent, "id");  /* bridge id */
@@ -1507,13 +1505,11 @@ edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running,
                     ret = txn_add_port(edit, e);
                 } else if (xmlStrEqual(edit->name, BAD_CAST "queue")) {
                     ret = txn_add_queue(edit, e);
-                } else
-                    if (xmlStrEqual(edit->name, BAD_CAST "owned-certificate"))
-                {
+                } else if (xmlStrEqual(edit->name,
+                                       BAD_CAST "owned-certificate")) {
                     ret = txn_add_owned_certificate(edit, e);
-                } else
-                    if (xmlStrEqual
-                        (edit->name, BAD_CAST "external-certificate")) {
+                } else if (xmlStrEqual(edit->name,
+                                       BAD_CAST "external-certificate")) {
                     ret = txn_add_external_certificate(edit, e);
                 } else if (xmlStrEqual(edit->name, BAD_CAST "flow-table")) {
                     ret = txn_add_flow_table(edit, e);
@@ -1546,6 +1542,27 @@ edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running,
                  * reference here is only informative
                  */
             }
+        } else if (xmlStrEqual(edit->parent->name, BAD_CAST "queue")) {
+            if (xmlStrEqual(edit->name, BAD_CAST "id")) {
+                /* must be here, id is not the key -> it can be changed */
+                key = get_key(edit->parent, "resource-id");
+                aux = edit->children ? edit->children->content : NULL;
+                ret = txn_mod_queue_id(key, aux, e);
+            } else if (xmlStrEqual(edit->name, BAD_CAST "port")) {
+                key = get_key(edit->parent, "resource-id");
+                aux = edit->children ? edit->children->content : NULL;
+                ret = txn_add_queue_port(key, aux, e);
+            } else if (xmlStrEqual(edit->name, BAD_CAST "properties")) {
+                while (edit->children) {
+                    ret = edit_create(orig_doc, edit->children, running, e);
+                    if (ret) {
+                        break;
+                    }
+                }
+            }
+        } else if (xmlStrEqual(edit->parent->name, BAD_CAST "properties")) {
+            key = get_key(edit->parent->parent, "resource-id");
+            ret = txn_mod_queue_options(key, (char *) edit->name, edit, e);
         } else if (xmlStrEqual(edit->name, BAD_CAST "private-key")) {
             while (edit->children) {
                 ret = edit_create(orig_doc, edit->children, running, e);
@@ -1553,9 +1570,16 @@ edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running,
                     break;
                 }
             }
+        } else if (xmlStrEqual(edit->parent->name,
+                               BAD_CAST "owned-certificate")) {
+            key = get_key(edit->parent, "resource-id");
+            ret = txn_mod_own_cert_certificate(key, edit, e);
+        } else if (xmlStrEqual(edit->parent->name,
+                               BAD_CAST "external-certificate")) {
+            key = get_key(edit->parent, "resource-id");
+            ret = txn_mod_ext_cert_certificate(key, edit, e);
         } else if (xmlStrEqual(edit->parent->name, BAD_CAST "private-key")) {
             key = get_key(edit->parent->parent, "resource-id");
-
             if (xmlStrEqual(edit->name, BAD_CAST "key-type")) {
                 ret = txn_mod_own_cert_key_type(key, edit, e);
             } else if (xmlStrEqual(edit->name, BAD_CAST "key-data")) {
@@ -1565,18 +1589,14 @@ edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running,
                                 __func__, (const char *) edit->name,
                                 (const char *) edit->parent->name);
             }
-        } else
-            if (xmlStrEqual(edit->parent->name, BAD_CAST "owned-certificate"))
-        {
-            key = get_key(edit->parent, "resource-id");
-
-            ret = txn_mod_own_cert_certificate(key, edit, e);
-        } else
-            if (xmlStrEqual
-                (edit->parent->name, BAD_CAST "external-certificate")) {
-            key = get_key(edit->parent, "resource-id");
-
-            ret = txn_mod_ext_cert_certificate(key, edit, e);
+        } else if (xmlStrEqual(edit->parent->name, BAD_CAST "flow-table")) {
+            /* key 'table-id' */
+            key = get_key(edit->parent, "table-id");
+            if (xmlStrEqual(edit->name, BAD_CAST "name")) {
+                ret = txn_mod_flowtable_name(key, edit, e);
+            } else if (xmlStrEqual(edit->name, BAD_CAST "resource-id")) {
+                ret = txn_mod_flowtable_resid(key, edit, e);
+            }
         } else if (xmlStrEqual(edit->name, BAD_CAST "switch")) {
             /* create bridge */
             ret = txn_add_bridge(edit, e);
@@ -1602,34 +1622,6 @@ edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running,
             }
             /* enabled is not handled: it is too complicated to handle it in
              * combination with the OVSDB's garbage collection. */
-        } else if (xmlStrEqual(edit->parent->name, BAD_CAST "queue")) {
-            if (xmlStrEqual(edit->name, BAD_CAST "id")) {
-                key = get_key(edit->parent, "resource-id");
-                aux = edit->children ? edit->children->content : NULL;
-                ret = txn_mod_queue_id(key, aux, e);
-            } else if (xmlStrEqual(edit->name, BAD_CAST "port")) {
-                key = get_key(edit->parent, "resource-id");
-                aux = edit->children ? edit->children->content : NULL;
-                ret = txn_add_queue_port(key, aux, e);
-            } else if (xmlStrEqual(edit->name, BAD_CAST "properties")) {
-                while (edit->children) {
-                    ret = edit_create(orig_doc, edit->children, running, e);
-                    if (ret) {
-                        break;
-                    }
-                }
-            }
-        } else if (xmlStrEqual(edit->parent->name, BAD_CAST "properties")) {
-            key = get_key(edit->parent->parent, "resource-id");
-            ret = txn_mod_queue_options(key, (char *) edit->name, edit, e);
-        } else if (xmlStrEqual(edit->parent->name, BAD_CAST "flow-table")) {
-            /* key 'table-id' */
-            key = get_key(edit->parent, "table-id");
-            if (xmlStrEqual(edit->name, BAD_CAST "name")) {
-                ret = txn_mod_flowtable_name(key, edit, e);
-            } else if (xmlStrEqual(edit->name, BAD_CAST "resource-id")) {
-                ret = txn_mod_flowtable_resid(key, edit, e);
-            }
         } else if (xmlStrEqual(edit->name, BAD_CAST "controller")) {
             key = get_key(edit->parent->parent, "id");
             ret = txn_add_contr(edit, key, e);

@@ -11,6 +11,11 @@ It is required to have working public-key authentication
 with key without passphrase. Another possibility is password authentication with
 empty password.
 
+See 'config' file and edit credentials to login into OF-CONFIG server.
+
+SSH server should be added into known hosts before running tests. Connect to the server
+using netopeer-cli with the same username and approve server's fingerprint.
+
 Warning: this setting is highly insecure and MUST NOT be used in production environment.
 For testing purposes, empty password or private key without passphrase allows scripts
 to be non-interactive.

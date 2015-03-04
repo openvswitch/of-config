@@ -1,11 +1,12 @@
 #!/bin/bash
+. ./config
+
 netopeer-cli <<KONEC
-connect localhost
-copy-config --source=candidate running
-copy-config --config=create_tunnel_port.xml running
+connect --login $USER $HOST
+edit-config --test=set --config=create_tunnel_port.xml running
 get-config --filter=ovs.xml running
 
-edit-config --config=remove_tunnel.xml running
+edit-config --test=set --config=remove_tunnel.xml running
 get-config --filter=ovs.xml running
 
 disconnect

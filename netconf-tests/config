@@ -1,0 +1,9 @@
+#!/bin/bash
+#
+# Set 'USER' (username) and 'HOST' (address of OF-CONFIG server).
+# HOST can be set to localhost if OF-CONFIG runs locally.
+#
+
+USER=root
+
+HOST=localhost

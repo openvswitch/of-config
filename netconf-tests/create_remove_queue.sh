@@ -1,6 +1,8 @@
 #!/bin/bash
+. ./config
+
 netopeer-cli <<KONEC
-connect localhost
+connect --login $USER $HOST
 copy-config --source=startup running
 
 edit-config --test=set --config=create_queue.xml running

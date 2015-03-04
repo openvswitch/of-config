@@ -1,7 +1,8 @@
 #!/bin/bash
+. ./config
 
 netopeer-cli <<KONEC
-connect localhost
+connect --login $USER $HOST
 get-config --filter=ovs.xml running
 disconnect
 KONEC

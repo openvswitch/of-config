@@ -1,6 +1,8 @@
 #!/bin/bash
+. ./config
+
 netopeer-cli <<KONEC
-connect localhost
+connect --login $USER $HOST
 edit-config --test=set --config=create_flowtable.xml running
 get-config --filter=ovs.xml running
 

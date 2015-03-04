@@ -1,6 +1,8 @@
 #!/bin/bash
+. ./config
+
 netopeer-cli <<KONEC
-connect localhost
+connect --login $USER $HOST
 edit-config --config=remove_certificates.xml running
 get-config --filter=ovs.xml running
 

@@ -1288,7 +1288,7 @@ edit_delete(xmlNodePtr node, int running, struct nc_err **e)
 
             /* delete -> set to default */
             ret =
-                ofc_of_mod_port(bridge_name, key, node->name, BAD_CAST "", e);
+                ofc_of_mod_port(bridge_name, key, node->name, NULL, e);
         } else if (xmlStrEqual(node->name, BAD_CAST "features")) {
             ret =
                 edit_delete(go2node(node, BAD_CAST "advertised"), running, e);

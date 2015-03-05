@@ -43,6 +43,7 @@
 #include <socket-util.h>
 #include <ofp-util.h>
 #include <ofp-msgs.h>
+#include <ofp-print.h>
 #include <poll-loop.h>
 
 #include <libxml/tree.h>
@@ -239,22 +240,27 @@ ofc_of_get_ports(struct vconn *vconnp)
 /* Sets value of configuration bit of 'port_name' interface.  It can be used
  * to set: OFPUTIL_PC_NO_FWD, OFPUTIL_PC_NO_PACKET_IN, OFPUTIL_PC_NO_RECV,
  * OFPUTIL_PC_PORT_DOWN given as 'bit'.  If 'value' is 0, clear configuration
- * bit.  Otherwise, set 'bit' to 1.
- */
-static void
+ * bit.  Otherwise, set 'bit' to 1.  Function returns EXIT_SUCCESS on success.
+ * Otherwise it returns EXIT_FAILURE and sets *e. */
+static int
 ofc_of_mod_port_internal(struct vconn *vconnp, const char *port_name,
-                         enum ofputil_port_config bit, char value)
+                         enum ofputil_port_config bit, char value,
+                         struct nc_err **e)
 {
     enum ofptype type;
-    int ofp_version;
+    int ofp_version, ret;
     enum ofputil_protocol protocol;
     struct ofputil_phy_port pp;
     struct ofputil_port_mod pm;
     struct ofp_header *oh;
     struct ofpbuf b, *request, *reply = ofc_of_get_ports(vconnp);
+    struct ofpbuf *mod_reply = NULL;
+    char *oferr = NULL;
 
     if (reply == NULL) {
-        return;
+        *e = nc_err_new(NC_ERR_DATA_MISSING);
+        nc_err_set(*e, NC_ERR_PARAM_MSG, "No port found via OpenFlow.");
+        return EXIT_FAILURE;
     }
 
     ofp_version = vconn_get_version(vconnp);
@@ -265,8 +271,10 @@ ofc_of_mod_port_internal(struct vconn *vconnp, const char *port_name,
     /* get the beginning of data */
     ofpbuf_use_const(&b, oh, ntohs(oh->length));
     if (ofptype_pull(&type, &b) || type != OFPTYPE_PORT_DESC_STATS_REPLY) {
-        nc_verb_error("OpenFlow: bad reply.");
-        return;
+        *e = nc_err_new(NC_ERR_OP_FAILED);
+        nc_err_set(*e, NC_ERR_PARAM_MSG, "Unexpected response via OpenFlow.");
+        ofpbuf_delete(reply);
+        return EXIT_FAILURE;
     }
 
     /* find port by name */
@@ -285,11 +293,37 @@ ofc_of_mod_port_internal(struct vconn *vconnp, const char *port_name,
 
             request = ofputil_encode_port_mod(&pm, protocol);
             ofpmsg_update_length(request);
-            vconn_transact_noreply(vconnp, request, &reply);
-            break;
+            ret = vconn_transact_noreply(vconnp, request, &mod_reply);
+            if (ret) {
+                /* got error code */
+                *e = nc_err_new(NC_ERR_OP_FAILED);
+                nc_err_set(*e, NC_ERR_PARAM_MSG, ovs_strerror(ret));
+                ofpbuf_delete(reply);
+                return EXIT_FAILURE;
+            } else {
+                if (mod_reply) {
+                    oferr = ofp_to_string(ofpbuf_data(reply),
+                                          ofpbuf_size(reply), 2);
+
+                    *e = nc_err_new(NC_ERR_OP_FAILED);
+                    nc_err_set(*e, NC_ERR_PARAM_MSG, oferr);
+
+                    free(oferr);
+                    ofpbuf_delete(mod_reply);
+                    ofpbuf_delete(reply);
+                    return EXIT_FAILURE;
+                }
+                /* success - reply to port_mod was empty */
+                ofpbuf_delete(reply);
+                return EXIT_SUCCESS;
+            }
         }
     }
+    /* Port name was not found. */
     ofpbuf_delete(reply);
+    *e = nc_err_new(NC_ERR_DATA_MISSING);
+    nc_err_set(*e, NC_ERR_PARAM_MSG, "Modification of unknown port.");
+    return EXIT_FAILURE;
 }
 
 int
@@ -342,7 +376,10 @@ ofc_of_mod_port(const xmlChar * bridge_name, const xmlChar * port_name,
                    "Unable to connect to the bridge via openFlow.");
         return EXIT_FAILURE;
     }
-    ofc_of_mod_port_internal(vconnp, (char *) port_name, bit, val);
+    if (ofc_of_mod_port_internal(vconnp, (char *) port_name, bit, val, e)) {
+        nc_verb_error("OpenFlow: modification of configuration failed.");
+        return EXIT_FAILURE;
+    }
     if (of_ports != NULL) {
         ofpbuf_delete(of_ports);
     }

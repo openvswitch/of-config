@@ -1,0 +1,13 @@
+<capable-switch xmlns="urn:onf:config:yang">
+  <id>openvswitch</id>
+  <resources>
+    <port>
+      <name>gre0</name>
+      <ipgre-tunnel>
+        <local-endpoint-ipv4-adress>1.2.3.2</local-endpoint-ipv4-adress>
+        <remote-endpoint-ipv4-adress>8.8.8.8</remote-endpoint-ipv4-adress>
+        <key>123456</key>
+      </ipgre-tunnel>
+    </port>
+  </resources>
+</capable-switch>

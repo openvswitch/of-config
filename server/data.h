@@ -45,7 +45,13 @@
  * resource-id is store in 'external_ids' string maps with key
  * 'OFC_RESOURCE_ID'. */
 #define OFC_RESOURCE_ID "ofc_resource_id"
-#define OFC_RESOURCE_ID_2 "ofc_resource_id_2"
+
+/*
+ * SSL certificates are defined in a single record, so we have to use 2
+ * identifiers to distinguish resource-id of the owned and external certificate
+ */
+#define OFC_RESID_OWN "ofc_resource_id_own"
+#define OFC_RESID_EXT "ofc_resource_id_ext"
 
 /*
  * ofconfig-datastore.c

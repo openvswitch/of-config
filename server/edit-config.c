@@ -991,7 +991,10 @@ edit_operations(xmlDocPtr orig_doc, xmlDocPtr edit_doc,
                      orig_node = find_element_equiv(orig_doc, edit_node)) {
                     /* remove the edit node's equivalent from the original
                      * document */
-                    edit_delete(orig_node, running, error);
+                    if (edit_delete(orig_node, running, error)) {
+                        xmlXPathFreeObject(nodes);
+                        goto error;
+                    }
                 }
                 /* remove the node from the edit document */
                 edit_delete(edit_node, 0, error);

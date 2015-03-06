@@ -3,18 +3,18 @@
 
 netopeer-cli <<KONEC
 connect --login $USER $HOST
-edit-config --test=set --config=create_flowtable.xml running
+edit-config --config=create_flowtable.xml running
 get-config --filter=ovs.xml running
 
-edit-config --test=set --config=change_flowtable.xml running
+edit-config --config=change_flowtable.xml running
 get-config --filter=ovs.xml running
 
-edit-config --test=set --config=remove_flowtable.xml running
+edit-config --config=remove_flowtable.xml running
 get-config --filter=ovs.xml running
 
-edit-config --test=set --config=create_flowtable.xml running
+edit-config --config=create_flowtable.xml running
 get-config --filter=ovs.xml running
-edit-config --test=set --config=remove_flowtable_from_bridge.xml running
+edit-config --config=remove_flowtable_from_bridge.xml running
 get-config --filter=ovs.xml running
 
 disconnect

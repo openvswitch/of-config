@@ -1119,11 +1119,18 @@ edit_delete(xmlNodePtr node, int running, struct nc_err **e)
     nc_verb_verbose("Deleting the node %s%s", (char *) node->name,
                     (running ? " Running" : ""));
     if (running) {
-        if (node->parent->type == XML_DOCUMENT_NODE) {  /* capable-switch node
-                                                         */
+        if (node->type != XML_ELEMENT_NODE) {
+            /* skip processing comments and simply removes them */
+            goto end;
+        }
+
+        if (node->parent->type == XML_DOCUMENT_NODE) {
+            /* capable-switch node */
+
             /* removing root */
             return txn_del_all(e);
         }
+
         if (xmlStrEqual(node->parent->name, BAD_CAST "capable-switch")) {
             if (xmlStrEqual(node->name, BAD_CAST "id")) {
                 ofc_set_switchid(NULL);
@@ -1317,6 +1324,7 @@ edit_delete(xmlNodePtr node, int running, struct nc_err **e)
         }
     }
 
+end:
     if (!ret) {
         xmlUnlinkNode(node);
         xmlFreeNode(node);
@@ -1478,6 +1486,11 @@ edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running,
     nc_verb_verbose("Creating the node %s", (char *) edit->name);
     if (running) {
         /* OVS */
+        if (edit->type != XML_ELEMENT_NODE) {
+            /* skip processing comments and simply removes them */
+            goto end;
+        }
+
         if (edit->parent->type == XML_DOCUMENT_NODE) {
             /* set it all */
             while (edit->children) {
@@ -1707,6 +1720,7 @@ edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running,
         }
     }
 
+end:
     /* remove the node from the edit document */
     if (!ret) {
         edit_delete(edit, 0, NULL);

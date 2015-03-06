@@ -307,7 +307,7 @@ of_mod_port_cfg_internal(struct vconn *vconnp, const char *port_name,
         }
     }
     /* Port name was not found. */
-    *e = nc_err_new(NC_ERR_DATA_MISSING);
+    *e = nc_err_new(NC_ERR_OP_FAILED);
     nc_err_set(*e, NC_ERR_PARAM_MSG, "Modification of unknown port.");
 
 error:

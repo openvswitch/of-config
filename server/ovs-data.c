@@ -802,10 +802,11 @@ get_ports_config(const struct ovsrec_bridge *bridge)
 
             ds_put_format(&string, "<port>");
             ds_put_format(&string, "<name>%s</name>", row->name);
-            ds_put_format(&string,
-                          "<requested-number>%" PRIu64 "</requested-number>",
-                          (row->n_ofport_request >
-                           0 ? row->ofport_request[0] : 0));
+            if (row->n_ofport_request) {
+                ds_put_format(&string,
+                              "<requested-number>%"PRIu64"</requested-number>",
+                              row->ofport_request[0]);
+            }
             ds_put_format(&string, "<configuration>");
 
             /* get interface status */

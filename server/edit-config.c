@@ -1108,7 +1108,6 @@ static int
 edit_delete(xmlNodePtr node, int running, struct nc_err **e)
 {
     xmlNodePtr child;
-    const xmlChar *bridge_name;
     const xmlChar *key, *aux;
     int ret = EXIT_SUCCESS;
 
@@ -1119,11 +1118,18 @@ edit_delete(xmlNodePtr node, int running, struct nc_err **e)
     nc_verb_verbose("Deleting the node %s%s", (char *) node->name,
                     (running ? " Running" : ""));
     if (running) {
-        if (node->parent->type == XML_DOCUMENT_NODE) {  /* capable-switch node
-                                                         */
+        if (node->type != XML_ELEMENT_NODE) {
+            /* skip processing comments and simply removes them */
+            goto end;
+        }
+
+        if (node->parent->type == XML_DOCUMENT_NODE) {
+            /* capable-switch node */
+
             /* removing root */
             return txn_del_all(e);
         }
+
         if (xmlStrEqual(node->parent->name, BAD_CAST "capable-switch")) {
             if (xmlStrEqual(node->name, BAD_CAST "id")) {
                 ofc_set_switchid(NULL);
@@ -1182,6 +1188,50 @@ edit_delete(xmlNodePtr node, int running, struct nc_err **e)
                  * reference here is only informative
                  */
             }
+        } else if (xmlStrEqual(node->parent->name, BAD_CAST "port")) {
+            if (xmlStrEqual(node->name, BAD_CAST "requested-number")) {
+                key = get_key(node->parent, "name");
+                ret = txn_mod_port_reqnumber(key, NULL, e);
+            } else if (xmlStrEqual(node->name, BAD_CAST "ipgre-tunnel")
+                       || xmlStrEqual(node->name, BAD_CAST "vxlan-tunnel")
+                       || xmlStrEqual(node->name, BAD_CAST "tunnel")) {
+                key = get_key(node->parent, "name");
+                ret = txn_del_port_tunnel(key, node, e);
+            } else if (xmlStrEqual(node->name, BAD_CAST "features")) {
+                child = go2node(node, BAD_CAST "advertised");
+                if (child) {
+                    ret = edit_delete(child, running, e);
+                }
+            } else {
+                /* configuration */
+                while (node->children) {
+                    ret = edit_delete(node->children, running, e);
+                    if (ret) {
+                        break;
+                    }
+                }
+            }
+        } else if (xmlStrEqual(node->parent->name, BAD_CAST "configuration")) {
+            /* no-receive, no-forward, no-packet-in, admin-state */
+            key = get_key(node->parent->parent, "name");
+
+            /* delete -> set to default */
+            ret = of_mod_port_cfg(key, node->name, NULL, e);
+        } else if (xmlStrEqual(node->name, BAD_CAST "advertised")) {
+            key = get_key(node->parent->parent, "name");
+            for (child = node->children; child; child = child->next) {
+                if ((ret = txn_del_port_advert(key, child, e))) {
+                    break;
+                }
+            }
+        } else if (xmlStrEqual(node->parent->name, BAD_CAST "advertised")) {
+            key = get_key(node->parent->parent->parent, "name");
+            ret = txn_del_port_advert(key, node, e);
+        } else if (xmlStrEqual(node->parent->name, BAD_CAST "ipgre-tunnel")
+                || xmlStrEqual(node->parent->name, BAD_CAST "vxlan-tunnel")
+                || xmlStrEqual(node->parent->name, BAD_CAST "tunnel")) {
+            key = get_key(node->parent->parent, "name");
+            ret = txn_mod_port_tunnel_opt(key, node->name, NULL, e);
         } else if (xmlStrEqual(node->parent->name, BAD_CAST "queue")) {
             if (xmlStrEqual(node->name, BAD_CAST "port")) {
                 key = get_key(node->parent, "resource-id");
@@ -1271,45 +1321,6 @@ edit_delete(xmlNodePtr node, int running, struct nc_err **e)
                        || xmlStrEqual(node->name, BAD_CAST "protocol")) {
                 ret = txn_mod_contr_target(key, node->name, NULL, e);
             }
-        } else if (xmlStrEqual(node->name, BAD_CAST "requested-number")) {
-            key = get_key(node->parent, "name");
-            ret = txn_mod_port_reqnumber(key, NULL, e);
-        } else if (xmlStrEqual(node->name, BAD_CAST "ipgre-tunnel")
-                   || xmlStrEqual(node->name, BAD_CAST "vxlan-tunnel")
-                   || xmlStrEqual(node->name, BAD_CAST "tunnel")) {
-            key = get_key(node->parent, "name");
-            ret = txn_del_port_tunnel(key, node, e);
-        } else if (xmlStrEqual(node->name, BAD_CAST "no-receive")
-                   || xmlStrEqual(node->name, BAD_CAST "no-forward")
-                   || xmlStrEqual(node->name, BAD_CAST "no-packet-in")
-                   || xmlStrEqual(node->name, BAD_CAST "admin-state")) {
-            key = get_key(node->parent->parent, "name");
-            bridge_name = ofc_find_bridge_with_port(key);
-
-            /* delete -> set to default */
-            ret =
-                ofc_of_mod_port(bridge_name, key, node->name, NULL, e);
-        } else if (xmlStrEqual(node->name, BAD_CAST "features")) {
-            ret =
-                edit_delete(go2node(node, BAD_CAST "advertised"), running, e);
-        } else if (xmlStrEqual(node->name, BAD_CAST "advertised")) {
-            key = get_key(node->parent->parent, "name");
-            for (child = node->children; child; child = child->next) {
-                if ((ret = txn_del_port_advert(key, child, e))) {
-                    break;
-                }
-            }
-        } else if (xmlStrEqual(node->parent->name, BAD_CAST "advertised")) {
-            key = get_key(node->parent->parent->parent, "name");
-            ret = txn_del_port_advert(key, node, e);
-        } else
-            if (xmlStrEqual(node->name, BAD_CAST "local-endpoint-ipv4-adress")
-                || xmlStrEqual(node->name,
-                               BAD_CAST "remote-endpoint-ipv4-adress")
-                || xmlStrEqual(node->name, BAD_CAST "key")
-                || xmlStrEqual(node->name, BAD_CAST "vni")) {
-            key = get_key(node->parent->parent, "name");
-            ret = txn_mod_port_tunnel_opt(key, node, NULL, e);
         } else {
             nc_verb_warning("%s: Unknown element %s (parent: %s)", __func__,
                             (const char *) node->name,
@@ -1317,6 +1328,7 @@ edit_delete(xmlNodePtr node, int running, struct nc_err **e)
         }
     }
 
+end:
     if (!ret) {
         xmlUnlinkNode(node);
         xmlFreeNode(node);
@@ -1467,7 +1479,7 @@ edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running,
             struct nc_err **e)
 {
     xmlNodePtr parent, child;
-    const xmlChar *bridge_name, *key, *aux;
+    const xmlChar *key, *aux;
     int ret = EXIT_SUCCESS;
 
     /* remove operation attribute */
@@ -1478,6 +1490,11 @@ edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running,
     nc_verb_verbose("Creating the node %s", (char *) edit->name);
     if (running) {
         /* OVS */
+        if (edit->type != XML_ELEMENT_NODE) {
+            /* skip processing comments and simply removes them */
+            goto end;
+        }
+
         if (edit->parent->type == XML_DOCUMENT_NODE) {
             /* set it all */
             while (edit->children) {
@@ -1545,6 +1562,52 @@ edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running,
                  * reference here is only informative
                  */
             }
+        } else if (xmlStrEqual(edit->parent->name, BAD_CAST "port")) {
+            if (xmlStrEqual(edit->name, BAD_CAST "requested-number")) {
+                key = get_key(edit->parent, "name");
+                aux = edit->children ? edit->children->content : NULL;
+                ret = txn_mod_port_reqnumber(key, aux, e);
+            } else if (xmlStrEqual(edit->name, BAD_CAST "ipgre-tunnel")
+                    || xmlStrEqual(edit->name, BAD_CAST "vxlan-tunnel")
+                    || xmlStrEqual(edit->name, BAD_CAST "tunnel")) {
+                key = get_key(edit->parent, "name");
+                ret = txn_add_port_tunnel(key, edit, e);
+                /* TODO: remove previous branch of choice */
+            } else if (xmlStrEqual(edit->name, BAD_CAST "features")) {
+                child = go2node(edit, BAD_CAST "advertised");
+                if (child) {
+                    ret = edit_create(orig_doc, child, running, e);
+                }
+            } else {
+                /* configuration */
+                while (edit->children) {
+                    ret = edit_create(orig_doc, edit->children, running, e);
+                    if (ret) {
+                        break;
+                    }
+                }
+            }
+        } else if (xmlStrEqual(edit->parent->name, BAD_CAST "configuration")) {
+            /* no-receive, no-forward, no-packet-in, admin-state */
+            key = get_key(edit->parent->parent, "name");
+            aux = edit->children ? edit->children->content : NULL;
+            ret = of_mod_port_cfg(key, edit->name, aux, e);
+        } else if (xmlStrEqual(edit->name, BAD_CAST "advertised")) {
+            key = get_key(edit->parent->parent, "name");
+            for (child = edit->children; child; child = child->next) {
+                if ((ret = txn_add_port_advert(key, child, e))) {
+                    break;
+                }
+            }
+        } else if (xmlStrEqual(edit->parent->name, BAD_CAST "advertised")) {
+            key = get_key(edit->parent->parent->parent, "name");
+            ret = txn_add_port_advert(key, edit, e);
+        } else if (xmlStrEqual(edit->parent->name, BAD_CAST "ipgre-tunnel")
+                || xmlStrEqual(edit->parent->name, BAD_CAST "vxlan-tunnel")
+                || xmlStrEqual(edit->parent->name, BAD_CAST "tunnel")) {
+            key = get_key(edit->parent->parent, "name");
+            aux = edit->children ? edit->children->content : NULL;
+            ret = txn_mod_port_tunnel_opt(key, edit->name, aux, e);
         } else if (xmlStrEqual(edit->parent->name, BAD_CAST "queue")) {
             if (xmlStrEqual(edit->name, BAD_CAST "id")) {
                 /* must be here, id is not the key -> it can be changed */
@@ -1639,47 +1702,6 @@ edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running,
                 aux = edit->children ? edit->children->content : NULL;
                 ret = txn_mod_contr_target(key, edit->name, aux, e);
             }
-        } else if (xmlStrEqual(edit->name, BAD_CAST "requested-number")) {
-            key = get_key(edit->parent, "name");
-            aux = edit->children ? edit->children->content : NULL;
-            ret = txn_mod_port_reqnumber(key, aux, e);
-        } else if (xmlStrEqual(edit->name, BAD_CAST "no-receive")
-                   || xmlStrEqual(edit->name, BAD_CAST "no-forward")
-                   || xmlStrEqual(edit->name, BAD_CAST "no-packet-in")
-                   || xmlStrEqual(edit->name, BAD_CAST "admin-state")) {
-
-            nc_verb_verbose("Modify port configuration (%s:%d)", __FILE__,
-                            __LINE__);
-            key = get_key(edit->parent->parent, "name");
-            aux = edit->children ? edit->children->content : NULL;
-            bridge_name = ofc_find_bridge_with_port(key);
-
-            ret = ofc_of_mod_port(bridge_name, key, edit->name, aux, e);
-        } else if (xmlStrEqual(edit->name, BAD_CAST "features")) {
-            ret = edit_create(orig_doc, go2node(edit, BAD_CAST "advertised"),
-                              running, e);
-        } else if (xmlStrEqual(edit->name, BAD_CAST "advertised")) {
-            key = get_key(edit->parent->parent, "name");
-            for (child = edit->children; child; child = child->next) {
-                if ((ret = txn_add_port_advert(key, child, e))) {
-                    break;
-                }
-            }
-        } else if (xmlStrEqual(edit->parent->name, BAD_CAST "advertised")) {
-            key = get_key(edit->parent->parent->parent, "name");
-            ret = txn_add_port_advert(key, edit, e);
-        } else
-            if (xmlStrEqual(edit->name, BAD_CAST "local-endpoint-ipv4-adress")
-                || xmlStrEqual(edit->name,
-                               BAD_CAST "remote-endpoint-ipv4-adress")
-                || xmlStrEqual(edit->name, BAD_CAST "key")
-                || xmlStrEqual(edit->name, BAD_CAST "vni")) {
-            key = get_key(edit->parent->parent, "name");
-            if (edit->children && edit->children->content) {
-                ret =
-                    txn_mod_port_tunnel_opt(key, edit, edit->children->content,
-                                            e);
-            }
         } else {
             nc_verb_warning("%s: unknown element %s (parent: %s)", __func__,
                             (const char *) edit->name,
@@ -1707,6 +1729,7 @@ edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running,
         }
     }
 
+end:
     /* remove the node from the edit document */
     if (!ret) {
         edit_delete(edit, 0, NULL);

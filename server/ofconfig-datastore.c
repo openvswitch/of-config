@@ -400,8 +400,7 @@ ofcds_editconfig(void *UNUSED(data), const nc_rpc * UNUSED(rpc),
 
         if (ret == EXIT_SUCCESS) {
             /* modify port/configuration of ports that were created */
-            ret = of_mod_port_configuration(xmlDocGetRootElement(cfg_clone),
-                                             error);
+            ret = of_post_ports(xmlDocGetRootElement(cfg_clone), error);
         }
         /* config clone was used and it is not needed by now */
         xmlFreeDoc(cfg_clone);

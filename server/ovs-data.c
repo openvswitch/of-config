@@ -77,16 +77,6 @@ struct u32_str_map {
     const char *str;
 };
 
-static const char *
-print_uuid_ro(const struct uuid *uuid)
-{
-    static char str[38];
-
-    snprintf(str, 37, UUID_FMT, UUID_ARGS(uuid));
-    str[37] = 0;
-    return str;
-}
-
 static const struct u32_str_map rates[] = {
     {ADVERTISED_10baseT_Half, "10Mb-HD"},
     {ADVERTISED_10baseT_Full, "10Mb-FD"},
@@ -124,7 +114,7 @@ static const struct u32_str_map medium[] = {
  * stores a pointer to the new connection in '*vconnp', otherwise a null
  * pointer. */
 static int
-open_vconn_socket(const char *name, struct vconn **vconnp)
+of_open_vconn_socket(const char *name, struct vconn **vconnp)
 {
     int error;
     char *vconn_name;
@@ -150,55 +140,47 @@ open_vconn_socket(const char *name, struct vconn **vconnp)
  *
  * Function returns true on success.  If successful, it stores a pointer
  * to the new connection in '*vconnp', otherwise a null pointer. */
-bool
-ofc_of_open_vconn(const char *name, struct vconn **vconnp)
+static bool
+of_open_vconn(const char *name, struct vconn **vconnp)
 {
-    char *datapath_name, *datapath_type, *socket_name;
+    char *dp_name = NULL, *dp_type = NULL, *sock_name = NULL;
     enum ofputil_protocol protocol;
-    char *bridge_path;
+    char *bridge_path = NULL;
     int ofp_version;
     int error;
+    bool ret = false;
 
     if (asprintf(&bridge_path, "%s/%s.mgmt", ovs_rundir(), name) == -1) {
         return false;
     }
 
     /* changed to called function */
-    dp_parse_name(name, &datapath_name, &datapath_type);
+    dp_parse_name(name, &dp_name, &dp_type);
 
-    if (asprintf(&socket_name, "%s/%s.mgmt", ovs_rundir(), datapath_name) == -1) {
-        free(bridge_path);
-        free(datapath_name);
-        free(datapath_type);
-        return false;
+    if (asprintf(&sock_name, "%s/%s.mgmt", ovs_rundir(), dp_name) == -1) {
+        nc_verb_error("%s: asprintf() failed", __func__);
+        goto cleanup;
     }
-    free(datapath_name);
-    free(datapath_type);
 
     if (strchr(name, ':')) {
         vconn_open(name, OFPUTIL_DEFAULT_VERSIONS, DSCP_DEFAULT, vconnp);
-    } else if (!open_vconn_socket(name, vconnp)) {
+    } else if (!of_open_vconn_socket(name, vconnp)) {
         /* Fall Through. */
-    } else if (!open_vconn_socket(bridge_path, vconnp)) {
+    } else if (!of_open_vconn_socket(bridge_path, vconnp)) {
         /* Fall Through. */
-    } else if (!open_vconn_socket(socket_name, vconnp)) {
+    } else if (!of_open_vconn_socket(sock_name, vconnp)) {
         /* Fall Through. */
     } else {
         nc_verb_error("OpenFlow: %s is not a bridge or a socket.", name);
-        free(bridge_path);
-        free(socket_name);
-        return false;
+        goto cleanup;
     }
-
-    free(bridge_path);
-    free(socket_name);
 
     nc_verb_verbose("OpenFlow: connecting to %s", vconn_get_name(*vconnp));
     error = vconn_connect_block(*vconnp);
     if (error) {
         nc_verb_error("OpenFlow: %s: failed to connect to socket (%s).", name,
                       ovs_strerror(error));
-        return false;
+        goto cleanup;
     }
 
     ofp_version = vconn_get_version(*vconnp);
@@ -206,17 +188,25 @@ ofc_of_open_vconn(const char *name, struct vconn **vconnp)
     if (!protocol) {
         nc_verb_error("OpenFlow: %s: unsupported OpenFlow version 0x%02x.",
                       name, ofp_version);
-        return false;
+        goto cleanup;
     }
 
-    return true;
+    ret = true;
+
+cleanup:
+    free(bridge_path);
+    free(dp_name);
+    free(dp_type);
+    free(sock_name);
+
+    return ret;
 }
 
 /* Gets information about interfaces using 'vconnp' connection.  Function
  * returns pointer to OpenFlow buffer (implemented by OVS) that is used
  * to get results. */
-struct ofpbuf *
-ofc_of_get_ports(struct vconn *vconnp)
+static struct ofpbuf *
+of_get_ports(struct vconn *vconnp)
 {
     struct ofpbuf *request;
     struct ofpbuf *reply;
@@ -226,7 +216,7 @@ ofc_of_get_ports(struct vconn *vconnp)
         return NULL;
     }
 
-    /* existence of version was checked in ofc_of_open_vconn() */
+    /* existence of version was checked in of_open_vconn() */
     ofp_version = vconn_get_version(vconnp);
 
     request = ofputil_encode_port_desc_stats_request(ofp_version, OFPP_NONE);
@@ -243,7 +233,7 @@ ofc_of_get_ports(struct vconn *vconnp)
  * bit.  Otherwise, set 'bit' to 1.  Function returns EXIT_SUCCESS on success.
  * Otherwise it returns EXIT_FAILURE and sets *e. */
 static int
-ofc_of_mod_port_internal(struct vconn *vconnp, const char *port_name,
+of_mod_port_cfg_internal(struct vconn *vconnp, const char *port_name,
                          enum ofputil_port_config bit, char value,
                          struct nc_err **e)
 {
@@ -253,7 +243,7 @@ ofc_of_mod_port_internal(struct vconn *vconnp, const char *port_name,
     struct ofputil_phy_port pp;
     struct ofputil_port_mod pm;
     struct ofp_header *oh;
-    struct ofpbuf b, *request, *reply = ofc_of_get_ports(vconnp);
+    struct ofpbuf b, *request, *reply = of_get_ports(vconnp);
     struct ofpbuf *mod_reply = NULL;
     char *oferr = NULL;
 
@@ -273,8 +263,7 @@ ofc_of_mod_port_internal(struct vconn *vconnp, const char *port_name,
     if (ofptype_pull(&type, &b) || type != OFPTYPE_PORT_DESC_STATS_REPLY) {
         *e = nc_err_new(NC_ERR_OP_FAILED);
         nc_err_set(*e, NC_ERR_PARAM_MSG, "Unexpected response via OpenFlow.");
-        ofpbuf_delete(reply);
-        return EXIT_FAILURE;
+        goto error;
     }
 
     /* find port by name */
@@ -298,8 +287,7 @@ ofc_of_mod_port_internal(struct vconn *vconnp, const char *port_name,
                 /* got error code */
                 *e = nc_err_new(NC_ERR_OP_FAILED);
                 nc_err_set(*e, NC_ERR_PARAM_MSG, ovs_strerror(ret));
-                ofpbuf_delete(reply);
-                return EXIT_FAILURE;
+                goto error;
             } else {
                 if (mod_reply) {
                     oferr = ofp_to_string(ofpbuf_data(reply),
@@ -310,8 +298,7 @@ ofc_of_mod_port_internal(struct vconn *vconnp, const char *port_name,
 
                     free(oferr);
                     ofpbuf_delete(mod_reply);
-                    ofpbuf_delete(reply);
-                    return EXIT_FAILURE;
+                    goto error;
                 }
                 /* success - reply to port_mod was empty */
                 ofpbuf_delete(reply);
@@ -320,72 +307,114 @@ ofc_of_mod_port_internal(struct vconn *vconnp, const char *port_name,
         }
     }
     /* Port name was not found. */
-    ofpbuf_delete(reply);
     *e = nc_err_new(NC_ERR_DATA_MISSING);
     nc_err_set(*e, NC_ERR_PARAM_MSG, "Modification of unknown port.");
+
+error:
+    ofpbuf_delete(reply);
     return EXIT_FAILURE;
 }
 
+static const xmlChar *
+find_bridge_with_port(const xmlChar *port_name)
+{
+    const struct ovsrec_bridge *bridge;
+    const struct ovsrec_port *port;
+    const struct ovsrec_interface *interface;
+    int port_i, inter_i;
+
+    OVSREC_BRIDGE_FOR_EACH(bridge, ovsdb_handler->idl) {
+        for (port_i = 0; port_i < bridge->n_ports; port_i++) {
+            port = bridge->ports[port_i];
+            for (inter_i = 0; inter_i < port->n_interfaces; inter_i++) {
+                interface = port->interfaces[inter_i];
+                if (!strncmp
+                    (interface->name, (char *) port_name,
+                     strlen(interface->name) + 1)) {
+                    return BAD_CAST bridge->name;
+                }
+            }
+        }
+    }
+    return NULL;
+}
+
 int
-ofc_of_mod_port(const xmlChar * bridge_name, const xmlChar * port_name,
-                const xmlChar * bit_xchar, const xmlChar * value,
-                struct nc_err **e)
+of_mod_port_cfg(const xmlChar *port_name, const xmlChar *node_name,
+                const xmlChar *value, struct nc_err **e)
 {
     struct vconn *vconnp;
     enum ofputil_port_config bit;
-    struct ofpbuf *of_ports = NULL;
     char val;
+    const xmlChar *br_name;
 
-    if (!value || xmlStrEqual(value, BAD_CAST "false")) {
-        /* !value = delete */
-        val = 0;
-    } else if (xmlStrEqual(value, BAD_CAST "true")) {
-        val = 1;
-    } else if (xmlStrEqual(value, BAD_CAST "down")) {
-        val = 1;                /* inverse logic for admin-state */
-    } else if (xmlStrEqual(value, BAD_CAST "up")) {
-        val = 0;                /* inverse logic for admin-state */
-    } else {
-        *e = nc_err_new(NC_ERR_BAD_ELEM);
-        nc_err_set(*e, NC_ERR_PARAM_INFO_BADELEM, (char *) bit_xchar);
-        nc_err_set(*e, NC_ERR_PARAM_MSG, "Invalid element value.");
+    br_name = find_bridge_with_port(port_name);
+    if (!br_name) {
+        nc_verb_error("%s: the bridge with the port %s not found", __func__,
+                      (char *) port_name);
+        *e = nc_err_new(NC_ERR_OP_FAILED);
+        nc_err_set(*e, NC_ERR_PARAM_MSG,
+                   "The bridge with the port being modified not found.");
         return EXIT_FAILURE;
     }
-    if (xmlStrEqual(bit_xchar, BAD_CAST "no-receive")) {
+
+    if (xmlStrEqual(node_name, BAD_CAST "no-receive")) {
         bit = OFPUTIL_PC_NO_RECV;
-    } else if (xmlStrEqual(bit_xchar, BAD_CAST "no-forward")) {
+    } else if (xmlStrEqual(node_name, BAD_CAST "no-forward")) {
         bit = OFPUTIL_PC_NO_FWD;
-    } else if (xmlStrEqual(bit_xchar, BAD_CAST "no-packet-in")) {
+    } else if (xmlStrEqual(node_name, BAD_CAST "no-packet-in")) {
         bit = OFPUTIL_PC_NO_PACKET_IN;
-    } else if (xmlStrEqual(bit_xchar, BAD_CAST "admin-state")) {
+    } else if (xmlStrEqual(node_name, BAD_CAST "admin-state")) {
         bit = OFPUTIL_PC_PORT_DOWN;
     } else {
         *e = nc_err_new(NC_ERR_BAD_ELEM);
-        nc_err_set(*e, NC_ERR_PARAM_INFO_BADELEM, (char *) bit_xchar);
+        nc_err_set(*e, NC_ERR_PARAM_INFO_BADELEM, (char *) node_name);
         nc_err_set(*e, NC_ERR_PARAM_MSG, "Invalid element name.");
         return EXIT_FAILURE;
     }
 
-    if (ofc_of_open_vconn((char *) bridge_name, &vconnp) == true) {
-        of_ports = ofc_of_get_ports(vconnp);
+    /* check value */
+    val = -1;
+    if (bit == OFPUTIL_PC_PORT_DOWN) {
+        /* admin-state */
+        if (!value || xmlStrEqual(value, BAD_CAST "up")) {
+            /* !value = delete, up is the default value */
+            val = 0;
+        } else if (xmlStrEqual(value, BAD_CAST "down")) {
+            val = 1;
+        }
     } else {
-        nc_verb_error("OpenFlow: could not connect to '%s' bridge.",
-                      bridge_name);
+        /* no-receive, no-forward, no-packet-in */
+        if (!value || xmlStrEqual(value, BAD_CAST "false")) {
+            /* !value = delete, false is the default value */
+            val = 0;
+        } else if (xmlStrEqual(value, BAD_CAST "true")) {
+            val = 1;
+        }
+    }
+    if (val == -1) {
+        *e = nc_err_new(NC_ERR_BAD_ELEM);
+        nc_err_set(*e, NC_ERR_PARAM_INFO_BADELEM, (char *) node_name);
+        nc_err_set(*e, NC_ERR_PARAM_MSG, "Invalid element value.");
+        return EXIT_FAILURE;
+    }
+
+    /* prepare OpenFlow connection to the bridge where the port is used ... */
+    if (of_open_vconn((char *) br_name, &vconnp) != true) {
+        nc_verb_error("OpenFlow: could not connect to '%s' bridge.", br_name);
         *e = nc_err_new(NC_ERR_OP_FAILED);
         nc_err_set(*e, NC_ERR_PARAM_MSG,
                    "Unable to connect to the bridge via openFlow.");
         return EXIT_FAILURE;
     }
-    if (ofc_of_mod_port_internal(vconnp, (char *) port_name, bit, val, e)) {
+
+    /* ... and apply change to the port */
+    if (of_mod_port_cfg_internal(vconnp, (char *) port_name, bit, val, e)) {
         nc_verb_error("OpenFlow: modification of configuration failed.");
+        vconn_close(vconnp);
         return EXIT_FAILURE;
     }
-    if (of_ports != NULL) {
-        ofpbuf_delete(of_ports);
-    }
-    if (vconnp != NULL) {
-        vconn_close(vconnp);
-    }
+    vconn_close(vconnp);
 
     return EXIT_SUCCESS;
 }
@@ -394,8 +423,8 @@ ofc_of_mod_port(const xmlChar * bridge_name, const xmlChar * port_name,
  * If interface is not found, function returns NULL.  'reply' should be
  * prepared by ofc_of_get_ports().  Note that 'reply' still needs to be
  * freed. */
-struct ofputil_phy_port *
-ofc_of_getport_byname(struct ofpbuf *reply, const char *name)
+static struct ofputil_phy_port *
+of_get_port_byname(struct ofpbuf *reply, const char *name)
 {
     struct ofpbuf b;
     static struct ofputil_phy_port pp;
@@ -536,13 +565,13 @@ find_flowtable_id(const struct ovsrec_flow_table *flowtable, int64_t *key)
 static char *
 get_flow_tables_state(void)
 {
-    const struct ovsrec_flow_table *row, *next;
+    const struct ovsrec_flow_table *row;
     struct ds string;
     int64_t table_id;
 
     ds_init(&string);
 
-    OVSREC_FLOW_TABLE_FOR_EACH_SAFE(row, next, ovsdb_handler->idl) {
+    OVSREC_FLOW_TABLE_FOR_EACH(row, ovsdb_handler->idl) {
         if (!find_flowtable_id(row, &table_id)) {
             /* flow-table is not linked with a bridge */
             continue;
@@ -559,13 +588,13 @@ get_flow_tables_state(void)
 static char *
 get_flow_tables_config(void)
 {
-    const struct ovsrec_flow_table *row, *next;
+    const struct ovsrec_flow_table *row;
     const char *resource_id;
     struct ds string;
     int64_t table_id;
 
     ds_init(&string);
-    OVSREC_FLOW_TABLE_FOR_EACH_SAFE(row, next, ovsdb_handler->idl) {
+    OVSREC_FLOW_TABLE_FOR_EACH(row, ovsdb_handler->idl) {
         resource_id = smap_get(&row->external_ids, OFC_RESOURCE_ID);
         if (!find_flowtable_id(row, &table_id)) {
             continue;
@@ -752,12 +781,13 @@ get_ports_config(const struct ovsrec_bridge *bridge)
     struct ds string;
     struct vconn *vconnp;
     const char *bridge_name = bridge->name;
+    const char *tunnel_type = NULL;
     struct ofpbuf *of_ports = NULL;
     struct ofputil_phy_port *of_port = NULL;
     enum ofputil_port_config c;
 
-    if (ofc_of_open_vconn(bridge_name, &vconnp) == true) {
-        of_ports = ofc_of_get_ports(vconnp);
+    if (of_open_vconn(bridge_name, &vconnp) == true) {
+        of_ports = of_get_ports(vconnp);
     } else {
         nc_verb_error("OpenFlow: could not connect to '%s' bridge.",
                       bridge_name);
@@ -771,14 +801,15 @@ get_ports_config(const struct ovsrec_bridge *bridge)
 
             ds_put_format(&string, "<port>");
             ds_put_format(&string, "<name>%s</name>", row->name);
-            ds_put_format(&string,
-                          "<requested-number>%" PRIu64 "</requested-number>",
-                          (row->n_ofport_request >
-                           0 ? row->ofport_request[0] : 0));
+            if (row->n_ofport_request) {
+                ds_put_format(&string,
+                              "<requested-number>%"PRIu64"</requested-number>",
+                              row->ofport_request[0]);
+            }
             ds_put_format(&string, "<configuration>");
 
             /* get interface status */
-            of_port = ofc_of_getport_byname(of_ports, row->name);
+            of_port = of_get_port_byname(of_ports, row->name);
             if (of_port != NULL) {
                 c = of_port->config;
                 ds_put_format(&string, "<admin-state>%s</admin-state>"
@@ -807,50 +838,34 @@ get_ports_config(const struct ovsrec_bridge *bridge)
             dump_port_features(&string, ecmd->advertising);
             ds_put_format(&string, "</advertised></features>");
 
-            if (!strcmp(row->type, "gre")) {
-                ds_put_format(&string, "<ipgre-tunnel>");
+            tunnel_type = smap_get(&row->external_ids, "tunnel_type");
+            if (tunnel_type) {
+                ds_put_format(&string, "<%s>", tunnel_type);
                 find_and_append_smap_val(&row->options, "local_ip",
                                          "local-endpoint-ipv4-adress",
                                          &string);
                 find_and_append_smap_val(&row->options, "remote_ip",
                                          "remote-endpoint-ipv4-adress",
                                          &string);
-                find_and_append_smap_val(&row->options, "csum",
-                                         "checksum-present", &string);
-                find_and_append_smap_val(&row->options, "key", "key", &string);
-                ds_put_format(&string, "</ipgre-tunnel>");
-            } else if (!strcmp(row->type, "vxlan")) {
-                ds_put_format(&string, "<vxlan-tunnel>");
-                find_and_append_smap_val(&row->options, "local_ip",
-                                         "local-endpoint-ipv4-adress",
-                                         &string);
-                find_and_append_smap_val(&row->options, "remote_ip",
-                                         "remote-endpoint-ipv4-adress",
-                                         &string);
-
-                find_and_append_smap_val(&row->options, "key", "vni", &string);
-                ds_put_format(&string, "</vxlan-tunnel>");
-            } else if ((!strcmp(row->type, "gre64"))
-                       || (!strcmp(row->type, "geneve"))
-                       || (!strcmp(row->type, "lisp"))) {
-                ds_put_format(&string, "<tunnel>");
-                find_and_append_smap_val(&row->options, "local_ip",
-                                         "local-endpoint-ipv4-adress",
-                                         &string);
-                find_and_append_smap_val(&row->options, "remote_ip",
-                                         "remote-endpoint-ipv4-adress",
-                                         &string);
-                ds_put_format(&string, "</tunnel>");
+                if (!strcmp(tunnel_type, "ipgre-tunnel")) {
+                    find_and_append_smap_val(&row->options, "csum",
+                                             "checksum-present", &string);
+                    find_and_append_smap_val(&row->options, "key", "key",
+                                             &string);
+                } else if (!strcmp(tunnel_type, "vxlan-tunnel")) {
+                    find_and_append_smap_val(&row->options, "key", "vni",
+                                             &string);
+                }
+                ds_put_format(&string, "</%s>", tunnel_type);
+                tunnel_type = NULL;
             }
             ds_put_format(&string, "</port>");
         }
     }
-    if (of_ports != NULL) {
-        ofpbuf_delete(of_ports);
-    }
-    if (vconnp != NULL) {
-        vconn_close(vconnp);
-    }
+
+    ofpbuf_delete(of_ports);
+    vconn_close(vconnp);
+
     return ds_steal_cstr(&string);
 }
 
@@ -864,9 +879,10 @@ get_ports_state(const struct ovsrec_bridge *bridge)
     const char *bridge_name = bridge->name;
     struct ofpbuf *of_ports = NULL;
     struct ofputil_phy_port *of_port = NULL;
+    const unsigned char norate = 0xff;
 
-    if (ofc_of_open_vconn(bridge_name, &vconnp) == true) {
-        of_ports = ofc_of_get_ports(vconnp);
+    if (of_open_vconn(bridge_name, &vconnp) == true) {
+        of_ports = of_get_ports(vconnp);
     } else {
         nc_verb_error("OpenFlow: could not connect to '%s' bridge.",
                       bridge_name);
@@ -887,13 +903,7 @@ get_ports_state(const struct ovsrec_bridge *bridge)
             ds_put_format(&string, "<name>%s</name>", row->name);
             ds_put_format(&string, "<number>%" PRIu64 "</number>",
                           (row->n_ofport > 0 ? row->ofport[0] : 0));
-            of_port = ofc_of_getport_byname(of_ports, row->name);
-            if (of_port != NULL) {
-                ds_put_format(&string,
-                              "<current-rate>%" PRIu32 "</current-rate>"
-                              "<max-rate>%" PRIu32 "</max-rate>",
-                              of_port->curr_speed, of_port->max_speed);
-            }
+            of_port = of_get_port_byname(of_ports, row->name);
             ds_put_format(&string, "<state>");
             ds_put_format(&string, "<oper-state>%s</oper-state>",
                           (row->link_state !=
@@ -924,15 +934,18 @@ get_ports_state(const struct ovsrec_bridge *bridge)
                 break;
             case 10000:
                 ds_put_format(&string, "<rate>10Gb");
-                ecmd->duplex = DUPLEX_FULL + 1; /* do not print duplex suffix */
+                /* do not print duplex suffix */
+                ecmd->duplex = DUPLEX_FULL + 1;
                 break;
             case 40000:
                 ds_put_format(&string, "<rate>40Gb");
-                ecmd->duplex = DUPLEX_FULL + 1; /* do not print duplex suffix */
+                /* do not print duplex suffix */
+                ecmd->duplex = DUPLEX_FULL + 1;
                 break;
             default:
-                ds_put_format(&string, "<rate>");
-                ecmd->duplex = DUPLEX_FULL + 1; /* do not print duplex suffix */
+                ds_put_format(&string, "<rate>other");
+                /* do not print duplex suffix */
+                ecmd->duplex = norate;
             }
             switch (ecmd->duplex) {
             case DUPLEX_HALF:
@@ -945,7 +958,6 @@ get_ports_state(const struct ovsrec_bridge *bridge)
                 ds_put_format(&string, "</rate>");
                 break;
             }
-
             /* auto-negotiation */
             ds_put_format(&string, "<auto-negotiate>%s</auto-negotiate>",
                           ecmd->autoneg ? "true" : "false");
@@ -974,15 +986,20 @@ get_ports_state(const struct ovsrec_bridge *bridge)
             dump_port_features(&string, ecmd->lp_advertising);
             ds_put_format(&string, "</advertised-peer></features>");
 
+            if (of_port != NULL && ecmd->duplex == norate) {
+                ds_put_format(&string,
+                              "<current-rate>%" PRIu32 "</current-rate>"
+                              "<max-rate>%" PRIu32 "</max-rate>",
+                              of_port->curr_speed, of_port->max_speed);
+            }
+
             ds_put_format(&string, "</port>");
         }
     }
-    if (of_ports != NULL) {
-        ofpbuf_delete(of_ports);
-    }
-    if (vconnp != NULL) {
-        vconn_close(vconnp);
-    }
+
+    ofpbuf_delete(of_ports);
+    vconn_close(vconnp);
+
     return ds_steal_cstr(&string);
 }
 
@@ -1081,12 +1098,12 @@ get_controller_config(struct ds *string, const struct ovsrec_controller *row)
 static char *
 get_bridges_state(void)
 {
-    const struct ovsrec_bridge *row, *next;
+    const struct ovsrec_bridge *row;
     struct ds string;
     size_t i;
 
     ds_init(&string);
-    OVSREC_BRIDGE_FOR_EACH_SAFE(row, next, ovsdb_handler->idl) {
+    OVSREC_BRIDGE_FOR_EACH(row, ovsdb_handler->idl) {
         /* char *uuid = print_uuid(&row->header_.uuid); */
         /* ds_put_format(&string, "<resource-id>%s</resource-id>", uuid);
          * free(uuid); */
@@ -1421,7 +1438,7 @@ get_external_certificates_config(void)
 /* Synchronize local copy of OVSDB.  Returns EXIT_SUCCESS on success.
  * Otherwise returns EXIT_FAILURE. */
 static int
-ofconf_update(ovsdb_t *p)
+ofc_update(ovsdb_t *p)
 {
     int retval, i;
 
@@ -1490,7 +1507,7 @@ ofc_get_config_data(void)
     if (ovsdb_handler == NULL) {
         return NULL;
     }
-    ofconf_update(ovsdb_handler);
+    ofc_update(ovsdb_handler);
     queues = get_queues_config();
     if (queues == (NULL)) {
         queues = strdup("");
@@ -1557,7 +1574,7 @@ ofc_get_state_data(void)
         return NULL;
     }
     ds_init(&ports_ds);
-    ofconf_update(ovsdb_handler);
+    ofc_update(ovsdb_handler);
 
     OVSREC_BRIDGE_FOR_EACH(bridge, ovsdb_handler->idl) {
         ports = get_ports_state(bridge);
@@ -1605,7 +1622,7 @@ ofc_init(const char *ovs_db_path)
     p->txn = NULL;
     p->seqno = ovsdb_idl_get_seqno(p->idl);
     nc_verb_verbose("Try to synchronize OVSDB.");
-    if (ofconf_update(p) == EXIT_FAILURE) {
+    if (ofc_update(p) == EXIT_FAILURE) {
         ofc_destroy();
         return false;
     }
@@ -1863,60 +1880,57 @@ txn_mod_port_admin_state(const xmlChar *port_name, const xmlChar *value,
 }
 
 int
-of_mod_port_configuration(xmlNodePtr cfg, struct nc_err **error)
+of_post_ports(xmlNodePtr cfg, struct nc_err **error)
 {
     xmlXPathContextPtr xpathCtx = NULL;
     xmlXPathObjectPtr xpathObj = NULL;
-    xmlDocPtr doc;
-    const xmlChar *bridge_name = NULL;
     const xmlChar *port_name, *value;
     xmlNodePtr port, aux;
     const char *xpathexpr = "//ofc:port/ofc:configuration/..";
     size_t size, i;
     int ret = EXIT_FAILURE;
 
-    if (cfg == NULL) {
+    if (!cfg || ovsdb_handler->added_interface == false) {
         return EXIT_SUCCESS;
     }
-    if (ovsdb_handler->added_interface == false) {
-        return EXIT_SUCCESS;
-    }
-
-    doc = cfg->doc;
 
     /* Create xpath evaluation context */
-    xpathCtx = xmlXPathNewContext(doc);
-    if (xpathCtx == NULL) {
-        nc_verb_error("Unable to create new XPath context");
+    xpathCtx = xmlXPathNewContext(cfg->doc);
+    if (!xpathCtx) {
+        nc_verb_error("%s: Unable to create new XPath context", __func__);
         goto cleanup;
     }
 
-    if (xmlXPathRegisterNs
-        (xpathCtx, BAD_CAST "ofc", BAD_CAST "urn:onf:config:yang")) {
-        nc_verb_error("Registering a namespace for XPath failed (%s).",
+    if (xmlXPathRegisterNs(xpathCtx, BAD_CAST "ofc",
+                           BAD_CAST "urn:onf:config:yang")) {
+        nc_verb_error("%s: Registering a namespace for XPath failed.",
                       __func__);
         goto cleanup;
     }
 
     /* Evaluate xpath expression */
     xpathObj = xmlXPathEvalExpression(BAD_CAST xpathexpr, xpathCtx);
-    if (xpathObj == NULL) {
-        nc_verb_error("Unable to evaluate xpath expression \"%s\"", xpathexpr);
+    if (!xpathObj) {
+        nc_verb_error("%s: Unable to evaluate xpath expression \"%s\"",
+                      __func__, xpathexpr);
         goto cleanup;
     }
 
-    /* Print results */
+    /* apply changes via OpenFlow */
     size = (xpathObj->nodesetval) ? xpathObj->nodesetval->nodeNr : 0;
     for (i = 0; i < size; i++) {
         if (xpathObj->nodesetval->nodeTab[i]) {
             port = xpathObj->nodesetval->nodeTab[i];
             port_name = get_key(port, "name");
-            bridge_name = ofc_find_bridge_with_port(port_name);
             aux = go2node(port, BAD_CAST "configuration");
+            if (!aux) {
+                continue;
+            }
+
+            /* process port/configuration/. elements of the port */
             for (aux = aux->children; aux; aux = aux->next) {
                 value = aux->children ? aux->children->content : NULL;
-                if (ofc_of_mod_port
-                    (bridge_name, port_name, aux->name, value, error)) {
+                if (of_mod_port_cfg(port_name, aux->name, value, error)) {
                     return EXIT_FAILURE;
                 }
             }
@@ -1941,6 +1955,7 @@ txn_add_port(xmlNodePtr node, struct nc_err **e)
     struct ovsrec_interface *iface;
     struct ethtool_cmd *ecmd;
     int i;
+    int tunnel = 0;
 
     if (!node) {
         nc_verb_error("%s: invalid input parameters.", __func__);
@@ -1966,6 +1981,10 @@ txn_add_port(xmlNodePtr node, struct nc_err **e)
                 ovsrec_port_verify_name(port);
                 ovsrec_port_set_name(port, (char *) xmlval);
             } else {
+                nc_verb_error("%s: port name value is missing.", __func__);
+                *e = nc_err_new(NC_ERR_BAD_ELEM);
+                nc_err_set(*e, NC_ERR_PARAM_INFO_BADELEM, "name");
+                nc_err_set(*e, NC_ERR_PARAM_MSG, "Invalid name of the port.");
                 return EXIT_FAILURE;
             }
         } else if (xmlStrEqual(aux->name, BAD_CAST "requested-number")) {
@@ -1979,10 +1998,23 @@ txn_add_port(xmlNodePtr node, struct nc_err **e)
         } else if (xmlStrEqual(aux->name, BAD_CAST "ipgre-tunnel")
                    || xmlStrEqual(aux->name, BAD_CAST "vxlan-tunnel")
                    || xmlStrEqual(aux->name, BAD_CAST "tunnel")) {
-            port_name = get_key(aux->parent, "name");
-            if (txn_mod_port_add_tunnel(port_name, aux, e)) {
+            /* check if there another tunnel already set */
+            if (tunnel) {
+                nc_verb_error("%s: multiple tunnels specified.");
+                *e = nc_err_new(NC_ERR_BAD_ELEM);
+                nc_err_set(*e, NC_ERR_PARAM_INFO_BADELEM, (char *)aux->name);
+                nc_err_set(*e, NC_ERR_PARAM_MSG,
+                           "Multiple branches of the \"tunnel-type\" choice.");
                 return EXIT_FAILURE;
             }
+
+            port_name = get_key(aux->parent, "name");
+            if (txn_add_port_tunnel(port_name, aux, e)) {
+                return EXIT_FAILURE;
+            }
+
+            /* set the flag to avoid multiple branches of the choice */
+            tunnel = 1;
         } else if (xmlStrEqual(aux->name, BAD_CAST "features")) {
             advert = go2node(aux, BAD_CAST "advertised");
             if (!advert) {
@@ -2207,40 +2239,6 @@ txn_add_queue(xmlNodePtr node, struct nc_err **e)
     return EXIT_SUCCESS;
 }
 
-static const struct ovsrec_port *
-find_port_by_name(const xmlChar *port_name)
-{
-    const struct ovsrec_port *port, *next;
-
-    if (!port_name) {
-        return NULL;
-    }
-
-    OVSREC_PORT_FOR_EACH_SAFE(port, next, ovsdb_handler->idl) {
-        if (xmlStrEqual(port_name, BAD_CAST port->name)) {
-            return port;
-        }
-    }
-    return NULL;
-}
-
-static const struct ovsrec_interface *
-find_interface_by_name(const xmlChar *ifc_name)
-{
-    const struct ovsrec_interface *ifc, *next;
-
-    if (!ifc_name) {
-        return NULL;
-    }
-
-    OVSREC_INTERFACE_FOR_EACH_SAFE(ifc, next, ovsdb_handler->idl) {
-        if (xmlStrEqual(ifc_name, BAD_CAST ifc->name)) {
-            return ifc;
-        }
-    }
-    return NULL;
-}
-
 /* Finds queue by resource-id and returns pointer to it.  When no queue is
  * found, returns NULL. */
 static const struct ovsrec_queue *
@@ -2305,7 +2303,11 @@ txn_add_queue_port(const xmlChar *rid, const xmlChar *port_name,
     }
 
     /* find port record */
-    port = find_port_by_name(port_name);
+    OVSREC_PORT_FOR_EACH(port, ovsdb_handler->idl) {
+        if (xmlStrEqual(port_name, BAD_CAST port->name)) {
+            break;
+        }
+    }
     if (!port) {
         nc_verb_error("Port to link with queue not found");
         *e = nc_err_new(NC_ERR_OP_FAILED);
@@ -2716,24 +2718,30 @@ int
 txn_del_port_tunnel(const xmlChar *port_name, xmlNodePtr tunnel_node,
                     struct nc_err **e)
 {
-    const struct ovsrec_interface *found = NULL;
+    const struct ovsrec_interface *ifc = NULL;
 
     nc_verb_verbose("Removing tunnel (%s:%d)", __FILE__, __LINE__);
 
-    found = find_interface_by_name(port_name);
-    if (found == NULL) {
+    OVSREC_INTERFACE_FOR_EACH(ifc, ovsdb_handler->idl) {
+        if (xmlStrEqual(port_name, BAD_CAST ifc->name)) {
+            break;
+        }
+    }
+    if (!ifc) {
         *e = nc_err_new(NC_ERR_BAD_ELEM);
         nc_err_set(*e, NC_ERR_PARAM_INFO_BADELEM, "name");
         nc_err_set(*e, NC_ERR_PARAM_MSG, "Port not found in OVSDB.");
         return EXIT_FAILURE;
     }
 
-    ovsrec_interface_verify_options(found);
-    ovsrec_interface_verify_type(found);
-    smap_remove((struct smap *) &found->options, "local_ip");
-    smap_remove((struct smap *) &found->options, "remote_ip");
-    ovsrec_interface_set_options(found, &found->options);
-    ovsrec_interface_set_type(found, "");
+    ovsrec_interface_verify_options(ifc);
+    ovsrec_interface_verify_type(ifc);
+    smap_remove((struct smap *) &ifc->options, "local_ip");
+    smap_remove((struct smap *) &ifc->options, "remote_ip");
+    smap_remove((struct smap *) &ifc->external_ids, "tunnel_type");
+    ovsrec_interface_set_options(ifc, &ifc->options);
+    ovsrec_interface_set_external_ids(ifc, &ifc->external_ids);
+    ovsrec_interface_set_type(ifc, ""); /* TODO: detect interface type */
 
     return EXIT_SUCCESS;
 }
@@ -4020,7 +4028,6 @@ txn_mod_bridge_datapath(const xmlChar *br_name, const xmlChar* value,
 {
     int i, j;
     static char dp[17];
-    struct smap othcfg;
     const struct ovsrec_bridge *bridge;
 
     if (!br_name) {
@@ -4041,14 +4048,11 @@ txn_mod_bridge_datapath(const xmlChar *br_name, const xmlChar* value,
         return EXIT_FAILURE;
     }
 
-    smap_clone(&othcfg, &bridge->other_config);
     ovsrec_bridge_verify_other_config(bridge);
-
     if (value) {
         /* set */
         if (xmlStrlen(value) != 23) {
             nc_verb_error("Invalid datapath (%s)", value);
-            smap_destroy(&othcfg);
 
             *e = nc_err_new(NC_ERR_BAD_ELEM);
             nc_err_set(*e, NC_ERR_PARAM_INFO_BADELEM, "datapath-id");
@@ -4063,15 +4067,14 @@ txn_mod_bridge_datapath(const xmlChar *br_name, const xmlChar* value,
             dp[i] = value[j];
         }
 
-        smap_replace(&othcfg, "datapath-id", dp);
+        smap_replace((struct smap *) &bridge->other_config, "datapath-id", dp);
     } else {
         /* delete */
-        smap_remove(&othcfg, "datapath-id");
+        smap_remove((struct smap *) &bridge->other_config, "datapath-id");
     }
 
     ovsrec_bridge_verify_other_config(bridge);
-    ovsrec_bridge_set_other_config(bridge, &othcfg);
-    smap_destroy(&othcfg);
+    ovsrec_bridge_set_other_config(bridge, &bridge->other_config);
 
     return EXIT_SUCCESS;
 }
@@ -4122,9 +4125,6 @@ txn_ovs_insert_bridge(const struct ovsrec_open_vswitch *ovs,
     struct ovsrec_bridge **bridges;
     size_t i;
 
-    nc_verb_verbose("Add bridge %s %s", bridge->name,
-                    print_uuid_ro(&bridge->header_.uuid));
-
     bridges = malloc(sizeof *ovs->bridges * (ovs->n_bridges + 1));
     for (i = 0; i < ovs->n_bridges; i++) {
         bridges[i] = ovs->bridges[i];
@@ -4150,8 +4150,6 @@ txn_bridge_insert_port(const struct ovsrec_bridge *bridge,
         *e = nc_err_new(NC_ERR_OP_FAILED);
         return EXIT_FAILURE;
     }
-    nc_verb_verbose("Add port %s %s", port->name,
-                    print_uuid_ro(&port->header_.uuid));
 
     ports = malloc(sizeof *bridge->ports * (bridge->n_ports + 1));
     for (i = 0; i < bridge->n_ports; i++) {
@@ -4169,7 +4167,7 @@ int
 txn_add_bridge(xmlNodePtr node, struct nc_err **e)
 {
     const struct ovsrec_open_vswitch *ovs;
-    const struct ovsrec_bridge *bridge, *next;
+    const struct ovsrec_bridge *bridge;
     const struct ovsrec_port *port;
     xmlNodePtr aux, leaf;
     xmlChar *xmlval, *bridge_id = NULL;
@@ -4193,9 +4191,9 @@ txn_add_bridge(xmlNodePtr node, struct nc_err **e)
     }
 
     /* check for existing bridge id */
-    OVSREC_BRIDGE_FOR_EACH_SAFE(bridge, next, ovsdb_handler->idl) {
+    OVSREC_BRIDGE_FOR_EACH(bridge, ovsdb_handler->idl) {
         if (xmlStrEqual(bridge_id, BAD_CAST bridge->name)) {
-            /* existing bridge, exit */
+            /* bridge already exists */
             *e = nc_err_new(NC_ERR_BAD_ELEM);
             nc_err_set(*e, NC_ERR_PARAM_INFO_BADELEM, "id");
             nc_err_set(*e, NC_ERR_PARAM_MSG, "Bridge already exists in OVSDB");
@@ -4272,98 +4270,13 @@ txn_add_bridge(xmlNodePtr node, struct nc_err **e)
     return EXIT_SUCCESS;
 }
 
-const xmlChar *
-ofc_find_bridge_with_port(const xmlChar *port_name)
-{
-    const struct ovsrec_bridge *bridge, *next;
-    const struct ovsrec_port *port;
-    const struct ovsrec_interface *interface;
-    int port_i, inter_i;
-
-    OVSREC_BRIDGE_FOR_EACH_SAFE(bridge, next, ovsdb_handler->idl) {
-        for (port_i = 0; port_i < bridge->n_ports; port_i++) {
-            port = bridge->ports[port_i];
-            for (inter_i = 0; inter_i < port->n_interfaces; inter_i++) {
-                interface = port->interfaces[inter_i];
-                if (!strncmp
-                    (interface->name, (char *) port_name,
-                     strlen(interface->name) + 1)) {
-                    return BAD_CAST bridge->name;
-                }
-            }
-        }
-    }
-    return NULL;
-}
-
-xmlChar *
-ofc_find_bridge_for_port(xmlNodePtr root, xmlChar *port_name)
-{
-    xmlXPathContextPtr xpathCtx = NULL;
-    xmlXPathObjectPtr xpathObj = NULL;
-    xmlDocPtr doc;
-    char *xpathexpr = NULL;
-    xmlChar *bridge_name = NULL;
-    int size, ret;
-
-    if (root == NULL) {
-        return NULL;
-    }
-    ret = asprintf(&xpathexpr,
-                   "//ofc:switch/ofc:resources/ofc:port['%s']/../../ofc:id[1]",
-                   (char *) port_name);
-    if (ret == -1) {
-        return NULL;
-    }
-    doc = root->doc;
-    /* Create xpath evaluation context */
-    xpathCtx = xmlXPathNewContext(doc);
-    if (xpathCtx == NULL) {
-        nc_verb_error("Unable to create new XPath context");
-        goto cleanup;
-    }
-
-    if (xmlXPathRegisterNs
-        (xpathCtx, BAD_CAST "ofc", BAD_CAST "urn:onf:config:yang")) {
-        nc_verb_error("Registering a namespace for XPath failed (%s).",
-                      __func__);
-        goto cleanup;
-    }
-
-    /* Evaluate xpath expression */
-    xpathObj = xmlXPathEvalExpression(BAD_CAST xpathexpr, xpathCtx);
-    if (xpathObj == NULL) {
-        nc_verb_error("Unable to evaluate xpath expression \"%s\"", xpathexpr);
-        goto cleanup;
-    }
-
-    /* Print results */
-    size = (xpathObj->nodesetval) ? xpathObj->nodesetval->nodeNr : 0;
-    if (size == 1) {
-        if (xpathObj->nodesetval->nodeTab[0]
-            && xpathObj->nodesetval->nodeTab[0]->children
-            && xpathObj->nodesetval->nodeTab[0]->children->content) {
-            bridge_name = xmlNodeGetContent(xpathObj->nodesetval->nodeTab[0]);
-        }
-    }
-
-cleanup:
-    /* Cleanup, use bridge_name that was initialized or set */
-    free(xpathexpr);
-    xmlXPathFreeObject(xpathObj);
-    xmlXPathFreeContext(xpathCtx);
-
-    return bridge_name;
-}
-
 int
-txn_mod_port_add_tunnel(const xmlChar *port_name, xmlNodePtr tunnel_node,
-                        struct nc_err **e)
+txn_add_port_tunnel(const xmlChar *port_name, xmlNodePtr tunnel_node,
+                    struct nc_err **e)
 {
+    const struct ovsrec_interface *ifc;
     xmlNodePtr iter;
     char *option, *value;
-    struct smap opt_cl;
-    const struct ovsrec_interface *ifc, *next, *found = NULL;
 
     nc_verb_verbose("Adding tunnel (%s:%d)", __FILE__, __LINE__);
 
@@ -4373,78 +4286,89 @@ txn_mod_port_add_tunnel(const xmlChar *port_name, xmlNodePtr tunnel_node,
         return EXIT_FAILURE;
     }
 
-    OVSREC_INTERFACE_FOR_EACH_SAFE(ifc, next, ovsdb_handler->idl) {
-        if (!strncmp(ifc->name, (char *) port_name, strlen(ifc->name) + 1)) {
-            found = ifc;
+    OVSREC_INTERFACE_FOR_EACH(ifc, ovsdb_handler->idl) {
+        if (!strcmp(ifc->name, (char *) port_name)) {
             break;
         }
     }
-    if (found == NULL) {
-        /* existing bridge, exit */
+    if (!ifc) {
         *e = nc_err_new(NC_ERR_BAD_ELEM);
         nc_err_set(*e, NC_ERR_PARAM_INFO_BADELEM, "name");
         nc_err_set(*e, NC_ERR_PARAM_MSG, "Port does not exist in OVSDB");
         return EXIT_FAILURE;
     }
 
-    smap_clone(&opt_cl, &ifc->options);
-
     for (iter = tunnel_node->children; iter; iter = iter->next) {
-        if (iter->type == XML_ELEMENT_NODE) {
-            if (xmlStrEqual(iter->name, BAD_CAST "local-endpoint-ipv4-adress")) {
-                option = "local_ip";
-            } else if (xmlStrEqual(iter->name,
-                                   BAD_CAST "remote-endpoint-ipv4-adress")) {
-                option = "remote_ip";
-            } else {
-                /* unknown element */
-                continue;
-            }
-            value = (char *) (iter->children ? iter->children->content : NULL);
-            smap_add_once(&opt_cl, option, (char *) value);
+        if (iter->type != XML_ELEMENT_NODE) {
+            continue;
         }
+
+        if (xmlStrEqual(iter->name, BAD_CAST "local-endpoint-ipv4-adress")) {
+            option = "local_ip";
+        } else if (xmlStrEqual(iter->name,
+                               BAD_CAST "remote-endpoint-ipv4-adress")) {
+            option = "remote_ip";
+        } else if (xmlStrEqual(iter->name, BAD_CAST "key")
+                || xmlStrEqual(iter->name, BAD_CAST "vni")) {
+            option = "key";
+        } else {
+            /* unknown element */
+            continue;
+        }
+        value = (char *) (iter->children ? iter->children->content : NULL);
+        smap_add_once((struct smap *)&ifc->options, option, (char *) value);
     }
     ovsrec_interface_verify_type(ifc);
-    if (xmlStrEqual(tunnel_node->name, BAD_CAST "ipgre-tunnel")) {
-        ovsrec_interface_set_type(ifc, "gre");
-    } else if (xmlStrEqual(tunnel_node->name, BAD_CAST "vxlan-tunnel")) {
+    if (xmlStrEqual(tunnel_node->name, BAD_CAST "vxlan-tunnel")) {
         ovsrec_interface_set_type(ifc, "vxlan");
     } else {
-        ovsrec_interface_set_type(ifc, "gre64");
-        /* or we hesitate about geneve and lisp */
+        /* tunnel or ipgre-tunnel */
+        ovsrec_interface_set_type(ifc, "gre");
     }
     ovsrec_interface_verify_options(ifc);
-    ovsrec_interface_set_options(ifc, &opt_cl);
+    ovsrec_interface_set_options(ifc, &ifc->options);
+
+    /* store tunnel-type for future get-config to interpret it correctly */
+    smap_replace((struct smap *)&ifc->external_ids, "tunnel_type",
+                 (char *) tunnel_node->name);
+    ovsrec_interface_verify_external_ids(ifc);
+    ovsrec_interface_set_external_ids(ifc, &ifc->external_ids);
 
     return EXIT_SUCCESS;
 }
 
 int
-txn_mod_port_tunnel_opt(const xmlChar * port_name, xmlNodePtr node,
-                        const xmlChar * value, struct nc_err **e)
+txn_mod_port_tunnel_opt(const xmlChar *port_name, const xmlChar *node_name,
+                        const xmlChar *value, struct nc_err **e)
 {
     const struct ovsrec_interface *ifc = NULL;
     const char *opt_key = NULL;
 
-    if (!node) {
+    if (!node_name) {
         *e = nc_err_new(NC_ERR_BAD_ELEM);
         return EXIT_FAILURE;
     }
 
-    if (xmlStrEqual(node->name, BAD_CAST "local-endpoint-ipv4-adress")) {
+    if (xmlStrEqual(node_name, BAD_CAST "local-endpoint-ipv4-adress")) {
         opt_key = "local_ip";
-    } else if (xmlStrEqual(node->name, BAD_CAST "remote-endpoint-ipv4-adress")) {
+    } else if (xmlStrEqual(node_name, BAD_CAST "remote-endpoint-ipv4-adress")) {
         opt_key = "remote_ip";
-    } else if (xmlStrEqual(node->name, BAD_CAST "key")) {
+    } else if (xmlStrEqual(node_name, BAD_CAST "key")
+            || xmlStrEqual(node_name, BAD_CAST "vni")) {
         opt_key = "key";
-    } else if (xmlStrEqual(node->name, BAD_CAST "vni")) {
-        opt_key = "key";
+    } else if (xmlStrEqual(node_name, BAD_CAST "checksum-present")) {
+        opt_key = "csum";
     } else {
         *e = nc_err_new(NC_ERR_BAD_ELEM);
+        nc_err_set(*e, NC_ERR_PARAM_INFO_BADELEM, (char *) node_name);
         return EXIT_FAILURE;
     }
 
-    ifc = find_interface_by_name(port_name);
+    OVSREC_INTERFACE_FOR_EACH(ifc, ovsdb_handler->idl) {
+        if (xmlStrEqual(port_name, BAD_CAST ifc->name)) {
+            break;
+        }
+    }
     if (!ifc) {
         *e = nc_err_new(NC_ERR_DATA_MISSING);
         return EXIT_FAILURE;

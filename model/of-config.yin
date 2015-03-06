@@ -669,14 +669,7 @@ information.</text>
       </description>
     </leaf>
     <leaf name="key">
-      <when condition="../key-present='true'">
-        <description>
-          <text>This element is only relevant if element key-present of this IP GRE
-      Tunnel has value 'true'.</text>
-        </description>
-      </when>
       <type name="uint32"/>
-      <mandatory value="true"/>
       <description>
         <text>The (optional) key of the GRE tunnel.  It MAY be used to set the
       OXM_OF_TUNNEL_ID match field metadata in the OpenFlow protocol</text>
@@ -1050,7 +1043,6 @@ operations.</text>
     </description>
     <leaf-list name="rate">
       <type name="OFPortRateType"/>
-      <min-elements value="1"/>
       <description>
         <text>The transmission rate that is supported or advertised. Multiple
        transmissions rates are allowed.</text>
@@ -1069,7 +1061,6 @@ operations.</text>
         <enum name="copper"/>
         <enum name="fiber"/>
       </type>
-      <min-elements value="1"/>
       <description>
         <text>The transmission medium used by the port. Multiple media are allowed.</text>
       </description>
@@ -1212,17 +1203,6 @@ OpenFlow Configuration Points.</text>
        Logical Switch or already in use by an OpenFlow Logical Switch.</text>
       </description>
       <list name="port">
-        <must condition="features/current/rate != 'other' or (count(current-rate) = 1 and count(max-rate) = 1 and  current-rate &gt; 0 and max-rate &gt; 0)">
-          <error-message>
-            <value>current-rate and max-rate must be specified and greater than 0 if rate
-       equals 'other'</value>
-          </error-message>
-          <description>
-            <text>current-rate and max-rate can only be present if rate = 'other', see
-       corresponding leaf descriptions. If rate = 'other', then
-       both leafs must be set to values greater than zero.</text>
-          </description>
-        </must>
         <key value="name"/>
         <description>
           <text>The list contains all port resources of the OpenFlow Capable Switch.

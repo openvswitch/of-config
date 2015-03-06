@@ -1,0 +1,10 @@
+<?xml version="1.0"?>
+<capable-switch xmlns="urn:onf:config:yang" xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <logical-switches>
+    <switch>
+      <resources>
+        <port xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0" xc:operation="create">eth1</port>
+      </resources>
+    </switch>
+  </logical-switches>
+</capable-switch>

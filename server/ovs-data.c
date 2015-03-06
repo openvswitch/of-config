@@ -4019,7 +4019,6 @@ txn_mod_bridge_datapath(const xmlChar *br_name, const xmlChar* value,
 {
     int i, j;
     static char dp[17];
-    struct smap othcfg;
     const struct ovsrec_bridge *bridge;
 
     if (!br_name) {
@@ -4040,14 +4039,11 @@ txn_mod_bridge_datapath(const xmlChar *br_name, const xmlChar* value,
         return EXIT_FAILURE;
     }
 
-    smap_clone(&othcfg, &bridge->other_config);
     ovsrec_bridge_verify_other_config(bridge);
-
     if (value) {
         /* set */
         if (xmlStrlen(value) != 23) {
             nc_verb_error("Invalid datapath (%s)", value);
-            smap_destroy(&othcfg);
 
             *e = nc_err_new(NC_ERR_BAD_ELEM);
             nc_err_set(*e, NC_ERR_PARAM_INFO_BADELEM, "datapath-id");
@@ -4062,15 +4058,14 @@ txn_mod_bridge_datapath(const xmlChar *br_name, const xmlChar* value,
             dp[i] = value[j];
         }
 
-        smap_replace(&othcfg, "datapath-id", dp);
+        smap_replace((struct smap *)&bridge->other_config, "datapath-id", dp);
     } else {
         /* delete */
-        smap_remove(&othcfg, "datapath-id");
+        smap_remove((struct smap *)&bridge->other_config, "datapath-id");
     }
 
     ovsrec_bridge_verify_other_config(bridge);
-    ovsrec_bridge_set_other_config(bridge, &othcfg);
-    smap_destroy(&othcfg);
+    ovsrec_bridge_set_other_config(bridge, &bridge->other_config);
 
     return EXIT_SUCCESS;
 }
@@ -4273,7 +4268,6 @@ txn_add_port_tunnel(const xmlChar *port_name, xmlNodePtr tunnel_node,
     const struct ovsrec_interface *ifc;
     xmlNodePtr iter;
     char *option, *value;
-    struct smap s;
 
     nc_verb_verbose("Adding tunnel (%s:%d)", __FILE__, __LINE__);
 
@@ -4295,7 +4289,6 @@ txn_add_port_tunnel(const xmlChar *port_name, xmlNodePtr tunnel_node,
         return EXIT_FAILURE;
     }
 
-    smap_clone(&s, &ifc->options);
     for (iter = tunnel_node->children; iter; iter = iter->next) {
         if (iter->type != XML_ELEMENT_NODE) {
             continue;
@@ -4314,7 +4307,7 @@ txn_add_port_tunnel(const xmlChar *port_name, xmlNodePtr tunnel_node,
             continue;
         }
         value = (char *) (iter->children ? iter->children->content : NULL);
-        smap_add_once(&s, option, (char *) value);
+        smap_add_once((struct smap *)&ifc->options, option, (char *) value);
     }
     ovsrec_interface_verify_type(ifc);
     if (xmlStrEqual(tunnel_node->name, BAD_CAST "vxlan-tunnel")) {
@@ -4324,15 +4317,13 @@ txn_add_port_tunnel(const xmlChar *port_name, xmlNodePtr tunnel_node,
         ovsrec_interface_set_type(ifc, "gre");
     }
     ovsrec_interface_verify_options(ifc);
-    ovsrec_interface_set_options(ifc, &s);
-    smap_destroy(&s);
+    ovsrec_interface_set_options(ifc, &ifc->options);
 
     /* store tunnel-type for future get-config to interpret it correctly */
-    smap_clone(&s, &ifc->external_ids);
-    smap_replace(&s, "tunnel_type", (char *) tunnel_node->name);
+    smap_replace((struct smap *)&ifc->external_ids, "tunnel_type",
+                 (char *) tunnel_node->name);
     ovsrec_interface_verify_external_ids(ifc);
-    ovsrec_interface_set_external_ids(ifc, &s);
-    smap_destroy(&s);
+    ovsrec_interface_set_external_ids(ifc, &ifc->external_ids);
 
     return EXIT_SUCCESS;
 }

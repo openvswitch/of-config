@@ -1418,8 +1418,9 @@ get_external_certificates_config(void)
     return ds_steal_cstr(&str);
 }
 
-/* synchronize local copy of OVSDB */
-static void
+/* Synchronize local copy of OVSDB.  Returns EXIT_SUCCESS on success.
+ * Otherwise returns EXIT_FAILURE. */
+static int
 ofconf_update(ovsdb_t *p)
 {
     int retval, i;
@@ -1430,6 +1431,7 @@ ofconf_update(ovsdb_t *p)
             retval = ovsdb_idl_get_last_error(p->idl);
             nc_verb_error("OVS database connection failed (%s)",
                           ovs_retval_to_string(retval));
+            return EXIT_FAILURE;
         }
 
         if (p->seqno != ovsdb_idl_get_seqno(p->idl)) {
@@ -1443,6 +1445,10 @@ ofconf_update(ovsdb_t *p)
             poll_block();
         }
     }
+    if (!ovsdb_idl_has_ever_connected(p->idl)) {
+        return EXIT_FAILURE;
+    }
+    return EXIT_SUCCESS;
 }
 
 char *
@@ -1591,14 +1597,18 @@ ofc_init(const char *ovs_db_path)
         /* failed */
         return false;
     }
+    ovsdb_handler = p;
     p->added_interface = false;
 
     ovsrec_init();
     p->idl = ovsdb_idl_create(ovs_db_path, &ovsrec_idl_class, true, true);
     p->txn = NULL;
     p->seqno = ovsdb_idl_get_seqno(p->idl);
-    ofconf_update(p);
-    ovsdb_handler = p;
+    nc_verb_verbose("Try to synchronize OVSDB.");
+    if (ofconf_update(p) == EXIT_FAILURE) {
+        ofc_destroy();
+        return false;
+    }
 
     /* prepare descriptor to perform ioctl() */
     ioctlfd = socket(PF_INET, SOCK_DGRAM, IPPROTO_IP);

@@ -563,29 +563,6 @@ find_flowtable_id(const struct ovsrec_flow_table *flowtable, int64_t *key)
 }
 
 static char *
-get_flow_tables_state(void)
-{
-    const struct ovsrec_flow_table *row;
-    struct ds string;
-    int64_t table_id;
-
-    ds_init(&string);
-
-    OVSREC_FLOW_TABLE_FOR_EACH(row, ovsdb_handler->idl) {
-        if (!find_flowtable_id(row, &table_id)) {
-            /* flow-table is not linked with a bridge */
-            continue;
-        }
-        ds_put_format(&string, "<flow-table>"
-                      "<table-id>%" PRIi64 "</table-id>"
-                      "<max-entries>%" PRId64 "</max-entries></flow-table>",
-                      table_id,
-                      (row->n_flow_limit > 0 ? row->flow_limit[0] : 0));
-    }
-    return ds_steal_cstr(&string);
-}
-
-static char *
 get_flow_tables_config(void)
 {
     const struct ovsrec_flow_table *row;
@@ -1559,11 +1536,10 @@ ofc_get_state_data(void)
     const char *state_data_format = "<?xml version=\"1.0\"?>"
         "<capable-switch xmlns=\"urn:onf:config:yang\">"
         "<config-version>%s</config-version>"
-        "<resources>%s%s</resources>"
+        "<resources>%s</resources>"
         "<logical-switches>%s</logical-switches></capable-switch>";
 
     char *ports;
-    char *flow_tables;
     char *bridges;
     const struct ovsrec_bridge *bridge;
 
@@ -1584,10 +1560,6 @@ ofc_get_state_data(void)
         ds_put_format(&ports_ds, "%s", ports);
         free(ports);
     }
-    flow_tables = get_flow_tables_state();
-    if (flow_tables == (NULL)) {
-        flow_tables = strdup("");
-    }
     bridges = get_bridges_state();
     if (bridges == (NULL)) {
         bridges = strdup("");
@@ -1596,9 +1568,8 @@ ofc_get_state_data(void)
     ds_init(&state_data);
 
     ds_put_format(&state_data, state_data_format, "1.2", ds_cstr(&ports_ds),
-                  flow_tables, bridges);
+                  bridges);
 
-    free(flow_tables);
     free(bridges);
     ds_destroy(&ports_ds);
 

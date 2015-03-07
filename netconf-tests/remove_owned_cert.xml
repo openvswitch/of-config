@@ -5,8 +5,5 @@
     <owned-certificate nc:operation="remove">
       <resource-id>owncertid</resource-id>
     </owned-certificate>
-    <external-certificate nc:operation="remove">
-      <resource-id>extcertid</resource-id>
-    </external-certificate>
   </resources>
 </capable-switch>

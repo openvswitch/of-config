@@ -7,3 +7,42 @@
 USER=root
 
 HOST=localhost
+
+# defined functions
+print_cert()
+{
+echo Certificate info:
+./get-config.sh | awk 'BEGIN {print "-----BEGIN CERTIFICATE-----"}
+/<certificate>/ {
+  if (term) {
+    exit
+  } else {
+    term = 1
+  }
+}
+/<certificate>/,/<\/certificate>/ {
+  gsub("<[^>]*>", ""); gsub(" ", "");
+  print $0;
+}
+END {print "-----END CERTIFICATE-----"}' | tee cert | openssl x509 -noout -subject
+}
+
+print_rsakeydata()
+{
+echo Key info:
+./get-config.sh | awk 'BEGIN {print "-----BEGIN RSA PRIVATE KEY-----"}
+/<key-data>/,/<\/key-data>/ {
+  gsub("<[^>]*>", ""); print $0;
+}
+END {print "-----END RSA PRIVATE KEY-----"}' | tee key | openssl rsa -noout -modulus
+}
+
+check_startup_difference()
+{
+./get-config.sh | diff "$1" -
+if [ $? -eq 0 ]; then
+    echo "Create and remove ended successfully."
+else
+    echo "Test failed."
+fi
+}

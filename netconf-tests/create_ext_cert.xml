@@ -1,0 +1,27 @@
+<?xml version="1.0"?>
+<capable-switch xmlns="urn:onf:config:yang">
+  <id>openvswitch</id>
+  <resources>
+    <external-certificate xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0" nc:operation="create">
+      <resource-id>extcertid</resource-id>
+      <certificate>MIIDVzCCAj+gAwIBAgIJAKJvnlRq21rlMA0GCSqGSIb3DQEBBQUAMEIxCzAJBgNV
+BAYTAlhYMRUwEwYDVQQHDAxEZWZhdWx0IENpdHkxHDAaBgNVBAoME0RlZmF1bHQg
+Q29tcGFueSBMdGQwHhcNMTUwMzA2MjEyNzM0WhcNMTYwMzA1MjEyNzM0WjBCMQsw
+CQYDVQQGEwJYWDEVMBMGA1UEBwwMRGVmYXVsdCBDaXR5MRwwGgYDVQQKDBNEZWZh
+dWx0IENvbXBhbnkgTHRkMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA
+5IVzyZf245Cs9QJX+vRyOk+JGDJtTVV15W9vEGVe+sgu49Eec533rUHvxVjpI02v
+XwQ6U3nIFYI5AbiYU5GhDDuow5HHJRKUb3Fo33rqqBhBo7uBWxto6NtzdTVYkxSO
+wZFzBgkBu3SuE8UTeaeQ5BQ/kTMTjR5EBINnLBs+EocTFF1osjDiHP4CHAC1ME17
+X4pb1BFdhCmpZidaiMsoXQc643bOtQVP1gNaT7y9Mle/O7nXrx0/OFoH3+1/f1gI
+VxwS00/+z0SuL59EKMf3pPKTiwATudHs4+vBXLqzemSEDTxd+Ad0eimkJ4CXZqnC
+X8QSGJ4403HY1arWf5PMIQIDAQABo1AwTjAdBgNVHQ4EFgQUHsJ9isLHV0GgwjZM
+svJdeLvBk50wHwYDVR0jBBgwFoAUHsJ9isLHV0GgwjZMsvJdeLvBk50wDAYDVR0T
+BAUwAwEB/zANBgkqhkiG9w0BAQUFAAOCAQEAFkVkYOUVvP3crO0sBBMgNtEiBESn
+avKOFA9C9gD6mUBnBgk5bMrVYDOrRSznFySYvRlk5SV+0icpjcPqlifTB85gs0HM
+rBJput62Ax3NpS50GCmDn/nVDZ90bPXDx5KqAIUOsptPJgMT4GPXjJvPBvz+8qs4
+t45olZy1gdPGjsgrC4PmvlS1vG/HO0bO27c6b+4UczJET+C/NF9K1hPRV6vyyUJe
+i32doSbMqyx746SmmzJF9wKDtpkYIdpOyArVw2AjXp0FKSRsY3CQ211u5K41lLZ5
+aRL7NCWO/tVNsXGKdgAlXFeTEoQWLMX2rlTz+kiNu836bDM2T9O6wVpbAg==</certificate>
+    </external-certificate>
+  </resources>
+</capable-switch>

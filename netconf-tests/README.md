@@ -23,45 +23,48 @@ to be non-interactive.
 Included files
 --------------
 
-Shell scripts are used to perform sequences of NETCONF operations (execute netopeer-cli):
+Bash scripts are used to perform sequences of NETCONF operations (execute netopeer-cli).
+XML files contain NETCONF data for requests.
 
-  * create_certificates.sh
-  * create_flowtable.sh
-  * create_port.sh
-  * create_queue.sh
-  * create_remove_flowtable.sh
-  * create_remove_queue.sh
-  * create_remove_tunnel.sh
-  * get-config.sh
-  * openflow_set.sh
-  * remove_flowtable.sh
-  * remove_queue.sh
-  * reset.sh
+'group\_' files are intended to execute multiple tests and to do basic checks such as
+comparison of initial configuration and configuration after test.
 
-XML files contain NETCONF data for requests:
+Tests are NOT fully automatic, output of scripts should be revisited manually.
 
-  * change_flowtable.xml
-  * change_queue.xml
-  * change_tunnel.xml
-  * create_certificates.xml
-  * create_flowtable.xml
-  * create_ipgre_tunnel_port.xml
-  * create_queue.xml
-  * create_tunnel.sh
-  * create_tunnel_port.xml
-  * create_vxlan_tunnel_port.xml
-  * ovs.xml - filter for get-config to get only OF-CONFIG subtree
-  * port_admin_state_down.xml
-  * port_admin_state_up.xml
-  * port_noreceive.xml
-  * port_openflow_set_down.xml
-  * port_openflow_set_up.xml
-  * remove_certificates.sh
-  * remove_certificates.xml
-  * remove_flowtable.xml
-  * remove_flowtable_from_bridge.xml
-  * remove_queue.xml
-  * remove_queue_from_bridge.xml
-  * remove_tunnel.xml
-  * startup.xml
+Tested parts
+============
+
+Port & Queue
+------------
+
+  * group_test_port.sh
+      * reset configuration on start [reset.sh]
+      * create and remove port [create_port_eth1.sh, remove_port_eth1.sh]
+      * modify port configuration (admin-state, no-receive, no-packet-in, no-forward) [openflow_set.sh]
+      * modify advertised /* TODO */
+      * modify name, request-number /* TODO? */
+      * create, modify, remove queue [create_modify_remove_queue.sh]
+      * create, modify, remove port with tunnel configuration [create_modify_remove_tunnel.sh]
+      * configuration after tests should be equal to state after reset (it is checked)
+
+Owned-certificate
+-----------------
+  * group_test_owned_cert.sh
+      * reset configuration on start [reset.sh]
+      * create [create_owned_cert.sh]
+      * modify [change_owned_cert.xml]
+      * remove [remove_owned_cert.xml]
+      * create malformed certificate [create_malform_certificates.xml]
+      * configuration after tests should be equal to state after reset (it is checked)
+
+External-certificate
+-----------------
+  * group_test_ext_cert.sh
+      * reset configuration on start [reset.sh]
+      * create [create_ext_cert.sh]
+      * modify [change_ext_cert.xml]
+      * remove [remove_ext_cert.xml]
+      * create malformed certificate [create_malform_certificates.xml]
+      * configuration after tests should be equal to state after reset (it is checked)
+
 

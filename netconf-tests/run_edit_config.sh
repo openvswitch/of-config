@@ -12,7 +12,7 @@ COMMS=""
 for i in `seq $((ARGC-1))`; do
     ARG="${!i}"
     if [ -e "$ARG" -a -r "$ARG" ]; then
-        COMMS="$(echo -e "$COMMANDS\nedit-config --config=${!i} ${!ARGC}")"
+        COMMS="$(echo -e "$COMMS\nedit-config --config=${!i} ${!ARGC}")"
     fi
 done
 

@@ -89,4 +89,12 @@ Switch
       * create owned_cert ext_cert ipgre_tunnel_port queue flowtable port_eth1
       * remove ofc-bridge
 
+Controller
+----------
+  * group_test_controller.sh
+      * reset configuration on start [reset.sh]
+      * create controller [create_controller.xml] (expected change is checked)
+      * modify controller (ip-address, port, local-ip-address, protocol) [change_controller.xml] (change of configuration is checked)
+      * remove controller [remove_controller.xml]
+      * configuration after tests should be equal to state after reset (it is checked)
 

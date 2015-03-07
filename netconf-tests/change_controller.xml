@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<capable-switch xmlns="urn:onf:config:yang">
+  <id>openvswitch</id>
+  <logical-switches>
+    <switch>
+      <id>ofc-bridge</id>
+      <controllers>
+        <controller>
+          <id>my_controller</id>
+          <ip-address>10.1.2.2</ip-address>
+          <port>12300</port>
+          <local-ip-address>10.1.2.3</local-ip-address>
+          <protocol>tls</protocol>
+        </controller>
+      </controllers>
+    </switch>
+  </logical-switches>
+</capable-switch>

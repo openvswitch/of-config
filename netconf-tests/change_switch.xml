@@ -1,0 +1,10 @@
+<capable-switch xmlns="urn:onf:config:yang">
+    <id>openvswitch</id>
+    <logical-switches>
+      <switch>
+        <id>test-bridge</id>
+        <datapath-id>12:12:12:12:13:13:14:15</datapath-id>
+        <lost-connection-behavior>failStandaloneMode</lost-connection-behavior>
+      </switch>
+    </logical-switches>
+  </capable-switch>

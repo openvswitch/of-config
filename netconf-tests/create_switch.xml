@@ -1,0 +1,9 @@
+<capable-switch xmlns="urn:onf:config:yang" xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+    <id>openvswitch</id>
+    <logical-switches>
+      <switch nc:operation="create">
+        <id>test-bridge</id>
+        <datapath-id>02:02:02:02:03:03:04:05</datapath-id>
+      </switch>
+    </logical-switches>
+  </capable-switch>

@@ -79,4 +79,14 @@ Flow-table
       * remove from Bridge (only) [remove_flowtable_from_bridge.xml]
       * configuration after tests should be equal to state after reset (it is checked)
 
+Switch
+------
+  * group_test_switch.sh
+      * create [create_switch.xml] (expected change is checked)
+      * modify (datapath-id, lost-connection-behavior) [change_switch.xml] (change of configuration is checked)
+      * remove [remove_switch.xml]
+      * configuration at this point should be equal to state after reset (it is checked)
+      * create owned_cert ext_cert ipgre_tunnel_port queue flowtable port_eth1
+      * remove ofc-bridge
+
 

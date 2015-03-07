@@ -1,0 +1,26 @@
+<?xml version="1.0"?>
+<capable-switch xmlns="urn:onf:config:yang">
+  <id>openvswitch</id>
+  <resources>
+    <port>
+      <name>eth1</name>
+      <features>
+        <advertised>
+          <rate>10Mb-HD</rate>
+          <rate>10Mb-FD</rate>
+          <rate>100Mb-HD</rate>
+          <rate>100Mb-FD</rate>
+          <rate>1Gb-HD</rate>
+          <rate>1Gb-FD</rate>
+          <rate>10Gb</rate>
+          <rate>40Gb</rate>
+          <rate>100Gb</rate>
+          <rate>1Tb</rate>
+          <auto-negotiate>true</auto-negotiate>
+          <medium>fiber</medium>
+          <pause>symmetric</pause>
+        </advertised>
+      </features>
+    </port>
+  </resources>
+</capable-switch>

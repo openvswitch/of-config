@@ -41,10 +41,14 @@ Port & Queue
       * reset configuration on start [reset.sh]
       * create and remove port [create_port_eth1.sh, remove_port_eth1.sh]
       * modify port configuration (admin-state, no-receive, no-packet-in, no-forward) [openflow_set.sh]
-      * modify advertised /* TODO */
-      * modify name, request-number /* TODO? */
+      * modify advertised [change_port_advertised.xml]
+      * modify request-number [change_port_reqnum.xml]
       * create, modify, remove queue [create_modify_remove_queue.sh]
       * create, modify, remove port with tunnel configuration [create_modify_remove_tunnel.sh]
+      * configuration after tests should be equal to state after reset (it is checked)
+      * create multiple ports
+      * create multiple queues
+      * create queue and move it to different port
       * configuration after tests should be equal to state after reset (it is checked)
 
 Owned-certificate

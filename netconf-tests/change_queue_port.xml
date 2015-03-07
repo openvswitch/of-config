@@ -1,0 +1,11 @@
+<?xml version="1.0"?>
+<capable-switch xmlns="urn:onf:config:yang">
+  <id>openvswitch</id>
+  <resources>
+    <queue>
+      <resource-id>my_queue</resource-id>
+      <port>eth1</port>
+    </queue>
+  </resources>
+</capable-switch>
+

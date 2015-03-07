@@ -3,7 +3,6 @@
 
 netopeer-cli <<KONEC
 connect --login $USER $HOST
-copy-config --source=candidate running
 copy-config --source=startup running
 disconnect
 KONEC

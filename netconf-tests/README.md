@@ -51,8 +51,8 @@ Owned-certificate
 -----------------
   * group_test_owned_cert.sh
       * reset configuration on start [reset.sh]
-      * create [create_owned_cert.sh]
-      * modify [change_owned_cert.xml]
+      * create [create_owned_cert.sh] (expected change is checked)
+      * modify [change_owned_cert.xml] (change of configuration is checked)
       * remove [remove_owned_cert.xml]
       * create malformed certificate [create_malform_certificates.xml]
       * configuration after tests should be equal to state after reset (it is checked)
@@ -61,8 +61,8 @@ External-certificate
 -----------------
   * group_test_ext_cert.sh
       * reset configuration on start [reset.sh]
-      * create [create_ext_cert.sh]
-      * modify [change_ext_cert.xml]
+      * create [create_ext_cert.sh] (expected change is checked)
+      * modify [change_ext_cert.xml] (change of configuration is checked)
       * remove [remove_ext_cert.xml]
       * create malformed certificate [create_malform_certificates.xml]
       * configuration after tests should be equal to state after reset (it is checked)

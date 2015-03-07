@@ -29,7 +29,7 @@ echo Certificate info:
   gsub("<[^>]*>", ""); gsub(" ", "");
   print $0;
 }
-END {print "-----END CERTIFICATE-----"}' | tee cert | openssl x509 -noout -subject
+END {print "-----END CERTIFICATE-----"}' | openssl x509 -noout -subject
 }
 
 print_rsakeydata()
@@ -39,7 +39,7 @@ echo Key info:
 /<key-data>/,/<\/key-data>/ {
   gsub("<[^>]*>", ""); print $0;
 }
-END {print "-----END RSA PRIVATE KEY-----"}' | tee key | openssl rsa -noout -modulus
+END {print "-----END RSA PRIVATE KEY-----"}' | openssl rsa -noout -modulus
 }
 
 # Check that configuration returned to original state.

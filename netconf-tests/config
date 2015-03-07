@@ -8,6 +8,11 @@ USER=root
 
 HOST=localhost
 
+# colors
+green=$(tput setaf 2)
+red=$(tput setaf 1)
+reset=$(tput sgr0)
+
 # defined functions
 print_cert()
 {
@@ -37,12 +42,26 @@ echo Key info:
 END {print "-----END RSA PRIVATE KEY-----"}' | tee key | openssl rsa -noout -modulus
 }
 
+# Check that configuration returned to original state.
+# Expects one parameter with name of file with stored configuration.
 check_startup_difference()
 {
 ./get-config.sh | diff "$1" -
 if [ $? -eq 0 ]; then
-    echo "Create and remove ended successfully."
+    echo "${green}Create and remove ended successfully.${reset}"
 else
-    echo "Test failed."
+    echo "${red}Test failed.${reset}"
+fi
+}
+
+# Check that configuration changed after edit-config
+# Expects one parameter with name of file with stored configuration.
+check_startup_nonchange()
+{
+./get-config.sh | diff -q "$1" -
+if [ $? -ne 0 ]; then
+    echo "${green}Configuration changed as expected.${reset}"
+else
+    echo "${red}Test failed.${reset}"
 fi
 }

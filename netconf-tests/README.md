@@ -67,4 +67,16 @@ External-certificate
       * create malformed certificate [create_malform_certificates.xml]
       * configuration after tests should be equal to state after reset (it is checked)
 
+Flow-table
+----------
+
+  * group_test_flowtable.sh
+      * reset configuration on start [reset.sh]
+      * create [create_flowtable.sh] (expected change is checked)
+      * modify [change_flowtable.xml] (change of configuration is checked)
+      * remove [remove_flowtable.xml]
+      * create [create_flowtable.xml]
+      * remove from Bridge (only) [remove_flowtable_from_bridge.xml]
+      * configuration after tests should be equal to state after reset (it is checked)
+
 

@@ -1417,30 +1417,24 @@ get_external_certificates_config(void)
 static int
 ofc_update(ovsdb_t *p)
 {
-    int retval, i;
+    int retval;
 
-    for (i = 0; i < 4; i++) {
-        ovsdb_idl_run(p->idl);
+    ovsdb_idl_run(p->idl);
+    while (!p->seqno || p->seqno != ovsdb_idl_get_seqno(p->idl)) {
         if (!ovsdb_idl_is_alive(p->idl)) {
             retval = ovsdb_idl_get_last_error(p->idl);
             nc_verb_error("OVS database connection failed (%s)",
                           ovs_retval_to_string(retval));
             return EXIT_FAILURE;
         }
-
         if (p->seqno != ovsdb_idl_get_seqno(p->idl)) {
             p->seqno = ovsdb_idl_get_seqno(p->idl);
-            i--;
-        }
-
-        if (p->seqno == ovsdb_idl_get_seqno(p->idl)) {
+        } else if (p->seqno == ovsdb_idl_get_seqno(p->idl)) {
             ovsdb_idl_wait(p->idl);
             poll_timer_wait(100);       /* wait for 100ms (at most) */
             poll_block();
         }
-    }
-    if (!ovsdb_idl_has_ever_connected(p->idl)) {
-        return EXIT_FAILURE;
+        ovsdb_idl_run(p->idl);
     }
     return EXIT_SUCCESS;
 }

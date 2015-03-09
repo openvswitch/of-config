@@ -1012,45 +1012,63 @@ get_controller_state(struct ds *string, const struct ovsrec_controller *row)
 
 /* parses target t: rewrites delimiters to \0 and sets output pointers */
 static void
-parse_target_to_addr(char *t, char **protocol, char **address, char **port)
+parse_target_to_addr(char *t, const char **protocol, const char **address,
+                     const char **port)
 {
     /* XXX write some test for this... */
-    char *is_ipv6 = NULL;
+    char *is_ipv6 = NULL, *delim;
+    static const char *tls = "tls";
 
     if (t == NULL) {
         (*protocol) = NULL;
         (*address) = NULL;
         (*port) = NULL;
+        return;
     }
 
     /* t begins with protocol */
     (*protocol) = t;
 
     /* address is after delimiter ':' */
-    (*address) = strchr(*protocol, ':');
-    is_ipv6 = strchr(*address, '[');
-    if (*address != NULL) {
-        *(*address) = 0;
-        (*address)++;
+    delim = strchr(*protocol, ':');
+    is_ipv6 = strchr(delim, '[');
+    if (delim != NULL && (delim + 1) != '\0') {
+        /* address */
+        *delim = '\0';
+        *address = delim + 1;
+
+        /* port */
         if (is_ipv6 != NULL) {
-            (*port) = strchr(*address, ']');
-            (*port)++;
+            *address += 1;
+            delim = strchr(*address, ']');
+            if (delim) {
+                *delim = '\0';
+                delim++;
+            }
         } else {
-            (*port) = strchr(*address, ':');
+            delim = strchr(*address, ':');
         }
-        if (*port != NULL) {
-            *(*port) = 0;
-            (*port)++;
+        if (delim && *delim == ':') {
+            *delim = '\0';
+            *port = delim + 1;
+        } else {
+            *port = NULL;
         }
     } else {
-        (*port) = NULL;
+        *port = NULL;
+        *address = NULL;
+    }
+
+    /* map protocol value to the of-config values */
+    if (!strcmp(*protocol, "ssl")) {
+        *protocol = tls;
     }
 }
 
 static void
 get_controller_config(struct ds *string, const struct ovsrec_controller *row)
 {
-    char *protocol, *address, *port;
+    const char *protocol, *address, *port;
     const char *id;
     char *target = strdup(row->target);
 
@@ -3944,9 +3962,9 @@ txn_mod_contr_target(const xmlChar *contr_id, const xmlChar *name,
     if (xmlStrEqual(name, BAD_CAST "port")) {
         /* hide the port from the current value in controller structure */
         aux = index(contr->target, ':');        /* protocol_:_ip */
-        aux = index(aux, ':');  /* ip_:_port */
+        aux = index(aux + 1, ':');  /* ip_:_port */
         if (aux != NULL) {
-            aux = '\0';
+            *aux = '\0';
         }
         if (value) {
             asprintf(&aux, "%s:%s", contr->target, value);
@@ -3967,7 +3985,7 @@ txn_mod_contr_target(const xmlChar *contr_id, const xmlChar *name,
     } else if (xmlStrEqual(name, BAD_CAST "ip-address")) {
         if (value) {
             p = index(contr->target, ':');      /* protocol_:_ip */
-            p = index(p, ':');  /* ip_:_port */
+            p = index(p + 1, ':');  /* ip_:_port */
             if (p) {
                 asprintf(&aux, "xxx:%s:%s", value, p + 1);
             } else {

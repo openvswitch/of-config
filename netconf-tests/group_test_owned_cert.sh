@@ -16,8 +16,9 @@ check_startup_nonchange before_change
 ./run_edit_config.sh remove_owned_cert.xml running
 check_startup_difference start_state
 
-./run_edit_config.sh create_malform_certificates.xml running
-check_startup_difference start_state
+# Do not check, OF-CONFIG does not analyze content of SSL data
+#./run_edit_config.sh create_malform_certificates.xml running
+#check_startup_difference start_state
 
 rm -f start_state before_change
 

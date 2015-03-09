@@ -3825,6 +3825,7 @@ txn_add_contr(xmlNodePtr node, const xmlChar *br_name, struct nc_err **e)
                 proto = "tcp";
             }
         } else if (xmlStrEqual(aux->name, BAD_CAST "local-ip-address")) {
+            ovsrec_controller_verify_local_ip(contr);
             ovsrec_controller_set_local_ip(contr,
                                            (char *) aux->children->content);
         }
@@ -3838,6 +3839,7 @@ txn_add_contr(xmlNodePtr node, const xmlChar *br_name, struct nc_err **e)
 
     asprintf(&target, "%s:%s%s%s", proto, ip, port ? ":" : "",
              port ? port : "");
+    ovsrec_controller_verify_target(contr);
     ovsrec_controller_set_target(contr, target);
     free(target);
 
@@ -3954,6 +3956,7 @@ txn_mod_contr_target(const xmlChar *contr_id, const xmlChar *name,
         return EXIT_FAILURE;
     }
 
+    ovsrec_controller_verify_target(contr);
     if (!contr->target) {
         /* prepare empty template */
         ovsrec_controller_set_target(contr, "ssl:");

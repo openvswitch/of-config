@@ -1694,12 +1694,12 @@ edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running,
         } else if (xmlStrEqual(edit->parent->name, BAD_CAST "controller")) {
             key = get_key(edit->parent, "id");
             /* key 'id' cannot be deleted */
+            aux = edit->children ? edit->children->content : NULL;
             if (xmlStrEqual(edit->name, BAD_CAST "local-ip-address")) {
-                ret = txn_mod_contr_lip(key, NULL, e);
+                ret = txn_mod_contr_lip(key, aux, e);
             } else if (xmlStrEqual(edit->name, BAD_CAST "ip-address")
                        || xmlStrEqual(edit->name, BAD_CAST "port")
                        || xmlStrEqual(edit->name, BAD_CAST "protocol")) {
-                aux = edit->children ? edit->children->content : NULL;
                 ret = txn_mod_contr_target(key, edit->name, aux, e);
             }
         } else {

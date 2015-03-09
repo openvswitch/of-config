@@ -2421,14 +2421,49 @@ txn_mod_queue_id(const xmlChar *rid, const xmlChar* qid_s, struct nc_err **e)
     return EXIT_SUCCESS;
 }
 
+static int
+txn_del_qos_queue(const struct ovsrec_qos **qos, int i, struct nc_err **e)
+{
+    struct ovsrec_queue **queues;
+    int64_t *queues_keys;
+    int j, k;
+
+    if ((*qos)->n_queues == 1) {
+        /* there is only one queue in QoS, remove the whole QoS record */
+        ovsrec_qos_delete(*qos);
+        *qos = NULL;
+    } else {
+        /* there are multiple queues in QoS, update the list of queues */
+        queues = malloc(sizeof *(*qos)->value_queues * ((*qos)->n_queues - 1));
+        queues_keys = malloc(sizeof *(*qos)->key_queues * ((*qos)->n_queues - 1));
+        for (j = k = 0; j < (*qos)->n_queues; j++) {
+            /* we have i value from interrupted for loop in main part of this
+             * function
+             */
+            if (j == i) {
+                continue;
+            }
+            queues[k] = (*qos)->value_queues[j];
+            queues_keys[k] = (*qos)->key_queues[j];
+            k++;
+        }
+
+        ovsrec_qos_verify_queues(*qos);
+        ovsrec_qos_set_queues((*qos), queues_keys, queues, (*qos)->n_queues - 1);
+
+        free(queues);
+        free(queues_keys);
+    }
+
+    return EXIT_SUCCESS;
+}
+
 int
 txn_del_queue_port(const xmlChar *rid, struct nc_err **e)
 {
     const struct ovsrec_port *port;
-    struct ovsrec_queue **queues;
-    int64_t *queues_keys;
     const char *aux;
-    int i, j, k;
+    int i, ret;
 
     if (!rid) {
         nc_verb_error("%s: invalid input parameters.", __func__);
@@ -2446,7 +2481,13 @@ txn_del_queue_port(const xmlChar *rid, struct nc_err **e)
                            OFC_RESOURCE_ID);
             if (aux && xmlStrEqual(rid, BAD_CAST aux)) {
                 /* we found the connection, remove it and update port/qos */
-                goto update_port;
+                ret = txn_del_qos_queue((const struct ovsrec_qos **)&port->qos,
+                                        i, e);
+                if (!port->qos) {
+                    ovsrec_port_verify_qos(port);
+                    ovsrec_port_set_qos(port, NULL);
+                }
+                return ret;
             }
         }
     }
@@ -2455,40 +2496,6 @@ txn_del_queue_port(const xmlChar *rid, struct nc_err **e)
     nc_verb_error("%s: requested queue link not found in any port.", __func__);
     *e = nc_err_new(NC_ERR_OP_FAILED);
     return EXIT_FAILURE;
-
-update_port:
-    if (port->qos->n_queues == 1) {
-        /* there is only one queue in QoS, remove the whole QoS record */
-        ovsrec_qos_delete(port->qos);
-        ovsrec_port_verify_qos(port);
-        ovsrec_port_set_qos(port, NULL);
-    } else {
-        /* there are multiple queues in QoS, update the list of queues */
-        queues = malloc(sizeof *port->qos->value_queues *
-                        (port->qos->n_queues - 1));
-        queues_keys = malloc(sizeof *port->qos->key_queues *
-                             (port->qos->n_queues - 1));
-        for (j = k = 0; j < port->qos->n_queues; j++) {
-            /* we have i value from interrupted for loop in main part of this
-             * function
-             */
-            if (j == i) {
-                continue;
-            }
-            queues[k] = port->qos->value_queues[j];
-            queues_keys[k] = port->qos->key_queues[j];
-            k++;
-        }
-
-        ovsrec_qos_verify_queues(port->qos);
-        ovsrec_qos_set_queues(port->qos, queues_keys, queues,
-                              port->qos->n_queues - 1);
-
-        free(queues);
-        free(queues_keys);
-    }
-
-    return EXIT_SUCCESS;
 }
 
 int
@@ -3724,7 +3731,10 @@ int
 txn_del_queue(const xmlChar *rid, struct nc_err **e)
 {
     const struct ovsrec_port *port = NULL;
+    const struct ovsrec_qos *qos;
     const struct ovsrec_queue *queue;
+    int i;
+    const char *rid2;
 
     if (!rid) {
         nc_verb_error("%s: invalid input parameters.", __func__);
@@ -3739,8 +3749,29 @@ txn_del_queue(const xmlChar *rid, struct nc_err **e)
         if (txn_del_queue_port(rid, e)) {
             return EXIT_FAILURE;
         }
+    } else {
+        /* the queue has no reference to port, so we have to check references
+         * to queues in qos records manually
+         */
+        OVSREC_QOS_FOR_EACH(qos, ovsdb_handler->idl) {
+            if (qos->n_queues == 0) {
+                continue;
+            }
+
+            for (i = 0; i < qos->n_queues; i++) {
+                rid2 = smap_get(&qos->value_queues[i]->external_ids,
+                                OFC_RESOURCE_ID);
+                if (rid2 && xmlStrEqual(rid, BAD_CAST rid2)) {
+                    if (txn_del_qos_queue(&qos, i, e)) {
+                        return EXIT_FAILURE;
+                    }
+                    goto remove_queue;
+                }
+            }
+        }
     }
 
+remove_queue:
     /* Remove the queue itself */
     queue = find_queue(rid);
     if (!queue) {

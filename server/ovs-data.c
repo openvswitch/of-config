@@ -3996,8 +3996,10 @@ txn_mod_contr_target(const xmlChar *contr_id, const xmlChar *name,
             ovsrec_controller_set_target(contr, aux);
             free(aux);
         } else {
-            /* delete whole target */
-            ovsrec_controller_set_target(contr, NULL);
+            /* ip-address is mandatory, so it cannot be deleted. However,
+             * when replacing the value, we do delete + create. So, we do
+             * nothing, since this delete must be followed by create
+             * implemented by this function. */
         }
     }
 

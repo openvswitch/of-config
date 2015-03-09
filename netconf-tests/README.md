@@ -26,8 +26,9 @@ Included files
 Bash scripts are used to perform sequences of NETCONF operations (execute netopeer-cli).
 XML files contain NETCONF data for requests.
 
-'group\_' files are intended to execute multiple tests and to do basic checks such as
-comparison of initial configuration and configuration after test.
+'group\_test\_\*.sh' files are intended to execute multiple tests and to do basic checks such as
+comparison of initial configuration and configuration after test. 'group\_tests.sh' executes
+all 'group\_test\_\*.sh' files that are executable.
 
 Tests are NOT fully automatic, output of scripts should be revisited manually.
 

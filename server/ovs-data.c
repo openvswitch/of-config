@@ -1012,45 +1012,63 @@ get_controller_state(struct ds *string, const struct ovsrec_controller *row)
 
 /* parses target t: rewrites delimiters to \0 and sets output pointers */
 static void
-parse_target_to_addr(char *t, char **protocol, char **address, char **port)
+parse_target_to_addr(char *t, const char **protocol, const char **address,
+                     const char **port)
 {
     /* XXX write some test for this... */
-    char *is_ipv6 = NULL;
+    char *is_ipv6 = NULL, *delim;
+    static const char *tls = "tls";
 
     if (t == NULL) {
         (*protocol) = NULL;
         (*address) = NULL;
         (*port) = NULL;
+        return;
     }
 
     /* t begins with protocol */
     (*protocol) = t;
 
     /* address is after delimiter ':' */
-    (*address) = strchr(*protocol, ':');
-    is_ipv6 = strchr(*address, '[');
-    if (*address != NULL) {
-        *(*address) = 0;
-        (*address)++;
+    delim = strchr(*protocol, ':');
+    is_ipv6 = strchr(delim, '[');
+    if (delim != NULL && (delim + 1) != '\0') {
+        /* address */
+        *delim = '\0';
+        *address = delim + 1;
+
+        /* port */
         if (is_ipv6 != NULL) {
-            (*port) = strchr(*address, ']');
-            (*port)++;
+            *address += 1;
+            delim = strchr(*address, ']');
+            if (delim) {
+                *delim = '\0';
+                delim++;
+            }
         } else {
-            (*port) = strchr(*address, ':');
+            delim = strchr(*address, ':');
         }
-        if (*port != NULL) {
-            *(*port) = 0;
-            (*port)++;
+        if (delim && *delim == ':') {
+            *delim = '\0';
+            *port = delim + 1;
+        } else {
+            *port = NULL;
         }
     } else {
-        (*port) = NULL;
+        *port = NULL;
+        *address = NULL;
+    }
+
+    /* map protocol value to the of-config values */
+    if (!strcmp(*protocol, "ssl")) {
+        *protocol = tls;
     }
 }
 
 static void
 get_controller_config(struct ds *string, const struct ovsrec_controller *row)
 {
-    char *protocol, *address, *port;
+    const char *protocol, *address, *port;
     const char *id;
     char *target = strdup(row->target);
 
@@ -2403,14 +2421,49 @@ txn_mod_queue_id(const xmlChar *rid, const xmlChar* qid_s, struct nc_err **e)
     return EXIT_SUCCESS;
 }
 
+static int
+txn_del_qos_queue(const struct ovsrec_qos **qos, int i, struct nc_err **e)
+{
+    struct ovsrec_queue **queues;
+    int64_t *queues_keys;
+    int j, k;
+
+    if ((*qos)->n_queues == 1) {
+        /* there is only one queue in QoS, remove the whole QoS record */
+        ovsrec_qos_delete(*qos);
+        *qos = NULL;
+    } else {
+        /* there are multiple queues in QoS, update the list of queues */
+        queues = malloc(sizeof *(*qos)->value_queues * ((*qos)->n_queues - 1));
+        queues_keys = malloc(sizeof *(*qos)->key_queues * ((*qos)->n_queues - 1));
+        for (j = k = 0; j < (*qos)->n_queues; j++) {
+            /* we have i value from interrupted for loop in main part of this
+             * function
+             */
+            if (j == i) {
+                continue;
+            }
+            queues[k] = (*qos)->value_queues[j];
+            queues_keys[k] = (*qos)->key_queues[j];
+            k++;
+        }
+
+        ovsrec_qos_verify_queues(*qos);
+        ovsrec_qos_set_queues((*qos), queues_keys, queues, (*qos)->n_queues - 1);
+
+        free(queues);
+        free(queues_keys);
+    }
+
+    return EXIT_SUCCESS;
+}
+
 int
 txn_del_queue_port(const xmlChar *rid, struct nc_err **e)
 {
     const struct ovsrec_port *port;
-    struct ovsrec_queue **queues;
-    int64_t *queues_keys;
     const char *aux;
-    int i, j, k;
+    int i, ret;
 
     if (!rid) {
         nc_verb_error("%s: invalid input parameters.", __func__);
@@ -2428,7 +2481,13 @@ txn_del_queue_port(const xmlChar *rid, struct nc_err **e)
                            OFC_RESOURCE_ID);
             if (aux && xmlStrEqual(rid, BAD_CAST aux)) {
                 /* we found the connection, remove it and update port/qos */
-                goto update_port;
+                ret = txn_del_qos_queue((const struct ovsrec_qos **)&port->qos,
+                                        i, e);
+                if (!port->qos) {
+                    ovsrec_port_verify_qos(port);
+                    ovsrec_port_set_qos(port, NULL);
+                }
+                return ret;
             }
         }
     }
@@ -2437,40 +2496,6 @@ txn_del_queue_port(const xmlChar *rid, struct nc_err **e)
     nc_verb_error("%s: requested queue link not found in any port.", __func__);
     *e = nc_err_new(NC_ERR_OP_FAILED);
     return EXIT_FAILURE;
-
-update_port:
-    if (port->qos->n_queues == 1) {
-        /* there is only one queue in QoS, remove the whole QoS record */
-        ovsrec_qos_delete(port->qos);
-        ovsrec_port_verify_qos(port);
-        ovsrec_port_set_qos(port, NULL);
-    } else {
-        /* there are multiple queues in QoS, update the list of queues */
-        queues = malloc(sizeof *port->qos->value_queues *
-                        (port->qos->n_queues - 1));
-        queues_keys = malloc(sizeof *port->qos->key_queues *
-                             (port->qos->n_queues - 1));
-        for (j = k = 0; j < port->qos->n_queues; j++) {
-            /* we have i value from interrupted for loop in main part of this
-             * function
-             */
-            if (j == i) {
-                continue;
-            }
-            queues[k] = port->qos->value_queues[j];
-            queues_keys[k] = port->qos->key_queues[j];
-            k++;
-        }
-
-        ovsrec_qos_verify_queues(port->qos);
-        ovsrec_qos_set_queues(port->qos, queues_keys, queues,
-                              port->qos->n_queues - 1);
-
-        free(queues);
-        free(queues_keys);
-    }
-
-    return EXIT_SUCCESS;
 }
 
 int
@@ -3706,7 +3731,10 @@ int
 txn_del_queue(const xmlChar *rid, struct nc_err **e)
 {
     const struct ovsrec_port *port = NULL;
+    const struct ovsrec_qos *qos;
     const struct ovsrec_queue *queue;
+    int i;
+    const char *rid2;
 
     if (!rid) {
         nc_verb_error("%s: invalid input parameters.", __func__);
@@ -3721,8 +3749,29 @@ txn_del_queue(const xmlChar *rid, struct nc_err **e)
         if (txn_del_queue_port(rid, e)) {
             return EXIT_FAILURE;
         }
+    } else {
+        /* the queue has no reference to port, so we have to check references
+         * to queues in qos records manually
+         */
+        OVSREC_QOS_FOR_EACH(qos, ovsdb_handler->idl) {
+            if (qos->n_queues == 0) {
+                continue;
+            }
+
+            for (i = 0; i < qos->n_queues; i++) {
+                rid2 = smap_get(&qos->value_queues[i]->external_ids,
+                                OFC_RESOURCE_ID);
+                if (rid2 && xmlStrEqual(rid, BAD_CAST rid2)) {
+                    if (txn_del_qos_queue(&qos, i, e)) {
+                        return EXIT_FAILURE;
+                    }
+                    goto remove_queue;
+                }
+            }
+        }
     }
 
+remove_queue:
     /* Remove the queue itself */
     queue = find_queue(rid);
     if (!queue) {
@@ -3807,6 +3856,7 @@ txn_add_contr(xmlNodePtr node, const xmlChar *br_name, struct nc_err **e)
                 proto = "tcp";
             }
         } else if (xmlStrEqual(aux->name, BAD_CAST "local-ip-address")) {
+            ovsrec_controller_verify_local_ip(contr);
             ovsrec_controller_set_local_ip(contr,
                                            (char *) aux->children->content);
         }
@@ -3820,6 +3870,7 @@ txn_add_contr(xmlNodePtr node, const xmlChar *br_name, struct nc_err **e)
 
     asprintf(&target, "%s:%s%s%s", proto, ip, port ? ":" : "",
              port ? port : "");
+    ovsrec_controller_verify_target(contr);
     ovsrec_controller_set_target(contr, target);
     free(target);
 
@@ -3936,6 +3987,7 @@ txn_mod_contr_target(const xmlChar *contr_id, const xmlChar *name,
         return EXIT_FAILURE;
     }
 
+    ovsrec_controller_verify_target(contr);
     if (!contr->target) {
         /* prepare empty template */
         ovsrec_controller_set_target(contr, "ssl:");
@@ -3944,9 +3996,9 @@ txn_mod_contr_target(const xmlChar *contr_id, const xmlChar *name,
     if (xmlStrEqual(name, BAD_CAST "port")) {
         /* hide the port from the current value in controller structure */
         aux = index(contr->target, ':');        /* protocol_:_ip */
-        aux = index(aux, ':');  /* ip_:_port */
+        aux = index(aux + 1, ':');  /* ip_:_port */
         if (aux != NULL) {
-            aux = '\0';
+            *aux = '\0';
         }
         if (value) {
             asprintf(&aux, "%s:%s", contr->target, value);
@@ -3967,7 +4019,7 @@ txn_mod_contr_target(const xmlChar *contr_id, const xmlChar *name,
     } else if (xmlStrEqual(name, BAD_CAST "ip-address")) {
         if (value) {
             p = index(contr->target, ':');      /* protocol_:_ip */
-            p = index(p, ':');  /* ip_:_port */
+            p = index(p + 1, ':');  /* ip_:_port */
             if (p) {
                 asprintf(&aux, "xxx:%s:%s", value, p + 1);
             } else {
@@ -3978,8 +4030,10 @@ txn_mod_contr_target(const xmlChar *contr_id, const xmlChar *name,
             ovsrec_controller_set_target(contr, aux);
             free(aux);
         } else {
-            /* delete whole target */
-            ovsrec_controller_set_target(contr, NULL);
+            /* ip-address is mandatory, so it cannot be deleted. However,
+             * when replacing the value, we do delete + create. So, we do
+             * nothing, since this delete must be followed by create
+             * implemented by this function. */
         }
     }
 

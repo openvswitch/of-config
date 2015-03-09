@@ -82,6 +82,8 @@ Flow-table
       * create [create_flowtable.xml]
       * remove from Bridge (only) [remove_flowtable_from_bridge.xml]
       * configuration after tests should be equal to state after reset (it is checked)
+      * create multiple flow-tables [create_flowtable_multiple.sh]
+      * configuration after tests should be equal to state after reset (it is checked)
 
 Switch
 ------

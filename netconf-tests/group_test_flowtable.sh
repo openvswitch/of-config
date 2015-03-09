@@ -24,5 +24,7 @@ check_startup_nonchange before_change
 
 check_startup_difference start_state
 
+./create_flowtable_multiple.sh
+
 rm -f start_state before_change
 

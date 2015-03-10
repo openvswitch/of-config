@@ -2771,7 +2771,7 @@ txn_del_bridge_flowtable(const xmlChar *br_name, const xmlChar *table_id,
     const char *tid_s;
     struct ovsrec_flow_table **fts;
     int64_t *fts_keys;
-    size_t i, j;
+    size_t i, j, n;
 
     if (!table_id || !br_name) {
         nc_verb_error("%s: invalid input parameters.", __func__);
@@ -2791,24 +2791,67 @@ txn_del_bridge_flowtable(const xmlChar *br_name, const xmlChar *table_id,
                    "Logical-switch does not exist in OVSDB");
         return EXIT_FAILURE;
     }
+    if (!bridge->n_flow_tables) {
+        /* be silent here - OVSDB IDL do some optimization during the first
+         * call to ovsrec_bridge_set_flow_tables() and updates it according
+         * to previously removed flow_tables in /capable-switch/resources/
+         * The check if the caller requests removing the non-existing
+         * element is done earlier.
+         */
+        return EXIT_SUCCESS;
+    }
 
-    fts =
-        malloc(sizeof *bridge->value_flow_tables *
-               (bridge->n_flow_tables - 1));
-    fts_keys =
-        malloc(sizeof *bridge->key_flow_tables * (bridge->n_flow_tables - 1));
+    n = bridge->n_flow_tables - 1;
+    if (!n) {
+        /* special case - the last flow-table in the bridge */
+        tid_s = smap_get(&(bridge->value_flow_tables[0]->external_ids),
+                        "table_id");
+        if (!tid_s) {
+            nc_verb_error("%s: flow-table with no table-id found in OVSDB");
+            *e = nc_err_new(NC_ERR_OP_FAILED);
+            nc_err_set(*e, NC_ERR_PARAM_MSG,
+                            "Flow-table with no table-id found in OVSDB");
+            return EXIT_FAILURE;
+        }
+
+        if (!xmlStrEqual(table_id, BAD_CAST tid_s)) {
+            /* be silent again for the same reason as earlier in this
+             * function
+             */
+            return EXIT_SUCCESS;
+        }
+
+        ovsrec_bridge_verify_flow_tables(bridge);
+        ovsrec_bridge_set_flow_tables(bridge, NULL, NULL, 0);
+        return EXIT_SUCCESS;
+    }
+
+    /* there are still some flow-tables in the bridge, rearrange the array
+     * of them
+     */
+    fts = malloc(n * sizeof *bridge->value_flow_tables);
+    fts_keys = malloc(n * sizeof *bridge->key_flow_tables);
     for (i = j = 0; i < bridge->n_flow_tables; i++) {
         tid_s = smap_get(&(bridge->value_flow_tables[i]->external_ids),
                          "table_id");
-        if (!tid_s || !xmlStrEqual(table_id, BAD_CAST tid_s)) {
-            if (j == bridge->n_flow_tables - 1) {
-                *e = nc_err_new(NC_ERR_BAD_ELEM);
-                nc_err_set(*e, NC_ERR_PARAM_INFO_BADELEM, "table-id");
-                nc_err_set(*e, NC_ERR_PARAM_MSG,
-                           "Table referenced from the logical-switch does not exist in OVSDB");
+        if (!tid_s) {
+            nc_verb_error("%s: flow-table with no table-id found in OVSDB");
+            *e = nc_err_new(NC_ERR_OP_FAILED);
+            nc_err_set(*e, NC_ERR_PARAM_MSG,
+                       "Flow-table with no table-id found in OVSDB");
+            free(fts);
+            free(fts_keys);
+            return EXIT_FAILURE;
+        }
+
+        if (!xmlStrEqual(table_id, BAD_CAST tid_s)) {
+            if (j == n) {
+                /* be silent again for the same reason as earlier in this
+                 * function
+                 */
                 free(fts);
                 free(fts_keys);
-                return EXIT_FAILURE;
+                return EXIT_SUCCESS;
             }
             fts[j] = bridge->value_flow_tables[i];
             fts_keys[j] = bridge->key_flow_tables[i];
@@ -2817,8 +2860,7 @@ txn_del_bridge_flowtable(const xmlChar *br_name, const xmlChar *table_id,
     }
 
     ovsrec_bridge_verify_flow_tables(bridge);
-    ovsrec_bridge_set_flow_tables(bridge, fts_keys, fts,
-                                  bridge->n_flow_tables - 1);
+    ovsrec_bridge_set_flow_tables(bridge, fts_keys, fts, n);
     free(fts);
     free(fts_keys);
 
@@ -2853,9 +2895,40 @@ txn_del_bridge_port(const xmlChar *br_name, const xmlChar *port_name,
         return EXIT_FAILURE;
     }
 
+    if (!bridge->n_ports) {
+        /* be silent here - OVSDB IDL do some optimization during the first
+         * call to ovsrec_bridge_set_ports() and updates it according
+         * to previously removed ports in /capable-switch/resources/
+         * The check if the caller requests removing the non-existing
+         * element is done earlier.
+         */
+        return EXIT_SUCCESS;
+    }
+
+    if (bridge->n_ports == 1) {
+        /* special case - the last port in the bridge */
+        if (!xmlStrEqual(port_name, BAD_CAST bridge->ports[0]->name)) {
+            /* be silent again for the same reason as earlier in this
+             * function
+             */
+            return EXIT_SUCCESS;
+        }
+
+        ovsrec_bridge_verify_ports(bridge);
+        ovsrec_bridge_set_ports(bridge, NULL, 0);
+        return EXIT_SUCCESS;
+    }
+
     ports = malloc(sizeof *bridge->ports * (bridge->n_ports - 1));
     for (i = j = 0; j < bridge->n_ports; j++) {
         if (!xmlStrEqual(port_name, BAD_CAST bridge->ports[j]->name)) {
+            if (j == bridge->n_ports - 1) {
+                /* be silent again for the same reason as earlier in this
+                 * function
+                 */
+                free(ports);
+                return EXIT_SUCCESS;
+            }
             ports[i] = bridge->ports[j];
             i++;
         }

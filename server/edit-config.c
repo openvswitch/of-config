@@ -1504,7 +1504,6 @@ edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running,
                     break;
                 }
             }
-            return ret;
         }
         if (xmlStrEqual(edit->parent->name, BAD_CAST "capable-switch")) {
             if (xmlStrEqual(edit->name, BAD_CAST "id")) {

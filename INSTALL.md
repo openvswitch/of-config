@@ -12,26 +12,30 @@ OF-CONFIG Build Requirements
 
 The list of dependencies:
 
-  - gcc
-  - libtool
-  - automake
   - autoconf
-  - m4
-  - pkgconfig
-  - make
-  - openssl-devel
-  - libxml2-devel
-  - libxslt-devel
-  - libssh2-devel
+  - automake
+  - gcc
   - kernel-devel
   - kernel-headers
+  - libssh2
+  - libssh2-devel
+  - libtool
+  - libxml2
+  - libxml2-devel
+  - libxslt
+  - libxslt-devel
+  - m4
+  - make
+  - openssl
+  - openssl-devel
+  - pkgconfig
 
-It is also needed to have:
+It is also needed to have packages:
 
-  - pyang-1.4.1 (https://pyang.googlecode.com/files/pyang-1.4.1.tar.gz)
   - openvswitch-2.3.1 - LTS package (http://openvswitch.org/releases/openvswitch-2.3.1.tar.gz)
+  - pyang-1.4.1 (https://pyang.googlecode.com/files/pyang-1.4.1.tar.gz)
 
-Optionally, it is usefull to install NETCONF client:
+Optionally, it is useful to install NETCONF client:
 
   - Netopeer-cli (contained in https://code.google.com/p/netopeer/)
 
@@ -52,9 +56,9 @@ At first, unpack archive with Open vSwitch source codes:
 
 Then configure Open vSwitch using:
 
-    ./configure --prefix=/ --datarootdir=/usr/share
+    ./configure --prefix=/ --datarootdir=/usr/share --with-linux=/lib/modules/$(uname -r)/build
 
-Note: we discovered bad symbolic link 'build' in /lib/modules/`uname -r`/ in Scientific Linux 6.6,
+Note: we discovered bad symbolic link 'build' in /lib/modules/$(uname -r)/ in Scientific Linux 6.6,
 therefore, we temporary fixed it by creating new symbolic link manually. For our case it was:
 
     ln -s /usr/src/kernels/2.6.32-504.8.1.el6.x86_64/ /lib/modules/2.6.32-504.el6.x86_64/build
@@ -75,7 +79,7 @@ To start Open vSwitch after boot:
 
     chkconfig openvswitch on
 
-Note: sed(1) is used to rewrite path to Open vSwitch scripts that is staticaly defined
+Note: sed(1) is used to rewrite path to Open vSwitch scripts that is statically defined
 in openvswitch script.
 
 OF-CONFIG Installation
@@ -108,8 +112,8 @@ for configuration data model. To create validation schemas use:
 
     lnctool --model <model> validation
 
-OF-CONFIG
----------
+OF-CONFIG configure
+-------------------
 
 Finally, build and compilation of OF-CONFIG server is done as follows.
 
@@ -123,12 +127,12 @@ Path to configured OVS directory must be passed:
 
 Note: libnetconf was installed with default prefix (/usr/local/). That means pc file is stored in
 /usr/local/lib/pkgconfig/. If it is not problem for pkg-config to detect pc files in this path,
-setting of PKG_CONFIG_PATH variable can be ommited.
+setting of PKG_CONFIG_PATH variable can be omitted.
 
-Build
------
+OF-CONFIG Build
+---------------
 
-After successful configuration of OF-CONFIG, it can be build using standard steps:
+After successful configuration of OF-CONFIG, it can be build and installed using standard steps:
 
     [of-config]# make
 
@@ -143,23 +147,24 @@ By default, ofc-server starts in daemon mode. To avoid daemon mode, pass -f para
 
 ofc-server supports some parameters that can be found in help: ofc-server -h
 
-Usefull parameter is -v<level> that specifies level of verbose output.
+Useful parameter is -v<level> that specifies level of verbose output.
 
 Troubleshooting
----------------
+===============
 
 In case /usr/local/bin is not included in standard PATHs, there are some possibilities:
 
    * export PATH="$PATH:/usr/local/bin"
-   * running ofc-server by absolute path
-   * setting .bashrc etc
+   * running ofc-server by absolute or relative path
+   * setting PATH in .bashrc
 
-When linker does not search /usr/local/lib/, problem with missing libraries can be solved:
+When linker does not search in /usr/local/lib/, problem with missing libraries can be solved:
 
-   * create of configuration file for ld:
+   * create of configuration file for ld(1):
 
         echo "/usr/local/lib/" > /etc/ld.so.conf.d/locallib.conf; ldconfig
 
-   * before start of ofc-server: export LD_LIBRARY_PATH=/usr/local/lib
+   * before start of ofc-server:
 
+        export LD_LIBRARY_PATH=/usr/local/lib
 

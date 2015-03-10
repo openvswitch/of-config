@@ -1763,6 +1763,8 @@ txn_del_all(struct nc_err **UNUSED(e))
         ovsrec_ssl_delete(ssl);
     }
 
+    ofc_set_switchid(NULL);
+
     return EXIT_SUCCESS;
 }
 

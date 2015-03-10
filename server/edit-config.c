@@ -1353,16 +1353,17 @@ edit_remove(xmlDocPtr orig_doc, xmlNodePtr edit_node, int running,
 {
     xmlNodePtr old;
 
-    old = find_element_equiv(orig_doc, edit_node);
+    while ((old = find_element_equiv(orig_doc, edit_node)) != NULL) {
+        /* remove the edit node's equivalent from the original document */
+        if (edit_delete(old, running, error)) {
+            return EXIT_FAILURE;
+        }
+    }
 
     /* remove the node from the edit document */
     edit_delete(edit_node, 0, error);
 
-    if (old) {
-        /* remove the edit node's equivalent from the original document */
-        edit_delete(old, running, error);
-    }
-    return (EXIT_SUCCESS);
+    return EXIT_SUCCESS;
 }
 
 /**

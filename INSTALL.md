@@ -1,16 +1,14 @@
 How to Install OF-CONFIG server
 ===============================
 
-This document describes how to build and install OF-CONFIG server.
+This document describes how to build and install OF-CONFIG server. The steps described in
+this guide were tested on Scientific Linux 6.6 (Carbon).
 
-Build Requirements
-------------------
+Installation is divided into following sections: OF-CONFIG Build Requirements,
+Open vSwitch Installation, OF-CONFIG Installation.
 
-OF-CONFIG depends on libnetconf [1] and source package of Open vSwitch (OVS) [2].
-
-[1] https://code.google.com/p/libnetconf
-
-[2] http://openvswitch.org/releases/openvswitch-2.3.1.tar.gz
+OF-CONFIG Build Requirements
+============================
 
 The list of dependencies:
 
@@ -25,28 +23,107 @@ The list of dependencies:
   - libxml2-devel
   - libxslt-devel
   - libssh2-devel
+  - kernel-devel
+  - kernel-headers
 
-Configuration
--------------
+It is also needed to have:
 
-To configure OF-CONFIG, it is needed to extract and configure LTS package of OVS.
-Some source code files of OVS are needed for OF-CONFIG.
-In case OVS is installed into system using binary package, it is needed to configure
-OVS with respect to system paths, especially path to OVSDB and OpenFlow sockets.
+  - pyang-1.4.1 (https://pyang.googlecode.com/files/pyang-1.4.1.tar.gz)
+  - openvswitch-2.3.1 - LTS package (http://openvswitch.org/releases/openvswitch-2.3.1.tar.gz)
 
-In Fedora, OVS was configured as follows:
+Optionally, it is usefull to install NETCONF client:
 
-    [openvswitch-2.3.1]# ./configure --prefix=/ --datarootdir=/usr/share
+  - Netopeer-cli (contained in https://code.google.com/p/netopeer/)
 
-After successful configuration of OVS, OF-CONFIG can be configured.
+or
+
+  - Netopeer-GUI (https://github.com/CESNET/Netopeer-GUI/ installation is out of scope of this guide)
+
+Note: for the sake of simplicity of this guide, we assume all packages are downloaded in /root/
+and we are logged-in as root. In practice, only make install should be run as root to install
+into system directories.
+
+Open vSwitch Installation
+=========================
+
+At first, unpack archive with Open vSwitch source codes:
+
+    tar -xf openvswitch-2.3.1.tar.gz
+
+Then configure Open vSwitch using:
+
+    ./configure --prefix=/ --datarootdir=/usr/share
+
+Note: we discovered bad symbolic link 'build' in /lib/modules/`uname -r`/ in Scientific Linux 6.6,
+therefore, we temporary fixed it by creating new symbolic link manually. For our case it was:
+
+    ln -s /usr/src/kernels/2.6.32-504.8.1.el6.x86_64/ /lib/modules/2.6.32-504.el6.x86_64/build
+
+After successful configuration of Open vSwitch, run standard commands:
+
+    make && make install
+
+When Open vSwitch is installed, it can be started:
+
+    /usr/local/share/openvswitch/scripts/ovs-ctl start
+
+To start Open vSwitch after boot:
+
+    sed 's,/usr/share/,/usr/local/share/,' rhel/etc_init.d_openvswitch > /etc/init.d/openvswitch
+
+    chkconfig --add openvswitch
+
+    chkconfig openvswitch on
+
+Note: sed(1) is used to rewrite path to Open vSwitch scripts that is staticaly defined
+in openvswitch script.
+
+OF-CONFIG Installation
+======================
+
+pyang
+-----
+
+    [~]# tar -xf pyang-1.4.1.tar.gz && cd pyang-1.4.1 && python setup.py install
+
+To convert configuration data model into different format, use:
+
+    pyang -f <output format> <model>
+
+where 'output format' can be e.g. 'yang', 'yin' or 'tree'.
+
+libnetconf
+----------
+
+libnetconf can be installed simply by:
+
+    [~]# git clone https://code.google.com/p/libnetconf
+
+    [~]# cd libnetconf
+
+    [libnetconf]# ./configure && make && make install
+
+libnetconf is shipped with lnctool utility that can be used to generate validation schemas
+for configuration data model. To create validation schemas use:
+
+    lnctool --model <model> validation
+
+OF-CONFIG
+---------
+
+Finally, build and compilation of OF-CONFIG server is done as follows.
+
+To configure OF-CONFIG, it is needed to set path to Open vSwitch source codes package.
+The following steps are based on previous guide.
+
+After successful configuration and build of Open vSwitch package, OF-CONFIG can be configured.
 Path to configured OVS directory must be passed:
 
-    [of-config]# ./configure --with-ovs-srcdir=/root/openvswitch-2.3.1
-
-When some libraries were not installed into system paths,
-pkg-config cannot find appropriate pc files. Use PKG_CONFIG_PATH to set right path:
-
     [of-config]# ./configure --with-ovs-srcdir=/root/openvswitch-2.3.1 PKG_CONFIG_PATH=/usr/local/lib/pkgconfig/
+
+Note: libnetconf was installed with default prefix (/usr/local/). That means pc file is stored in
+/usr/local/lib/pkgconfig/. If it is not problem for pkg-config to detect pc files in this path,
+setting of PKG_CONFIG_PATH variable can be ommited.
 
 Build
 -----
@@ -61,7 +138,28 @@ Run
 ---
 
 OF-CONFIG server can be started by: ofc-server
-(with respect to --prefix and PATH)
 
 By default, ofc-server starts in daemon mode. To avoid daemon mode, pass -f parameter.
+
+ofc-server supports some parameters that can be found in help: ofc-server -h
+
+Usefull parameter is -v<level> that specifies level of verbose output.
+
+Troubleshooting
+---------------
+
+In case /usr/local/bin is not included in standard PATHs, there are some possibilities:
+
+   * export PATH="$PATH:/usr/local/bin"
+   * running ofc-server by absolute path
+   * setting .bashrc etc
+
+When linker does not search /usr/local/lib/, problem with missing libraries can be solved:
+
+   * create of configuration file for ld:
+
+        echo "/usr/local/lib/" > /etc/ld.so.conf.d/locallib.conf; ldconfig
+
+   * before start of ofc-server: export LD_LIBRARY_PATH=/usr/local/lib
+
 

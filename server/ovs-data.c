@@ -825,11 +825,12 @@ get_ports_config(const struct ovsrec_bridge *bridge)
                               OFC_PORT_CONF_BIT(c, OFPUTIL_PC_NO_RECV),
                               OFC_PORT_CONF_BIT(c, OFPUTIL_PC_NO_FWD),
                               OFC_PORT_CONF_BIT(c, OFPUTIL_PC_NO_PACKET_IN));
-            } else {
-                /* port was not found in OpenFlow reply, but we have ethtool */
+            } else if (row->admin_state) {
+                /* port was not found in OpenFlow reply, but admin-state can
+                 * be get directly from OVSDB
+                 */
                 ds_put_format(&string, "<admin-state>%s</admin-state>",
-                              (dev_get_flags(row->name) & IFF_UP) ? "up" :
-                              "down");
+                              row->admin_state);
             }
 
             ds_put_format(&string, "</configuration>");

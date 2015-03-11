@@ -1967,7 +1967,7 @@ of_post_ports(xmlNodePtr cfg, struct nc_err **error)
             for (aux = aux->children; aux; aux = aux->next) {
                 value = aux->children ? aux->children->content : NULL;
                 if (of_mod_port_cfg(port_name, aux->name, value, error)) {
-                    return EXIT_FAILURE;
+                    goto cleanup;
                 }
             }
         }

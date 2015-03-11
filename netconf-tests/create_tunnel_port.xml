@@ -5,7 +5,7 @@
     <port nc:operation="create">
       <name>gre0</name>
       <configuration>
-        <admin-state>down</admin-state>
+        <admin-state>up</admin-state>
         <no-receive>false</no-receive>
         <no-forward>false</no-forward>
         <no-packet-in>false</no-packet-in>

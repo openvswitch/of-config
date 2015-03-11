@@ -1557,12 +1557,33 @@ edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running,
                     ret = txn_add_bridge_port(key, aux, e);
                 } else if (xmlStrEqual(edit->name, BAD_CAST "flow-table")) {
                     ret = txn_add_bridge_flowtable(key, aux, e);
+                } else if (xmlStrEqual(edit->name, BAD_CAST "queue")) {
+                    /* reference here is only informative, so inform client
+                     * that some other change is expected. But first, check
+                     * that such a change was not performed
+                     */
+                    switch (ofc_check_bridge_queue(key, aux)) {
+                    case 1:
+                        *e = nc_err_new(NC_ERR_BAD_ELEM);
+                        nc_err_set(*e, NC_ERR_PARAM_INFO_BADELEM, "queue");
+                        nc_err_set(*e, NC_ERR_PARAM_MSG,
+                                   "Invalid queue leafref");
+                        ret = EXIT_FAILURE;
+                        break;
+                    case 2:
+                        *e = nc_err_new(NC_ERR_OP_FAILED);
+                        nc_err_set(*e, NC_ERR_PARAM_MSG,
+                                   "Assigning queue to the bridge (port) must "
+                                   "be done by the port element in the queue");
+                        ret = EXIT_FAILURE;
+                        break;
+                    default:
+                        /* everything was done elsewhere, so we are done */
+                        break;
+                    }
                 }
                 /* certificate is ignored on purpose! Once defined, it is
                  * automatically referenced and used in every bridge. */
-                /* queue is ignored on purpose! It is linked with the port,
-                 * reference here is only informative
-                 */
             }
         } else if (xmlStrEqual(edit->parent->name, BAD_CAST "port")) {
             if (xmlStrEqual(edit->name, BAD_CAST "requested-number")) {

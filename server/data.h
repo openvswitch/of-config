@@ -80,6 +80,7 @@ bool ofc_init(const char *ovs_db_path);
 char *ofc_get_state_data(void);
 
 char *ofc_get_config_data(void);
+int ofc_check_bridge_queue(const xmlChar *br_name, const xmlChar *queue_rid);
 
 int of_mod_port_cfg(const xmlChar *port_name, const xmlChar *bit_xchar, const xmlChar *value, struct nc_err **e);
 

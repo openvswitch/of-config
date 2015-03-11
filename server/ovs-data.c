@@ -4651,3 +4651,55 @@ txn_mod_port_tunnel_opt(const xmlChar *port_name, const xmlChar *node_name,
 
     return EXIT_SUCCESS;
 }
+
+/*
+ * 0 - ok, reference to the bridge's port found
+ * 1 - error (invalid parameter or missing object in OVSDB)
+ * 2 - no link between the queue and the bridge's ports
+ */
+int
+ofc_check_bridge_queue(const xmlChar *br_name, const xmlChar *queue_rid)
+{
+    const struct ovsrec_bridge *bridge;
+    const struct ovsrec_port *port;
+    const struct ovsrec_queue *queue;
+    size_t i;
+
+    if (!br_name || !queue_rid) {
+        return 1;
+    }
+
+    /* check that the queue exists */
+    queue = find_queue(queue_rid);
+    if (!queue) {
+        /* there is no such a queue */
+        return 1;
+    }
+
+    /* get queue's port */
+    port = find_queue_port((const char *)queue_rid);
+    if (!port) {
+        /* the queue has no port */
+        return 2;
+    }
+
+    /* get bridge structure */
+
+    OVSREC_BRIDGE_FOR_EACH(bridge, ovsdb_handler->idl) {
+        if (xmlStrEqual(br_name, BAD_CAST bridge->name)) {
+            break;
+        }
+    }
+    if (!bridge) {
+        return 1;
+    }
+
+    for (i = 0; i < bridge->n_ports; i++) {
+        if (!strcmp(bridge->ports[i]->name, port->name)) {
+            return 0;
+        }
+    }
+
+    /* the queue's port is not found inside the bridge's ports */
+    return 2;
+}

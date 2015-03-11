@@ -1870,6 +1870,7 @@ txn_mod_port_admin_state(const xmlChar *port_name, const xmlChar *value,
                          struct nc_err **e)
 {
     unsigned int flags;
+    int req;
 
     if (!port_name) {
         nc_verb_error("%s: invalid input parameters.", __func__);
@@ -1879,12 +1880,19 @@ txn_mod_port_admin_state(const xmlChar *port_name, const xmlChar *value,
 
     if (!value) {
         /* delete -> set default value (up) */
-        flags = dev_get_flags((char *) port_name) & IFF_UP;
-        dev_set_flags((char *) port_name, flags);
+        req = 1;
+        flags = dev_get_flags((char *) port_name);
+        if (flags && IFF_UP) {
+            /* already up */
+            return EXIT_SUCCESS;
+        }
+        dev_set_flags((char *) port_name, flags & IFF_UP);
     } else {
         if (xmlStrEqual(value, BAD_CAST "up")) {
+            req = 1;
             flags = dev_get_flags((char *) port_name) & IFF_UP;
         } else if (xmlStrEqual(value, BAD_CAST "down")) {
+            req = 0;
             flags = dev_get_flags((char *) port_name) & ~IFF_UP;
         } else {
             *e = nc_err_new(NC_ERR_BAD_ELEM);
@@ -1893,6 +1901,15 @@ txn_mod_port_admin_state(const xmlChar *port_name, const xmlChar *value,
             return EXIT_FAILURE;
         }
         dev_set_flags((char *) port_name, flags);
+    }
+
+    /* check the result */
+    flags = dev_get_flags((char *) port_name);
+    if ((req && !(flags && IFF_UP)) || (!req && (flags && IFF_UP))) {
+        *e = nc_err_new(NC_ERR_OP_FAILED);
+        nc_err_set(*e, NC_ERR_PARAM_MSG,
+                   "Interface admin state not set to the requested value.");
+        return EXIT_FAILURE;
     }
 
     return EXIT_SUCCESS;

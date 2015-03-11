@@ -315,6 +315,93 @@ error:
     return EXIT_FAILURE;
 }
 
+static unsigned int
+dev_get_flags(const char *ifname)
+{
+    struct ifreq ethreq;
+
+    strncpy(ethreq.ifr_name, ifname, sizeof ethreq.ifr_name);
+
+    if (ioctl(ioctlfd, SIOCGIFFLAGS, &ethreq)) {
+        nc_verb_error("ioctl %d on \"%s\" failed (%s)", SIOCGIFFLAGS, ifname,
+                      strerror(errno));
+        return 0;
+    }
+
+    return ethreq.ifr_flags;
+}
+
+static int
+dev_set_flags(const char *ifname, unsigned int flags)
+{
+    struct ifreq ethreq;
+
+    strncpy(ethreq.ifr_name, ifname, sizeof ethreq.ifr_name);
+
+    ethreq.ifr_flags = flags;
+    if (ioctl(ioctlfd, SIOCSIFFLAGS, &ethreq)) {
+        nc_verb_error("ioctl %d on \"%s\" failed (%s)", SIOCSIFFLAGS, ifname,
+                      strerror(errno));
+        return EXIT_FAILURE;
+    }
+
+    return EXIT_SUCCESS;
+}
+
+static int
+dev_is_system(const char *ifname)
+{
+    struct ethtool_drvinfo drvinfo;
+    struct ifreq ethreq;
+
+    memset(&ethreq, 0, sizeof ethreq);
+    memset(&drvinfo, 0, sizeof drvinfo);
+
+    strncpy(ethreq.ifr_name, ifname, sizeof ethreq.ifr_name);
+    drvinfo.cmd = ETHTOOL_GDRVINFO;
+    ethreq.ifr_data = &drvinfo;
+
+    errno = 0;
+    ioctl(ioctlfd, SIOCETHTOOL, &ethreq);
+    if (errno ||  !strcmp(drvinfo.driver, "openvswitch")) {
+        return 0;
+    } else {
+        return 1;
+    }
+}
+
+static struct ethtool_cmd *
+dev_get_ethtool(const char *ifname)
+{
+    static struct ethtool_cmd ecmd;
+    struct ifreq ethreq;
+
+    memset(&ethreq, 0, sizeof ethreq);
+    memset(&ecmd, 0, sizeof ecmd);
+
+    strncpy(ethreq.ifr_name, ifname, sizeof ethreq.ifr_name);
+    ecmd.cmd = ETHTOOL_GSET;
+    ethreq.ifr_data = &ecmd;
+
+    ioctl(ioctlfd, SIOCETHTOOL, &ethreq);
+
+    return &ecmd;
+}
+
+static int
+dev_set_ethtool(const char *ifname, struct ethtool_cmd *ecmd)
+{
+    struct ifreq ethreq;
+
+    memset(&ethreq, 0, sizeof ethreq);
+
+    strncpy(ethreq.ifr_name, ifname, sizeof ethreq.ifr_name);
+    ecmd->cmd = ETHTOOL_SSET;
+    ethreq.ifr_data = ecmd;
+
+    return ioctl(ioctlfd, SIOCETHTOOL, &ethreq);
+}
+
 static const xmlChar *
 find_bridge_with_port(const xmlChar *port_name)
 {
@@ -365,6 +452,12 @@ of_mod_port_cfg(const xmlChar *port_name, const xmlChar *node_name,
     } else if (xmlStrEqual(node_name, BAD_CAST "no-packet-in")) {
         bit = OFPUTIL_PC_NO_PACKET_IN;
     } else if (xmlStrEqual(node_name, BAD_CAST "admin-state")) {
+        if (dev_is_system((const char *) port_name)) {
+            /* set status if the system interface directly via ioctl() */
+            return txn_mod_port_admin_state(port_name, value, e);
+        }
+
+        /* it is internal interface, use OpenFlow */
         bit = OFPUTIL_PC_PORT_DOWN;
     } else {
         *e = nc_err_new(NC_ERR_BAD_ELEM);
@@ -685,71 +778,6 @@ dump_port_features(struct ds *s, uint32_t mask)
     }
 }
 
-static unsigned int
-dev_get_flags(const char *ifname)
-{
-    struct ifreq ethreq;
-
-    strncpy(ethreq.ifr_name, ifname, sizeof ethreq.ifr_name);
-
-    if (ioctl(ioctlfd, SIOCGIFFLAGS, &ethreq)) {
-        nc_verb_error("ioctl %d on \"%s\" failed (%s)", SIOCGIFFLAGS, ifname,
-                      strerror(errno));
-        return 0;
-    }
-
-    return ethreq.ifr_flags;
-}
-
-static int
-dev_set_flags(const char *ifname, unsigned int flags)
-{
-    struct ifreq ethreq;
-
-    strncpy(ethreq.ifr_name, ifname, sizeof ethreq.ifr_name);
-
-    ethreq.ifr_flags = flags;
-    if (ioctl(ioctlfd, SIOCSIFFLAGS, &ethreq)) {
-        nc_verb_error("ioctl %d on \"%s\" failed (%s)", SIOCSIFFLAGS, ifname,
-                      strerror(errno));
-        return EXIT_FAILURE;
-    }
-
-    return EXIT_SUCCESS;
-}
-
-static struct ethtool_cmd *
-dev_get_ethtool(const char *ifname)
-{
-    static struct ethtool_cmd ecmd;
-    struct ifreq ethreq;
-
-    memset(&ethreq, 0, sizeof ethreq);
-    memset(&ecmd, 0, sizeof ecmd);
-
-    strncpy(ethreq.ifr_name, ifname, sizeof ethreq.ifr_name);
-    ecmd.cmd = ETHTOOL_GSET;
-    ethreq.ifr_data = &ecmd;
-
-    ioctl(ioctlfd, SIOCETHTOOL, &ethreq);
-
-    return &ecmd;
-}
-
-static int
-dev_set_ethtool(const char *ifname, struct ethtool_cmd *ecmd)
-{
-    struct ifreq ethreq;
-
-    memset(&ethreq, 0, sizeof ethreq);
-
-    strncpy(ethreq.ifr_name, ifname, sizeof ethreq.ifr_name);
-    ecmd->cmd = ETHTOOL_SSET;
-    ethreq.ifr_data = ecmd;
-
-    return ioctl(ioctlfd, SIOCETHTOOL, &ethreq);
-}
-
 static char *
 get_ports_config(const struct ovsrec_bridge *bridge)
 {
@@ -871,11 +899,6 @@ get_ports_state(const struct ovsrec_bridge *bridge)
         for (ifc = 0; ifc < bridge->ports[port_it]->n_interfaces; ifc++) {
             row = bridge->ports[port_it]->interfaces[ifc];
 
-            /* get interface status via ioctl() */
-            struct ethtool_cmd *ecmd;
-
-            ecmd = dev_get_ethtool(row->name);
-
             ds_put_format(&string, "<port>");
             ds_put_format(&string, "<name>%s</name>", row->name);
             ds_put_format(&string, "<number>%" PRIu64 "</number>",
@@ -895,6 +918,16 @@ get_ports_state(const struct ovsrec_bridge *bridge)
             }
 
             ds_put_format(&string, "</state>");
+
+            /* get interface status via ioctl() */
+            struct ethtool_cmd ecmd_;
+            struct ethtool_cmd *ecmd = &ecmd_;
+
+            if (!dev_is_system(row->name)) {
+                memset(ecmd, 0, sizeof *ecmd);
+            } else {
+                ecmd = dev_get_ethtool(row->name);
+            }
 
             ds_put_format(&string, "<features><current>");
             /* rate - get speed and convert it with duplex value to
@@ -2006,6 +2039,10 @@ txn_add_port(xmlNodePtr node, struct nc_err **e)
                 continue;
             }
 
+            if (!dev_is_system((const char*)port_name)) {
+                continue;
+            }
+
             ecmd = dev_get_ethtool(iface->name);
             /* prepare default values */
             ecmd->advertising = ADVERTISED_Autoneg;
@@ -2047,6 +2084,16 @@ txn_add_port(xmlNodePtr node, struct nc_err **e)
             dev_set_ethtool(iface->name, ecmd);
         }
     }
+
+    /* detect interface type */
+    if (!tunnel) {
+        if (dev_is_system(port->name)) {
+            ovsrec_interface_set_type(iface, "system");
+        } else {
+            ovsrec_interface_set_type(iface, "internal");
+        }
+    }
+
     ovsdb_handler->added_interface = true;
 
     return EXIT_SUCCESS;
@@ -2062,6 +2109,13 @@ txn_add_port_advert(const xmlChar *port_name, xmlNodePtr node,
     if (!port_name || !node) {
         nc_verb_error("%s: invalid input parameters.", __func__);
         *e = nc_err_new(NC_ERR_OP_FAILED);
+        return EXIT_FAILURE;
+    }
+
+    if (!dev_is_system((const char*)port_name)) {
+        *e = nc_err_new(NC_ERR_OP_FAILED);
+        nc_err_set(*e, NC_ERR_PARAM_MSG,
+                   "Unable to set advertised values on this type of interface");
         return EXIT_FAILURE;
     }
 
@@ -2111,6 +2165,13 @@ txn_del_port_advert(const xmlChar *port_name, xmlNodePtr node,
     if (!port_name || !node) {
         nc_verb_error("%s: invalid input parameters.", __func__);
         *e = nc_err_new(NC_ERR_OP_FAILED);
+        return EXIT_FAILURE;
+    }
+
+    if (!dev_is_system((const char*)port_name)) {
+        *e = nc_err_new(NC_ERR_OP_FAILED);
+        nc_err_set(*e, NC_ERR_PARAM_MSG,
+                   "Unable to set advertised values on this type of interface");
         return EXIT_FAILURE;
     }
 
@@ -2733,7 +2794,13 @@ txn_del_port_tunnel(const xmlChar *port_name, xmlNodePtr tunnel_node,
     smap_remove((struct smap *) &ifc->external_ids, "tunnel_type");
     ovsrec_interface_set_options(ifc, &ifc->options);
     ovsrec_interface_set_external_ids(ifc, &ifc->external_ids);
-    ovsrec_interface_set_type(ifc, ""); /* TODO: detect interface type */
+
+    /* detect interface type */
+    if (dev_is_system((const char *) port_name)) {
+        ovsrec_interface_set_type(ifc, "system");
+    } else {
+        ovsrec_interface_set_type(ifc, "internal");
+    }
 
     return EXIT_SUCCESS;
 }

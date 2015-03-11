@@ -2700,6 +2700,10 @@ find_flowtable(const xmlChar *table_id)
     const struct ovsrec_flow_table *ft;
     const char *tid_s;
 
+    if (!table_id) {
+        return NULL;
+    }
+
     OVSREC_FLOW_TABLE_FOR_EACH(ft, ovsdb_handler->idl) {
         tid_s = smap_get(&(ft->external_ids), "table_id");
         if (tid_s && xmlStrEqual(table_id, BAD_CAST tid_s)) {
@@ -2754,6 +2758,12 @@ txn_mod_flowtable_resid(const xmlChar *table_id, xmlNodePtr node,
 {
     xmlChar *value;
     const struct ovsrec_flow_table *ft;
+
+    if (!table_id) {
+        nc_verb_error("%s: invalid input parameters.", __func__);
+        *e = nc_err_new(NC_ERR_OP_FAILED);
+        return EXIT_FAILURE;
+    }
 
     ft = find_flowtable(table_id);
     if (ft == NULL) {
@@ -3778,6 +3788,54 @@ txn_add_bridge_port(const xmlChar *br_name, const xmlChar *port_name,
     return EXIT_SUCCESS;
 }
 
+static int
+txn_bridge_insert_flowtable(const struct ovsrec_bridge *bridge,
+                            struct ovsrec_flow_table *ft, struct nc_err **e)
+{
+    int64_t *fts_keys;
+    struct ovsrec_flow_table **fts;
+    const char *tid_s;
+    int64_t tid = 0;
+    size_t i;
+
+    if (!bridge || !ft) {
+        nc_verb_error("%s: invalid input parameters.", __func__);
+        *e = nc_err_new(NC_ERR_OP_FAILED);
+        return EXIT_FAILURE;
+    }
+
+    tid_s = smap_get(&ft->external_ids, "table_id");
+    if (tid_s) {
+        sscanf((const char *) tid_s, "%" SCNi64, &tid);
+    } else {
+        nc_verb_error("%s: invalid flow table with missing table_id");
+        *e = nc_err_new(NC_ERR_OP_FAILED);
+        nc_err_set(*e, NC_ERR_PARAM_MSG,
+                   "Invalid flow table record, internal error");
+        return EXIT_FAILURE;
+    }
+
+    fts = malloc(sizeof *bridge->value_flow_tables *
+                 (bridge->n_flow_tables + 1));
+    fts_keys = malloc(sizeof *bridge->key_flow_tables *
+                      (bridge->n_flow_tables + 1));
+    for (i = 0; i < bridge->n_flow_tables; i++) {
+        fts[i] = bridge->value_flow_tables[i];
+        fts_keys[i] = bridge->key_flow_tables[i];
+    }
+    fts[i] = (struct ovsrec_flow_table *) ft;
+    fts_keys[i] = tid;
+
+    ovsrec_bridge_verify_flow_tables(bridge);
+    ovsrec_bridge_set_flow_tables(bridge, fts_keys, fts,
+                                  bridge->n_flow_tables + 1);
+
+    free(fts);
+    free(fts_keys);
+
+    return EXIT_SUCCESS;
+}
+
 int
 txn_add_bridge_flowtable(const xmlChar *br_name, const xmlChar *table_id,
                          struct nc_err **e)
@@ -4347,7 +4405,8 @@ txn_add_bridge(xmlNodePtr node, struct nc_err **e)
 {
     const struct ovsrec_open_vswitch *ovs;
     const struct ovsrec_bridge *bridge;
-    const struct ovsrec_port *port;
+    const struct ovsrec_port *port = NULL;
+    struct ovsrec_flow_table *ft = NULL;
     xmlNodePtr aux, leaf;
     xmlChar *xmlval, *bridge_id = NULL;
     int failmode_flag = 0;
@@ -4407,20 +4466,45 @@ txn_add_bridge(xmlNodePtr node, struct nc_err **e)
             }
         } else if (xmlStrEqual(aux->name, BAD_CAST "resources")) {
             for (leaf = aux->children; leaf; leaf = leaf->next) {
+                xmlval = leaf->children ? leaf->children->content : NULL;
                 if (xmlStrEqual(leaf->name, BAD_CAST "port")) {
-                    xmlval = leaf->children ? leaf->children->content : NULL;
-                    OVSREC_PORT_FOR_EACH(port, ovsdb_handler->idl) {
-                        if (xmlStrEqual(xmlval, BAD_CAST port->name)) {
-                            break;
+                    if (xmlval) {
+                        OVSREC_PORT_FOR_EACH(port, ovsdb_handler->idl) {
+                            if (xmlStrEqual(xmlval, BAD_CAST port->name)) {
+                                break;
+                            }
                         }
                     }
-                    if (txn_bridge_insert_port
-                        (bridge, (struct ovsrec_port *) port, e)) {
+                    if (!port) {
+                        *e = nc_err_new(NC_ERR_BAD_ELEM);
+                        nc_err_set(*e, NC_ERR_PARAM_INFO_BADELEM, "port");
+                        nc_err_set(*e, NC_ERR_PARAM_MSG,
+                                   "Invalid port leafref in switch.");
                         return EXIT_FAILURE;
                     }
+                    if (txn_bridge_insert_port(bridge,
+                                               (struct ovsrec_port *) port,
+                                               e)) {
+                        return EXIT_FAILURE;
+                    }
+                    port = NULL;
+                } else if (xmlStrEqual(leaf->name, BAD_CAST "flow-table")) {
+                    ft = (struct ovsrec_flow_table *) find_flowtable(xmlval);
+                    if (!ft) {
+                        *e = nc_err_new(NC_ERR_BAD_ELEM);
+                        nc_err_set(*e, NC_ERR_PARAM_INFO_BADELEM,
+                                   "flow-table");
+                        nc_err_set(*e, NC_ERR_PARAM_MSG,
+                                   "Invalid flow-table leafref in switch.");
+                        return EXIT_FAILURE;
+                    }
+                    if (txn_bridge_insert_flowtable(bridge, ft, e)) {
+                        return EXIT_FAILURE;
+                    }
+                    ft = NULL;
                 }
-                /* TODO: queue, flow-table certificate is already set, there
-                 * is no explicit link to it in OVSDB */
+                /* queue and certificate is already set, there is no explicit
+                 * link to it from the bridge in OVSDB */
             }
         } else if (xmlStrEqual(aux->name, BAD_CAST "controllers")) {
             for (leaf = aux->children; leaf; leaf = leaf->next) {
@@ -4428,7 +4512,8 @@ txn_add_bridge(xmlNodePtr node, struct nc_err **e)
                     return EXIT_FAILURE;
                 }
             }
-        } else if (xmlStrEqual(aux->name, BAD_CAST "lost-connection-behavior")) {
+        } else if (xmlStrEqual(aux->name,
+                               BAD_CAST "lost-connection-behavior")) {
             if (txn_mod_bridge_failmode
                 (BAD_CAST bridge->name, aux->children->content, e)) {
                 return EXIT_FAILURE;

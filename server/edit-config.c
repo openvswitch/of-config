@@ -1781,7 +1781,9 @@ edit_merge(xmlDocPtr orig_doc, xmlNodePtr edit_node, int running,
                 child = child->next;
             } else {
                 aux = child->next;
-                edit_merge(orig_doc, child, running, error);
+                if (edit_merge(orig_doc, child, running, error)) {
+                    return EXIT_FAILURE;
+                }
                 child = aux;
             }
         }

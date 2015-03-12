@@ -42,4 +42,7 @@ echo "Queue&port cleanup with different order"
                      remove_port_eth1.xml running
 check_startup_difference start_state
 
+echo 'This should end with "error: bad-element (application) - Invalid port leafref"'
+./run_edit_config.sh create_bridge_port.xml running
+
 rm start_state

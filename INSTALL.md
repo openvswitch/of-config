@@ -25,6 +25,13 @@ The list of OF-CONFIG dependencies:
   - openssl-devel
   - pkgconfig
 
+The OF-CONFIG server communicates with OF-CONFIG agents via DBUS by default,
+however, it can be disabled by configure script. Therefore, optional but recommended OF-CONFIG
+dependencies:
+
+  - dbus
+  - dbus-devel
+
 It is also needed to have packages:
 
   - openvswitch-2.3.1 - LTS package (http://openvswitch.org/releases/openvswitch-2.3.1.tar.gz)

@@ -1158,6 +1158,13 @@ certificate.</text>
         <text>Table name</text>
       </description>
     </leaf>
+    <leaf name="max-entries">
+      <type name="uint32"/>
+      <config value="false"/>
+      <description>
+        <text>The maximum number of flow entries supported by the flow table.</text>
+      </description>
+    </leaf>
   </grouping>
   <container name="capable-switch">
     <description>

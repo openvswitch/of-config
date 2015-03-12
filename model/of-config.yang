@@ -1431,6 +1431,14 @@ module of-config {
       description
 	"Table name";
     }
+
+    leaf max-entries {
+      type uint32;
+      config false;
+
+      description
+	"The maximum number of flow entries supported by the flow table.";
+    }
   }
 
 /*****************************************************************

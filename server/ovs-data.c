@@ -675,9 +675,11 @@ get_flow_tables_config(void)
             ds_put_format(&string, "<resource-id>%s</resource-id>",
                           resource_id);
         }
-        ds_put_format(&string, "<name>%s</name></flow-table>", row->name);
+        if (row->name) {
+            ds_put_format(&string, "<name>%s</name></flow-table>", row->name);
+        }
     }
-    return ds_steal_cstr(&string);
+    return string.length ? ds_steal_cstr(&string) : NULL;
 }
 
 static const struct ovsrec_port *
@@ -709,8 +711,8 @@ get_queues_config(void)
 {
     const struct ovsrec_queue *row;
     const struct ovsrec_port *port;
-    struct ds string;
-    const char *aux, *rid;
+    struct ds string, aux;
+    const char *id, *rid;
 
     ds_init(&string);
     OVSREC_QUEUE_FOR_EACH(row, ovsdb_handler->idl) {
@@ -719,9 +721,9 @@ get_queues_config(void)
             continue;
         }
         ds_put_format(&string, "<queue><resource-id>%s</resource-id>", rid);
-        aux = smap_get(&row->external_ids, "ofc_id");
-        if (aux) {
-            ds_put_format(&string, "<id>%s</id>", aux);
+        id = smap_get(&row->external_ids, "ofc_id");
+        if (id) {
+            ds_put_format(&string, "<id>%s</id>", id);
         }
 
         port = find_queue_port(rid);
@@ -729,18 +731,24 @@ get_queues_config(void)
             ds_put_format(&string, "<port>%s</port>", port->name);
         }
 
-        ds_put_format(&string, "<properties>");
+        ds_init(&aux);
         find_and_append_smap_val(&row->other_config, "min-rate", "min-rate",
-                                 &string);
+                                 &aux);
         find_and_append_smap_val(&row->other_config, "max-rate", "max-rate",
-                                 &string);
+                                 &aux);
         find_and_append_smap_val(&row->other_config, "experimenter-id",
-                                 "experimenter-id", &string);
+                                 "experimenter-id", &aux);
         find_and_append_smap_val(&row->other_config, "experimenter-data",
-                                 "experimenter-data", &string);
-        ds_put_format(&string, "</properties></queue>");
+                                 "experimenter-data", &aux);
+        if (aux.length) {
+            ds_put_format(&string, "<properties>%s</properties></queue>",
+                          ds_cstr(&aux));
+            ds_destroy(&aux);
+        } else {
+            ds_put_format(&string, "</queue>");
+        }
     }
-    return ds_steal_cstr(&string);
+    return string.length ? ds_steal_cstr(&string) : NULL;
 }
 
 static void
@@ -786,10 +794,11 @@ get_ports_config(const struct ovsrec_bridge *bridge)
     struct ds string;
     struct vconn *vconnp;
     const char *bridge_name = bridge->name;
-    const char *tunnel_type = NULL;
+    const char *tunnel_type;
     struct ofpbuf *of_ports = NULL;
     struct ofputil_phy_port *of_port = NULL;
     enum ofputil_port_config c;
+    struct ethtool_cmd *ecmd;
 
     if (of_open_vconn(bridge_name, &vconnp) == true) {
         of_ports = of_get_ports(vconnp);
@@ -811,16 +820,17 @@ get_ports_config(const struct ovsrec_bridge *bridge)
                               "<requested-number>%"PRIu64"</requested-number>",
                               row->ofport_request[0]);
             }
-            ds_put_format(&string, "<configuration>");
 
-            /* get interface status */
+            /* port/configuration/ */
             of_port = of_get_port_byname(of_ports, row->name);
             if (of_port != NULL) {
                 c = of_port->config;
-                ds_put_format(&string, "<admin-state>%s</admin-state>"
+                ds_put_format(&string, "<configuration>"
+                              "<admin-state>%s</admin-state>"
                               "<no-receive>%s</no-receive>"
                               "<no-forward>%s</no-forward>"
-                              "<no-packet-in>%s</no-packet-in>",
+                              "<no-packet-in>%s</no-packet-in>"
+                              "</configuration>",
                               (c & OFPUTIL_PC_PORT_DOWN ? "down" : "up"),
                               OFC_PORT_CONF_BIT(c, OFPUTIL_PC_NO_RECV),
                               OFC_PORT_CONF_BIT(c, OFPUTIL_PC_NO_FWD),
@@ -829,20 +839,19 @@ get_ports_config(const struct ovsrec_bridge *bridge)
                 /* port was not found in OpenFlow reply, but admin-state can
                  * be get directly from OVSDB
                  */
-                ds_put_format(&string, "<admin-state>%s</admin-state>",
-                              row->admin_state);
+                ds_put_format(&string, "<configuration>"
+                              "<admin-state>%s</admin-state>"
+                              "</configuration>", row->admin_state);
             }
 
-            ds_put_format(&string, "</configuration>");
+            if (dev_is_system(row->name)) {
+                /* get port/features/ via ioctl() */
+                ecmd = dev_get_ethtool(row->name);
 
-            /* get interface features via ioctl() */
-            struct ethtool_cmd *ecmd;
-
-            ecmd = dev_get_ethtool(row->name);
-
-            ds_put_format(&string, "<features><advertised>");
-            dump_port_features(&string, ecmd->advertising);
-            ds_put_format(&string, "</advertised></features>");
+                ds_put_format(&string, "<features><advertised>");
+                dump_port_features(&string, ecmd->advertising);
+                ds_put_format(&string, "</advertised></features>");
+            }
 
             tunnel_type = smap_get(&row->external_ids, "tunnel_type");
             if (tunnel_type) {
@@ -863,7 +872,6 @@ get_ports_config(const struct ovsrec_bridge *bridge)
                                              &string);
                 }
                 ds_put_format(&string, "</%s>", tunnel_type);
-                tunnel_type = NULL;
             }
             ds_put_format(&string, "</port>");
         }
@@ -872,7 +880,31 @@ get_ports_config(const struct ovsrec_bridge *bridge)
     ofpbuf_delete(of_ports);
     vconn_close(vconnp);
 
-    return ds_steal_cstr(&string);
+    return string.length ? ds_steal_cstr(&string) : NULL;
+}
+
+static char *
+get_flow_tables_state(void)
+{
+    struct ds string;
+    const struct ovsrec_flow_table *ft;
+    const char *tid;
+
+    ds_init(&string);
+
+    OVSREC_FLOW_TABLE_FOR_EACH(ft, ovsdb_handler->idl) {
+        if (ft->n_flow_limit > 0) {
+            tid = smap_get(&(ft->external_ids), "table_id");
+            if (!tid) {
+                continue;
+            }
+            ds_put_format(&string, "<flow-table><table-id>%s</table-id>"
+                          "<max-entries>%ld</max-entries></flow-table>",
+                          tid, ft->flow_limit[0]);
+        }
+    }
+
+    return string.length ? ds_steal_cstr(&string) : NULL;
 }
 
 static char *
@@ -880,7 +912,7 @@ get_ports_state(const struct ovsrec_bridge *bridge)
 {
     const struct ovsrec_interface *row;
     size_t port_it, ifc;
-    struct ds string;
+    struct ds string, aux;
     struct vconn *vconnp;
     const char *bridge_name = bridge->name;
     struct ofpbuf *of_ports = NULL;
@@ -902,25 +934,30 @@ get_ports_state(const struct ovsrec_bridge *bridge)
 
             ds_put_format(&string, "<port>");
             ds_put_format(&string, "<name>%s</name>", row->name);
-            ds_put_format(&string, "<number>%" PRIu64 "</number>",
-                          (row->n_ofport > 0 ? row->ofport[0] : 0));
-            of_port = of_get_port_byname(of_ports, row->name);
-            ds_put_format(&string, "<state>");
-            ds_put_format(&string, "<oper-state>%s</oper-state>",
-                          (row->link_state !=
-                           NULL ? row->link_state : "down"));
+            if (row->n_ofport > 0) {
+                ds_put_format(&string, "<number>%" PRIu64 "</number>",
+                              row->ofport[0]);
+            }
 
+            ds_init(&aux);
+            if (row->link_state) {
+                ds_put_format(&aux, "<oper-state>%s</oper-state>",
+                              row->link_state);
+            }
             find_and_append_smap_val(&row->other_config, "stp_state",
-                                     "blocked", &string);
+                                     "blocked", &aux);
+            of_port = of_get_port_byname(of_ports, row->name);
             if (of_port != NULL) {
-                ds_put_format(&string, "<live>%s</live>",
+                ds_put_format(&aux, "<live>%s</live>",
                               OFC_PORT_CONF_BIT(of_port->state,
                                                 OFPUTIL_PS_LIVE));
             }
+            if (aux.length) {
+                ds_put_format(&string, "<state>%s</state>", aux.string);
+                ds_destroy(&aux);
+            }
 
-            ds_put_format(&string, "</state>");
-
-            /* get interface status via ioctl() */
+            /* get port/features/ via ioctl() */
             struct ethtool_cmd ecmd_;
             struct ethtool_cmd *ecmd = &ecmd_;
 
@@ -1011,7 +1048,7 @@ get_ports_state(const struct ovsrec_bridge *bridge)
     ofpbuf_delete(of_ports);
     vconn_close(vconnp);
 
-    return ds_steal_cstr(&string);
+    return string.length ? ds_steal_cstr(&string) : NULL;
 }
 
 static void
@@ -1025,8 +1062,7 @@ get_controller_state(struct ds *string, const struct ovsrec_controller *row)
         return;
     }
 
-    ds_put_format(string, "<controller><id>%s</id>", val);
-    ds_put_format(string, "<state>");
+    ds_put_format(string, "<controller><id>%s</id><state>", val);
     if (row->is_connected) {
         ds_put_format(string, "<connection-state>up</connection-state>");
         /* XXX not mapped: ds_put_format(string,
@@ -1039,9 +1075,7 @@ get_controller_state(struct ds *string, const struct ovsrec_controller *row)
     } else {
         ds_put_format(string, "<connection-state>down</connection-state>");
     }
-    ds_put_format(string, "</state>");
-
-    ds_put_format(string, "</controller>");
+    ds_put_format(string, "</state></controller>");
 }
 
 /* parses target t: rewrites delimiters to \0 and sets output pointers */
@@ -1110,15 +1144,19 @@ get_controller_config(struct ds *string, const struct ovsrec_controller *row)
     id = smap_get(&(row->external_ids), "ofconfig-id");
 
     ds_put_format(string, "<controller>");
-    ds_put_format(string, "<id>%s</id>", id);
-    ds_put_format(string, "<ip-address>%s</ip-address>", address);
+    ds_put_format(string, "<controller><id>%s</id>", id);
+    if (target) {
+        ds_put_format(string, "<ip-address>%s</ip-address>", address);
+    }
     if (port) {
         ds_put_format(string, "<port>%s</port>", port);
     }
-    ds_put_format(string, "<protocol>%s</protocol>", protocol);
     if (row->local_ip) {
         ds_put_format(string, "<local-ip-address>%s</local-ip-address>",
                       row->local_ip);
+    }
+    if (protocol) {
+        ds_put_format(string, "<protocol>%s</protocol>", protocol);
     }
     ds_put_format(string, "</controller>");
     free(target);
@@ -1136,27 +1174,18 @@ get_bridges_state(void)
         /* char *uuid = print_uuid(&row->header_.uuid); */
         /* ds_put_format(&string, "<resource-id>%s</resource-id>", uuid);
          * free(uuid); */
-        ds_put_format(&string, "<switch>");
-        ds_put_format(&string, "<id>%s</id>", row->name);
-        ds_put_format(&string, "<capabilities><max-buffered-packets>%d"
-                      "</max-buffered-packets>", 256);
-        ds_put_format(&string, "<max-tables>%d</max-tables>", 255);
-        ds_put_format(&string, "<max-ports>%d</max-ports>", 255);
-        ds_put_format(&string, "<flow-statistics>%s</flow-statistics>",
-                      "true");
-        ds_put_format(&string, "<table-statistics>%s</table-statistics>",
-                      "true");
-        ds_put_format(&string, "<port-statistics>%s</port-statistics>",
-                      "true");
-        ds_put_format(&string, "<group-statistics>%s</group-statistics>",
-                      "true");
-        ds_put_format(&string, "<queue-statistics>%s</queue-statistics>",
-                      "true");
-        ds_put_format(&string,
-                      "<reassemble-ip-fragments>%s</reassemble-ip-fragments>",
-                      "true");
-        ds_put_format(&string, "<block-looping-ports>%s</block-looping-ports>",
-                      "true");
+        ds_put_format(&string, "<switch><id>%s</id>", row->name);
+        ds_put_format(&string, "<capabilities>"
+                      "<max-buffered-packets>256</max-buffered-packets>"
+                      "<max-tables>255</max-tables>"
+                      "<max-ports>255</max-ports>"
+                      "<flow-statistics>true</flow-statistics>"
+                      "<table-statistics>true</table-statistics>"
+                      "<port-statistics>true</port-statistics>"
+                      "<group-statistics>true</group-statistics>"
+                      "<queue-statistics>true</queue-statistics>"
+                      "<reassemble-ip-fragments>true</reassemble-ip-fragments>"
+                      "<block-looping-ports>true</block-looping-ports>");
 
         ds_put_format(&string, "<reserved-port-types><type>all</type>"
                       "<type>controller</type><type>table</type>"
@@ -1173,21 +1202,19 @@ get_bridges_state(void)
                       "<capability>chaining-check</capability>"
                       "</group-capabilities>");
 
-        ds_put_format(&string, "<action-types>");
-        ds_put_format(&string, "<type>set-mpls-ttl</type>"
+        ds_put_format(&string, "<action-types><type>set-mpls-ttl</type>"
                       "<type>dec-mpls-ttl</type><type>push-vlan</type>"
-                      "<type>pop-vlan</type><type>push-mpls</type>");
-        ds_put_format(&string, "<type>pop-mpls</type><type>set-queue</type>"
+                      "<type>pop-vlan</type><type>push-mpls</type>"
+                      "<type>pop-mpls</type><type>set-queue</type>"
                       "<type>group</type><type>set-nw-ttl</type>"
-                      "<type>dec-nw-ttl</type><type>set-field</type>");
-        ds_put_format(&string, "</action-types>");
+                      "<type>dec-nw-ttl</type><type>set-field</type>"
+                      "</action-types>");
 
-        ds_put_format(&string, "<instruction-types>");
-        ds_put_format(&string, "<type>apply-actions</type>"
+        ds_put_format(&string, "<instruction-types><type>apply-actions</type>"
                       "<type>clear-actions</type><type>write-actions</type>"
-                      "<type>write-metadata</type><type>goto-table</type>");
-        ds_put_format(&string, "</instruction-types>");
-        ds_put_format(&string, "</capabilities>");
+                      "<type>write-metadata</type><type>goto-table</type>"
+                      "</instruction-types></capabilities>");
+
         if (row->n_controller > 0) {
             ds_put_format(&string, "<controllers>");
             for (i = 0; i < row->n_controller; ++i) {
@@ -1198,7 +1225,7 @@ get_bridges_state(void)
         ds_put_format(&string, "</switch>");
     }
 
-    return ds_steal_cstr(&string);
+    return string.length ? ds_steal_cstr(&string) : NULL;
 }
 
 static char *
@@ -1208,7 +1235,7 @@ get_bridges_config(void)
     const struct ovsrec_open_vswitch *ovs;
     const char *resid, *cert_resid = NULL;
     struct ovsrec_port *port;
-    struct ds string;
+    struct ds string, aux;
     size_t i, j;
 
     /* prepare certificate info, which is global for all bridges */
@@ -1221,12 +1248,14 @@ get_bridges_config(void)
     OVSREC_BRIDGE_FOR_EACH(row, ovsdb_handler->idl) {
         ds_put_format(&string, "<switch>");
         ds_put_format(&string, "<id>%s</id>", row->name);
+        find_and_append_smap_val(&row->other_config, "datapath-id",
+                                 "datapath-id", &string);
+
         /* enabled is not handled: it is too complicated to handle it in
          * combination with the OVSDB's garbage collection. We would have to
          * store almost complete configuration data locally including applying
          * edit-config to it temporarily while the bridge is disabled. */
-        find_and_append_smap_val(&row->other_config, "datapath-id",
-                                 "datapath-id", &string);
+
         if (row->fail_mode) {
             if (!strcmp(row->fail_mode, "standalone")) {
                 ds_put_format(&string, "<lost-connection-behavior>"
@@ -1245,19 +1274,20 @@ get_bridges_config(void)
             ds_put_format(&string, "</controllers>");
         }
 
-        ds_put_format(&string, "<resources>");
+        /* switch/resources/ */
+        ds_init(&aux);
         for (i = 0; i < row->n_ports; i++) {
             port = row->ports[i];
             if (port == NULL) {
                 continue;
             }
-            ds_put_format(&string, "<port>%s</port>", port->name);
+            ds_put_format(&aux, "<port>%s</port>", port->name);
         }
 
         /* flow-table is linked using table-id */
         for (i = 0; i < row->n_flow_tables; i++) {
             /* OVS uses 64b keys */
-            ds_put_format(&string, "<flow-table>%" PRId64 "</flow-table>",
+            ds_put_format(&aux, "<flow-table>%" PRId64 "</flow-table>",
                           row->key_flow_tables[i]);
         }
 
@@ -1269,7 +1299,7 @@ get_bridges_config(void)
                         resid = smap_get(&row->ports[i]->qos->value_queues[j]->external_ids,
                                          OFC_RESOURCE_ID);
                         if (resid != NULL) {
-                            ds_put_format(&string, "<queue>%s</queue>", resid);
+                            ds_put_format(&aux, "<queue>%s</queue>", resid);
                         }
                     }
                 }
@@ -1277,13 +1307,19 @@ get_bridges_config(void)
         }
 
         if (cert_resid) {
-            ds_put_format(&string, "<certificate>%s</certificate>",
-                          cert_resid);
+            ds_put_format(&aux, "<certificate>%s</certificate>", cert_resid);
         }
-        ds_put_format(&string, "</resources></switch>");
+
+        if (aux.length) {
+            ds_put_format(&string, "<resources>%s</resources></switch>",
+                          aux.string);
+            ds_destroy(&aux);
+        } else {
+            ds_put_format(&string, "</switch>");
+        }
     }
 
-    return ds_steal_cstr(&string);
+    return string.length ? ds_steal_cstr(&string) : NULL;
 }
 
 static char *
@@ -1306,10 +1342,8 @@ get_owned_certificates_config(void)
             return NULL;
         }
 
-        ds_put_format(&str, "<owned-certificate>");
-        if (resid) {
-            ds_put_format(&str, "<resource-id>%s</resource-id>", resid);
-        }
+        ds_put_format(&str, "<owned-certificate><resource-id>%s</resource-id>",
+                      resid);
 
         /* certificate */
         fd = open(ssl->certificate, O_RDONLY);
@@ -1396,7 +1430,7 @@ get_owned_certificates_config(void)
         ds_put_format(&str, "</owned-certificate>");
     }
 
-    return ds_steal_cstr(&str);
+    return str.length ? ds_steal_cstr(&str) : NULL;
 }
 
 static char *
@@ -1419,8 +1453,9 @@ get_external_certificates_config(void)
             return NULL;
         }
 
-        ds_put_format(&str, "<external-certificate>");
-        ds_put_format(&str, "<resource-id>%s</resource-id>", resid);
+        ds_put_format(&str,
+                      "<external-certificate><resource-id>%s</resource-id>",
+                      resid);
 
         /* certificate (ca_cert) */
         fd = open(ssl->ca_cert, O_RDONLY);
@@ -1461,7 +1496,7 @@ get_external_certificates_config(void)
         ds_put_format(&str, "</external-certificate>");
     }
 
-    return ds_steal_cstr(&str);
+    return str.length ? ds_steal_cstr(&str) : NULL;
 }
 
 /* Synchronize local copy of OVSDB.  Returns EXIT_SUCCESS on success.
@@ -1494,32 +1529,20 @@ ofc_update(ovsdb_t *p)
 char *
 ofc_get_config_data(void)
 {
-    const char *config_data_format = "<?xml version=\"1.0\"?><capable-switch xmlns=\"urn:onf:config:yang\">"
-        "<id>%s</id><resources>" "%s"    /* port */
-        "%s"                    /* queue */
-        "%s"                    /* owned-certificate */
-        "%s"                    /* external-certificate */
-        "%s"                    /* flow-table */
-        "</resources>"
-        "<logical-switches>%s</logical-switches></capable-switch>";
-
-    struct ds state_data;
-
+    struct ds data, ports_ds;
     const char *id;
     char *queues;
     char *ports;
     char *flow_tables;
     char *bridges;
-    char *owned_certificates;
-    char *external_certificates;
+    char *owned_cert;
+    char *external_cert;
     const struct ovsrec_bridge *bridge;
-    struct ds ports_ds;
 
     if (ovsdb_handler == NULL) {
         return NULL;
     }
-
-    ds_init(&ports_ds);
+    ofc_update(ovsdb_handler);
 
     id = (const char *) ofc_get_switchid();
     if (!id) {
@@ -1527,69 +1550,70 @@ ofc_get_config_data(void)
         return strdup("");
     }
 
-    if (ovsdb_handler == NULL) {
-        return NULL;
-    }
-    ofc_update(ovsdb_handler);
-    queues = get_queues_config();
-    if (queues == (NULL)) {
-        queues = strdup("");
-    }
+    ds_init(&data);
+    ds_put_format(&data, "<?xml version=\"1.0\"?>"
+                  "<capable-switch xmlns=\"urn:onf:config:yang\">"
+                  "<id>%s</id>", id);
+
+    /* /capable-switch/resources */
+    ds_init(&ports_ds);
     OVSREC_BRIDGE_FOR_EACH(bridge, ovsdb_handler->idl) {
         ports = get_ports_config(bridge);
         if (ports == NULL) {
-            strdup("");
+            continue;
         }
+
         ds_put_format(&ports_ds, "%s", ports);
         free(ports);
     }
+
+    ports = NULL;
+    if (ports_ds.length) {
+        ports = ds_cstr(&ports_ds);
+    }
+    queues = get_queues_config();
+    owned_cert = get_owned_certificates_config();
+    external_cert = get_external_certificates_config();
     flow_tables = get_flow_tables_config();
-    if (flow_tables == (NULL)) {
-        flow_tables = strdup("");
-    }
-    bridges = get_bridges_config();
-    if (bridges == (NULL)) {
-        bridges = strdup("");
-    }
-    owned_certificates = get_owned_certificates_config();
-    if (owned_certificates == (NULL)) {
-        owned_certificates = strdup("");
-    }
-    external_certificates = get_external_certificates_config();
-    if (external_certificates == (NULL)) {
-        external_certificates = strdup("");
-    }
 
-    ds_init(&state_data);
-
-    ds_put_format(&state_data, config_data_format, id, ds_cstr(&ports_ds),
-                  queues, flow_tables, owned_certificates,
-                  external_certificates, bridges);
-
-    free(queues);
+    if (ports || queues || owned_cert || external_cert || flow_tables) {
+        ds_put_format(&data, "<resources>%s%s%s%s%s</resources>",
+                      ports ? ports : "",
+                      queues ? queues : "",
+                      owned_cert ? owned_cert : "",
+                      external_cert ? external_cert : "",
+                      flow_tables ? flow_tables : "");
+    }
     ds_destroy(&ports_ds);
+    free(queues);;
+    free(owned_cert);
+    free(external_cert);
     free(flow_tables);
-    free(bridges);
-    free(owned_certificates);
-    free(external_certificates);
 
-    return ds_steal_cstr(&state_data);
+    /* /capable-switch/logical-switches/ */
+    bridges = get_bridges_config();
+    if (bridges) {
+        ds_put_format(&data, "<logical-switches>%s</logical-switches>",
+                      bridges);
+    }
+    free(bridges);
+
+    /* close the envelope */
+    ds_put_format(&data, "</capable-switch>");
+
+    return ds_steal_cstr(&data);
 }
 
 char *
 ofc_get_state_data(void)
 {
-    const char *state_data_format = "<?xml version=\"1.0\"?>"
-        "<capable-switch xmlns=\"urn:onf:config:yang\">"
-        "<config-version>%s</config-version>"
-        "<resources>%s</resources>"
-        "<logical-switches>%s</logical-switches></capable-switch>";
-
+    const char *id;
     char *ports;
+    char *flow_tables;
     char *bridges;
     const struct ovsrec_bridge *bridge;
 
-    struct ds state_data;
+    struct ds data;
     struct ds ports_ds;
 
     if (ovsdb_handler == NULL) {
@@ -1598,28 +1622,55 @@ ofc_get_state_data(void)
     ds_init(&ports_ds);
     ofc_update(ovsdb_handler);
 
+    id = (const char *) ofc_get_switchid();
+    if (!id) {
+        /* no id -> no data */
+        return strdup("");
+    }
+
+    ds_init(&data);
+    ds_put_format(&data, "<?xml version=\"1.0\"?>"
+                  "<capable-switch xmlns=\"urn:onf:config:yang\">"
+                  "<config-version>1.2</config-version>");
+
+    /* /capable-switch/resources */
+    ds_init(&ports_ds);
     OVSREC_BRIDGE_FOR_EACH(bridge, ovsdb_handler->idl) {
         ports = get_ports_state(bridge);
         if (ports == NULL) {
-            strdup("");
+            continue;
         }
+
         ds_put_format(&ports_ds, "%s", ports);
         free(ports);
     }
-    bridges = get_bridges_state();
-    if (bridges == (NULL)) {
-        bridges = strdup("");
+
+    ports = NULL;
+    if (ports_ds.length) {
+        ports = ds_cstr(&ports_ds);
     }
+    flow_tables = get_flow_tables_state();
 
-    ds_init(&state_data);
-
-    ds_put_format(&state_data, state_data_format, "1.2", ds_cstr(&ports_ds),
-                  bridges);
-
-    free(bridges);
+    if (ports || flow_tables) {
+        ds_put_format(&data, "<resources>%s%s</resources>",
+                      ports ? ports : "",
+                      flow_tables ? flow_tables : "");
+    }
     ds_destroy(&ports_ds);
+    free(flow_tables);
 
-    return ds_steal_cstr(&state_data);
+    /* /capable-switch/logical-switches/ */
+    bridges = get_bridges_state();
+    if (bridges) {
+        ds_put_format(&data, "<logical-switches>%s</logical-switches>",
+                      bridges);
+    }
+    free(bridges);
+
+    /* close the envelope */
+    ds_put_format(&data, "</capable-switch>");
+
+    return ds_steal_cstr(&data);
 }
 
 bool

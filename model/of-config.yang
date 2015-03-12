@@ -1342,7 +1342,9 @@ module of-config {
         enum symmetric;
         enum asymmetric;
       }
+      /* ignore this condition to allow validation in case interface is not system
       mandatory true;
+      */
       description
 	"Specifies if pausing of transmission is supported at all and if yes if
          it is asymmetric or symmetric.";

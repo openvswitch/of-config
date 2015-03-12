@@ -1071,7 +1071,6 @@ operations.</text>
         <enum name="symmetric"/>
         <enum name="asymmetric"/>
       </type>
-      <mandatory value="true"/>
       <description>
         <text>Specifies if pausing of transmission is supported at all and if yes if
        it is asymmetric or symmetric.</text>

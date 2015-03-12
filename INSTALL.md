@@ -10,20 +10,15 @@ Open vSwitch Installation, OF-CONFIG Installation.
 OF-CONFIG Build Requirements
 ============================
 
-The list of dependencies:
+The list of OF-CONFIG dependencies:
 
   - autoconf
   - automake
   - gcc
-  - kernel-devel
-  - kernel-headers
-  - libssh2
-  - libssh2-devel
+  - libnetconf
   - libtool
   - libxml2
   - libxml2-devel
-  - libxslt
-  - libxslt-devel
   - m4
   - make
   - openssl
@@ -46,6 +41,16 @@ or
 Note: for the sake of simplicity of this guide, we assume all packages are downloaded in /root/
 and we are logged-in as root. In practice, only make install should be run as root to install
 into system directories.
+
+
+Open vSwitch and libnetconf require some additional dependencies:
+
+  - kernel-devel
+  - kernel-headers
+  - libssh2
+  - libssh2-devel
+  - libxslt
+  - libxslt-devel
 
 Open vSwitch Installation
 =========================

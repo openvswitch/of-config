@@ -6,6 +6,7 @@
       <name>gre0</name>
       <tunnel nc:operation="remove"/>
       <ipgre-tunnel nc:operation="remove"/>
+      <vxlan-tunnel nc:operation="remove"/>
     </port>
   </resources>
 </capable-switch>

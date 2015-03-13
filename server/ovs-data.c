@@ -2881,6 +2881,7 @@ txn_del_port_tunnel(const xmlChar *port_name, xmlNodePtr tunnel_node,
     ovsrec_interface_verify_type(ifc);
     smap_remove((struct smap *) &ifc->options, "local_ip");
     smap_remove((struct smap *) &ifc->options, "remote_ip");
+    smap_remove((struct smap *) &ifc->options, "key");
     smap_remove((struct smap *) &ifc->external_ids, "tunnel_type");
     ovsrec_interface_set_options(ifc, &ifc->options);
     ovsrec_interface_set_external_ids(ifc, &ifc->external_ids);

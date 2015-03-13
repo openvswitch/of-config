@@ -1856,6 +1856,7 @@ int
 txn_del_port(const xmlChar *port_name, struct nc_err **e)
 {
     const struct ovsrec_port *port;
+    const struct ovsrec_interface *iface;
 
     if (!port_name) {
         nc_verb_error("%s: invalid input parameters.", __func__);
@@ -1865,15 +1866,26 @@ txn_del_port(const xmlChar *port_name, struct nc_err **e)
 
     OVSREC_PORT_FOR_EACH(port, ovsdb_handler->idl) {
         if (xmlStrEqual(port_name, BAD_CAST port->name)) {
-            ovsrec_port_delete(port);
-            return EXIT_SUCCESS;
+            break;
+        }
+    }
+    OVSREC_INTERFACE_FOR_EACH(iface, ovsdb_handler->idl) {
+        if (xmlStrEqual(port_name, BAD_CAST iface->name)) {
+            break;
         }
     }
 
-    *e = nc_err_new(NC_ERR_BAD_ELEM);
-    nc_err_set(*e, NC_ERR_PARAM_INFO_BADELEM, "name");
-    nc_err_set(*e, NC_ERR_PARAM_MSG, "Port does not exist in OVSDB");
-    return EXIT_FAILURE;
+    if (!iface || !port) {
+        *e = nc_err_new(NC_ERR_BAD_ELEM);
+        nc_err_set(*e, NC_ERR_PARAM_INFO_BADELEM, "name");
+        nc_err_set(*e, NC_ERR_PARAM_MSG, "Port does not exist in OVSDB");
+        return EXIT_FAILURE;
+    }
+
+    ovsrec_port_delete(port);
+    ovsrec_interface_delete(iface);
+    return EXIT_SUCCESS;
+
 }
 
 /* /capable-switch/resources/port/requested-number */

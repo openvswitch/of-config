@@ -1,0 +1,17 @@
+<capable-switch xmlns="urn:onf:config:yang" xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <id>openvswitch</id>
+  <resources>
+    <port nc:operation="remove">
+      <name>gre0</name>
+    </port>
+  </resources>
+  <logical-switches>
+    <switch>
+      <id>ofc-bridge</id>
+      <resources>
+        <port nc:operation="remove">gre0</port>
+      </resources>
+    </switch>
+  </logical-switches>
+</capable-switch>
+

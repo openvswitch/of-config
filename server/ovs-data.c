@@ -1143,7 +1143,6 @@ get_controller_config(struct ds *string, const struct ovsrec_controller *row)
     parse_target_to_addr(target, &protocol, &address, &port);
     id = smap_get(&(row->external_ids), "ofconfig-id");
 
-    ds_put_format(string, "<controller>");
     ds_put_format(string, "<controller><id>%s</id>", id);
     if (target) {
         ds_put_format(string, "<ip-address>%s</ip-address>", address);

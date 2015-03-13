@@ -3081,7 +3081,7 @@ txn_del_bridge_port(const xmlChar *br_name, const xmlChar *port_name,
     ports = malloc(sizeof *bridge->ports * (bridge->n_ports - 1));
     for (i = j = 0; j < bridge->n_ports; j++) {
         if (!xmlStrEqual(port_name, BAD_CAST bridge->ports[j]->name)) {
-            if (j == bridge->n_ports - 1) {
+            if (i == bridge->n_ports - 1) {
                 /* be silent again for the same reason as earlier in this
                  * function
                  */

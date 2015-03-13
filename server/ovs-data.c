@@ -3976,6 +3976,13 @@ txn_del_bridge(const xmlChar *br_name, struct nc_err **e)
     bridges = malloc(sizeof *ovs->bridges * (ovs->n_bridges - 1));
     for (i = j = 0; j < ovs->n_bridges; j++) {
         if (!xmlStrEqual(br_name, BAD_CAST ovs->bridges[j]->name)) {
+            if (i == ovs->n_bridges - 1) {
+                *e = nc_err_new(NC_ERR_BAD_ELEM);
+                nc_err_set(*e, NC_ERR_PARAM_INFO_BADELEM, "name");
+                nc_err_set(*e, NC_ERR_PARAM_MSG, "switch to remove not found");
+                free(bridges);
+                return EXIT_FAILURE;
+            }
             bridges[i] = ovs->bridges[j];
             i++;
         } else {
@@ -4210,11 +4217,27 @@ txn_del_contr(const xmlChar *contr_id, const xmlChar *br_name,
         return EXIT_FAILURE;
     }
 
-    contrs = malloc(sizeof *br->controller * (br->n_controller - 1));
-    for (i = j = 0; i < br->n_controller; i++) {
-        if (br->controller[i] != contr) {
-            contrs[j] = br->controller[i];
-            j++;
+    switch (br->n_controller) {
+    case 0:
+missing_contr_error:
+        *e = nc_err_new(NC_ERR_OP_FAILED);
+        nc_err_set(*e, NC_ERR_PARAM_MSG,
+                   "Controller to delete is not connected with the specified bridge");
+        return EXIT_FAILURE;
+        break;
+    case 1:
+        contrs = NULL;
+        break;
+    default:
+        contrs = malloc(sizeof *br->controller * (br->n_controller - 1));
+        for (i = j = 0; i < br->n_controller; i++) {
+            if (br->controller[i] != contr) {
+                if (j == br->n_controller - 1) {
+                    goto missing_contr_error;
+                }
+                contrs[j] = br->controller[i];
+                j++;
+            }
         }
     }
     ovsrec_bridge_set_controller(br, contrs, br->n_controller - 1);

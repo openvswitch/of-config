@@ -305,6 +305,7 @@ ofcds_editconfig(void *UNUSED(data), const nc_rpc * UNUSED(rpc),
 {
     int ret = EXIT_FAILURE, running = 0;
     char *aux;
+    int cfgds_new = 0;
     xmlDocPtr cfgds = NULL, cfg = NULL, cfg_clone = NULL;
     xmlNodePtr rootcfg;
 
@@ -383,6 +384,10 @@ ofcds_editconfig(void *UNUSED(data), const nc_rpc * UNUSED(rpc),
     }
 
     /* perform operations */
+    if (!cfgds) {
+        cfgds_new = 1;
+        cfgds = xmlNewDoc(BAD_CAST "1.0");
+    }
     ret = edit_operations(cfgds, cfg, defop, running, error);
     if (ret != EXIT_SUCCESS) {
         goto error_cleanup;
@@ -405,6 +410,18 @@ ofcds_editconfig(void *UNUSED(data), const nc_rpc * UNUSED(rpc),
         /* config clone was used and it is not needed by now */
         xmlFreeDoc(cfg_clone);
 
+        xmlFreeDoc(cfgds);
+    } else if (cfgds_new){
+        if (cfgds->children) {
+            /* document changed, because we started with empty document */
+            if (target == NC_DATASTORE_STARTUP) {
+                gds_startup = cfgds;
+                cfgds = NULL;
+            } else if (target == NC_DATASTORE_CANDIDATE) {
+                gds_cand = cfgds;
+                cfgds = NULL;
+            }
+        }
         xmlFreeDoc(cfgds);
     }
     xmlFreeDoc(cfg);
@@ -557,13 +574,17 @@ ofcds_rollback(void *UNUSED(data))
     int size, ret;
     struct nc_err *e;
 
-    if (!rollback.doc || rollback.type == NC_DATASTORE_ERROR) {
+    if (rollback.type == NC_DATASTORE_ERROR) {
         nc_verb_error("No data to rollback");
         return EXIT_FAILURE;
     }
 
     /* dump data for copy-config */
-    xmlDocDumpMemory(rollback.doc, &data, &size);
+    if (rollback.doc) {
+        xmlDocDumpMemory(rollback.doc, &data, &size);
+    } else {
+        data = xmlStrdup(BAD_CAST "");
+    }
     rollbacking = 1;
     ret = ofcds_copyconfig(NULL, rollback.type, NC_DATASTORE_CONFIG,
                            (char *) data, &e);

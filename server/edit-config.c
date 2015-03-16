@@ -963,6 +963,11 @@ edit_operations(xmlDocPtr orig_doc, xmlDocPtr edit_doc,
 
     *error = NULL;
 
+    if (!orig_doc) {
+        nc_verb_error("No data to edit");
+        return EXIT_FAILURE;
+    }
+
     /* default replace */
     if (defop == NC_EDIT_DEFOP_REPLACE) {
         /* replace whole document */
@@ -1739,7 +1744,7 @@ edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running,
             }
         } else {
             /* we are in the root */
-            parent = (xmlNodePtr) (orig_doc->doc);
+            parent = (xmlNodePtr) (orig_doc);
         }
 
         if (parent->type == XML_DOCUMENT_NODE) {

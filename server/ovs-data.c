@@ -1948,11 +1948,11 @@ txn_mod_port_admin_state(const xmlChar *port_name, const xmlChar *value,
             /* already up */
             return EXIT_SUCCESS;
         }
-        dev_set_flags((char *) port_name, flags & IFF_UP);
+        dev_set_flags((char *) port_name, flags | IFF_UP);
     } else {
         if (xmlStrEqual(value, BAD_CAST "up")) {
             req = 1;
-            flags = dev_get_flags((char *) port_name) & IFF_UP;
+            flags = dev_get_flags((char *) port_name) | IFF_UP;
         } else if (xmlStrEqual(value, BAD_CAST "down")) {
             req = 0;
             flags = dev_get_flags((char *) port_name) & ~IFF_UP;
@@ -1967,7 +1967,8 @@ txn_mod_port_admin_state(const xmlChar *port_name, const xmlChar *value,
 
     /* check the result */
     flags = dev_get_flags((char *) port_name);
-    if ((req && !(flags && IFF_UP)) || (!req && (flags && IFF_UP))) {
+    if ((req && !(flags & IFF_UP)) || (!req && (flags & IFF_UP))) {
+        nc_verb_warning("interface state not affected");
         *e = nc_err_new(NC_ERR_OP_FAILED);
         nc_err_set(*e, NC_ERR_PARAM_MSG,
                    "Interface admin state not set to the requested value.");

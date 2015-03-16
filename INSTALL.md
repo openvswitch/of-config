@@ -127,6 +127,9 @@ for configuration data model. To create validation schemas use:
 OF-CONFIG configure
 -------------------
 
+During the build from git repository of OF-CONFIG, it is required to run the *boot.sh* script.
+This script executes autoreconf to generate some needed files such as configure script.
+
 Finally, build and compilation of OF-CONFIG server is done as follows.
 
 To configure OF-CONFIG, it is needed to set path to Open vSwitch source codes package.

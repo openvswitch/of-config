@@ -30,7 +30,7 @@
 #define XPATH_BUFFER 1024
 
 static int edit_replace(xmlDocPtr, xmlNodePtr, int, struct nc_err **);
-static int edit_delete(xmlNodePtr, int, struct nc_err **);
+static int edit_delete(xmlNodePtr, int, int, struct nc_err **);
 static int edit_remove(xmlDocPtr, xmlNodePtr, int, struct nc_err **);
 static int edit_create(xmlDocPtr, xmlNodePtr, int, struct nc_err **);
 static int edit_merge(xmlDocPtr, xmlNodePtr, int, struct nc_err **);
@@ -971,6 +971,7 @@ edit_operations(xmlDocPtr orig_doc, xmlDocPtr edit_doc,
     /* default replace */
     if (defop == NC_EDIT_DEFOP_REPLACE) {
         /* replace whole document */
+        nc_verb_verbose("edit-config: default replace");
         for (edit_node = edit_doc->children; edit_node != NULL;
              edit_node = edit_doc->children) {
             edit_replace(orig_doc, edit_node, running, error);
@@ -982,6 +983,7 @@ edit_operations(xmlDocPtr orig_doc, xmlDocPtr edit_doc,
     if (nodes != NULL) {
         if (!xmlXPathNodeSetIsEmpty(nodes->nodesetval)) {
             /* something to delete */
+            nc_verb_verbose("edit-config: delete");
             for (i = 0; i < nodes->nodesetval->nodeNr; i++) {
                 edit_node = nodes->nodesetval->nodeTab[i];
                 orig_node = find_element_equiv(orig_doc, edit_node);
@@ -996,13 +998,13 @@ edit_operations(xmlDocPtr orig_doc, xmlDocPtr edit_doc,
                      orig_node = find_element_equiv(orig_doc, edit_node)) {
                     /* remove the edit node's equivalent from the original
                      * document */
-                    if (edit_delete(orig_node, running, error)) {
+                    if (edit_delete(orig_node, running, 1, error)) {
                         xmlXPathFreeObject(nodes);
                         goto error;
                     }
                 }
                 /* remove the node from the edit document */
-                edit_delete(edit_node, 0, error);
+                edit_delete(edit_node, 0, 0, error);
                 nodes->nodesetval->nodeTab[i] = NULL;
             }
         }
@@ -1014,6 +1016,7 @@ edit_operations(xmlDocPtr orig_doc, xmlDocPtr edit_doc,
     if (nodes != NULL) {
         if (!xmlXPathNodeSetIsEmpty(nodes->nodesetval)) {
             /* something to remove */
+            nc_verb_verbose("edit-config: remove");
             for (i = 0; i < nodes->nodesetval->nodeNr; i++) {
                 if (edit_remove(orig_doc, nodes->nodesetval->nodeTab[i],
                                 running, error) != EXIT_SUCCESS) {
@@ -1031,6 +1034,7 @@ edit_operations(xmlDocPtr orig_doc, xmlDocPtr edit_doc,
     if (nodes != NULL) {
         if (!xmlXPathNodeSetIsEmpty(nodes->nodesetval)) {
             /* something to replace */
+            nc_verb_verbose("edit-config: replace");
             for (i = 0; i < nodes->nodesetval->nodeNr; i++) {
                 if (edit_replace(orig_doc, nodes->nodesetval->nodeTab[i],
                                  running, error) != EXIT_SUCCESS) {
@@ -1048,6 +1052,7 @@ edit_operations(xmlDocPtr orig_doc, xmlDocPtr edit_doc,
     if (nodes != NULL) {
         if (!xmlXPathNodeSetIsEmpty(nodes->nodesetval)) {
             /* something to create */
+            nc_verb_verbose("edit-config: create");
             for (i = 0; i < nodes->nodesetval->nodeNr; i++) {
                 if (edit_create(orig_doc, nodes->nodesetval->nodeTab[i],
                                 running, error) != EXIT_SUCCESS) {
@@ -1065,6 +1070,7 @@ edit_operations(xmlDocPtr orig_doc, xmlDocPtr edit_doc,
     if (nodes != NULL) {
         if (!xmlXPathNodeSetIsEmpty(nodes->nodesetval)) {
             /* something to create */
+            nc_verb_verbose("edit-config: explicit merge");
             for (i = 0; i < nodes->nodesetval->nodeNr; i++) {
                 if (edit_merge(orig_doc, nodes->nodesetval->nodeTab[i],
                                running, error) != EXIT_SUCCESS) {
@@ -1081,6 +1087,7 @@ edit_operations(xmlDocPtr orig_doc, xmlDocPtr edit_doc,
     if (defop == NC_EDIT_DEFOP_MERGE || defop == NC_EDIT_DEFOP_NOTSET) {
         /* replace whole document */
         if (edit_doc->children != NULL) {
+            nc_verb_verbose("edit-config: default merge");
             for (edit_node = edit_doc->children; edit_node != NULL;
                  edit_node = edit_doc->children) {
                 if (edit_merge(orig_doc, edit_doc->children,
@@ -1107,10 +1114,11 @@ error:
  *
  * @param[in] node XML node from the configuration data to delete.
  * @param[in] running Flag for applying changes to the OVSDB
+ * @param[in] log Flag for logging the deletion
  * @return Zero on success, non-zero otherwise.
  */
 static int
-edit_delete(xmlNodePtr node, int running, struct nc_err **e)
+edit_delete(xmlNodePtr node, int running, int log, struct nc_err **e)
 {
     xmlNodePtr child;
     const xmlChar *key, *aux;
@@ -1120,8 +1128,11 @@ edit_delete(xmlNodePtr node, int running, struct nc_err **e)
         return EXIT_SUCCESS;
     }
 
-    nc_verb_verbose("Deleting the node %s%s", (char *) node->name,
-                    (running ? " Running" : ""));
+    if (log) {
+        nc_verb_verbose("Deleting the node %s%s", (char *) node->name,
+                        (running ? " Running" : ""));
+    }
+
     if (running) {
         if (node->type != XML_ELEMENT_NODE) {
             /* skip processing comments and simply removes them */
@@ -1140,7 +1151,7 @@ edit_delete(xmlNodePtr node, int running, struct nc_err **e)
                 ofc_set_switchid(NULL);
             } else {            /* resources, logical-switches */
                 while (node->children) {
-                    if ((ret = edit_delete(node->children, running, e))) {
+                    if ((ret = edit_delete(node->children, running, log, e))) {
                         /* failure */
                         break;
                     }
@@ -1205,12 +1216,12 @@ edit_delete(xmlNodePtr node, int running, struct nc_err **e)
             } else if (xmlStrEqual(node->name, BAD_CAST "features")) {
                 child = go2node(node, BAD_CAST "advertised");
                 if (child) {
-                    ret = edit_delete(child, running, e);
+                    ret = edit_delete(child, running, log, e);
                 }
             } else {
                 /* configuration */
                 while (node->children) {
-                    ret = edit_delete(node->children, running, e);
+                    ret = edit_delete(node->children, running, log, e);
                     if (ret) {
                         break;
                     }
@@ -1243,7 +1254,7 @@ edit_delete(xmlNodePtr node, int running, struct nc_err **e)
                 ret = txn_del_queue_port(key, e);
             } else if (xmlStrEqual(node->name, BAD_CAST "properties")) {
                 while (node->children) {
-                    if ((ret = edit_delete(node->children, running, e))) {
+                    if ((ret = edit_delete(node->children, running, log, e))) {
                         break;
                     }
                 }
@@ -1260,7 +1271,7 @@ edit_delete(xmlNodePtr node, int running, struct nc_err **e)
             ret = txn_mod_own_cert_certificate(key, NULL, e);
         } else if (xmlStrEqual(node->name, BAD_CAST "private-key")) {
             while (node->children) {
-                ret = edit_delete(node->children, running, e);
+                ret = edit_delete(node->children, running, log, e);
                 if (ret) {
                     break;
                 }
@@ -1301,7 +1312,7 @@ edit_delete(xmlNodePtr node, int running, struct nc_err **e)
                 ret = txn_mod_bridge_datapath(key, NULL, e);
             } else if (xmlStrEqual(node->name, BAD_CAST "controllers")) {
                 while (node->children) {        /* controller */
-                    if ((ret = edit_delete(node->children, running, e))) {
+                    if ((ret = edit_delete(node->children, running, log, e))) {
                         break;
                     }
                 }
@@ -1360,13 +1371,13 @@ edit_remove(xmlDocPtr orig_doc, xmlNodePtr edit_node, int running,
 
     while ((old = find_element_equiv(orig_doc, edit_node)) != NULL) {
         /* remove the edit node's equivalent from the original document */
-        if (edit_delete(old, running, error)) {
+        if (edit_delete(old, running, 1, error)) {
             return EXIT_FAILURE;
         }
     }
 
     /* remove the node from the edit document */
-    edit_delete(edit_node, 0, error);
+    edit_delete(edit_node, 0, 0, error);
 
     return EXIT_SUCCESS;
 }
@@ -1394,7 +1405,7 @@ edit_replace(xmlDocPtr orig_doc, xmlNodePtr edit_node, int running,
     if (edit_node == NULL) {
         /* replace by empty data */
         if (orig_doc->children) {
-            return (edit_delete(orig_doc->children, running, error));
+            return (edit_delete(orig_doc->children, running, 1, error));
         } else {
             /* initial cleanup */
             return txn_del_all(error);
@@ -1402,22 +1413,22 @@ edit_replace(xmlDocPtr orig_doc, xmlNodePtr edit_node, int running,
     }
 
     old = find_element_equiv(orig_doc, edit_node);
-    if (old == NULL) {
-        /* node to be replaced doesn't exist, so create new configuration data
-         */
-        return edit_create(orig_doc, edit_node, running, error);
-    } else {
+    if (old) {
         /*
          * replace old configuration data with the new data
          * Do this removing the old node and creating a new one to cover actual
          * "moving" of the instance of the list/leaf-list using YANG's insert
          * attribute
          */
-        if (edit_delete(old, running, error)) {
+        if (edit_delete(old, running, 1, error)) {
             return EXIT_FAILURE;
         }
-        return edit_create(orig_doc, edit_node, running, error);
     }
+    /* else - node to replace doesn't exist, so just create new configuration
+     * data
+     */
+
+    return edit_create(orig_doc, edit_node, running, error);
 }
 
 /**
@@ -1760,7 +1771,7 @@ edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running,
 end:
     /* remove the node from the edit document */
     if (!ret) {
-        edit_delete(edit, 0, NULL);
+        edit_delete(edit, 0, 0, NULL);
     }
 
     return ret;
@@ -1816,7 +1827,7 @@ edit_merge(xmlDocPtr orig_doc, xmlNodePtr edit_node, int running,
     }
 
     /* remove the node from the edit document */
-    edit_delete(edit_node, 0, NULL);
+    edit_delete(edit_node, 0, 0, NULL);
 
     return EXIT_SUCCESS;
 }

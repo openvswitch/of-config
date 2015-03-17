@@ -1810,7 +1810,7 @@ txn_del_all(struct nc_err **UNUSED(e))
     const struct ovsrec_port *port;
     const struct ovsrec_ssl *ssl;
 
-    nc_verb_verbose("Delete all (%s:%d)", __FILE__, __LINE__);
+    nc_verb_verbose("Deleting all OVSDB content");
 
     /* remove all settings - we need only to remove two base tables
      * Open_vSwitch and Flow_Sample_Collector_set, the rest will be done by

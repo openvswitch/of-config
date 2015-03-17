@@ -449,8 +449,10 @@ ofcds_copyconfig(void *UNUSED(data), NC_DATASTORE target,
     xmlDocPtr src_doc = NULL;
     xmlDocPtr dst_doc = NULL;
     xmlNodePtr root;
+    static const char *ds[] = {"error", "<config>", "URL", "running",
+                               "startup", "candidate"};
 
-    nc_verb_verbose("OFC COPY-CONFIG (from %d to %d)", source, target);
+    nc_verb_verbose("OFC COPY-CONFIG (from %s to %s)", ds[source], ds[target]);
 
     switch (source) {
     case NC_DATASTORE_RUNNING:

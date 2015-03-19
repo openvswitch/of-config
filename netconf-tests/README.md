@@ -35,6 +35,14 @@ Tests are NOT fully automatic, output of scripts should be revisited manually.
 Tested parts
 ============
 
+OF-CONFIG datastore & invalid capable-switch
+--------------------------------------------
+
+  * group_test_empty_ds.sh
+      * candidate: delete, try to add switch without key, delete, try to add switch, delete
+      * startup: backup to candidate, delete, try to add switch without key, delete, try to add switch, restore from candidate, delete candidate
+      * running: clear (copy empty candidate), try to add switch without key, clear, try to add switch, copy startup to running
+
 Port & Queue
 ------------
 

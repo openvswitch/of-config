@@ -1,0 +1,3 @@
+<capable-switch xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0" xmlns="urn:onf:config:yang" xc:operation="create">
+<id>testsw</id>
+</capable-switch>

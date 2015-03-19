@@ -3,14 +3,31 @@
 
 ./reset.sh
 ./get-config.sh > start_state
-./create_port_eth1.sh
 ./create_modify_remove_tunnel.sh
+check_startup_difference start_state
 ./create_modify_remove_queue.sh
+check_startup_difference start_state
 ./openflow_set.sh
+
+echo "Port modification"
+./run_edit_config.sh create_port_eth1.xml running
 ./run_edit_config.sh change_port_advertised.xml running
 ./get-config.sh
 ./run_edit_config.sh change_port_reqnum.xml running
 ./get-config.sh
+
+# prepare data files for configuration set for eth1
+sed 's,<name>ofc-bridge</name>,<name>eth1</name>,g' port_openflow_set_up.xml > tempfile
+mv tempfile port_openflow_set_up.xml
+sed 's,<name>ofc-bridge</name>,<name>eth1</name>,g' port_openflow_set_down.xml > tempfile
+mv tempfile port_openflow_set_down.xml
+./openflow_set.sh
+# restore data files
+sed 's,<name>eth1</name>,<name>ofc-bridge</name>,g' port_openflow_set_up.xml > tempfile
+mv tempfile port_openflow_set_up.xml
+sed 's,<name>eth1</name>,<name>ofc-bridge</name>,g' port_openflow_set_down.xml > tempfile
+mv tempfile port_openflow_set_down.xml
+
 ./remove_port_eth1.sh
 check_startup_difference start_state
 

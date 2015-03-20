@@ -512,7 +512,6 @@ and time.</text>
         <leaf name="key">
           <type name="yang:hex-string"/>
           <mandatory value="true"/>
-          <nacm:default-deny-all/>
           <description>
             <text>The key associated with the PSK identity</text>
           </description>

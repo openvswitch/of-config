@@ -1513,6 +1513,18 @@ edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running,
         }
 
         if (edit->parent->type == XML_DOCUMENT_NODE) {
+            /* creating whole capable-switch */
+            /* check presence of mandatory id */
+            key = get_key(edit, "id");
+            if (!key) {
+                *e = nc_err_new(NC_ERR_MISSING_ELEM);
+                nc_err_set(*e, NC_ERR_PARAM_INFO_BADELEM, "id");
+                nc_err_set(*e, NC_ERR_PARAM_MSG,
+                           "Missing capable-switch's id");
+                ret = EXIT_FAILURE;
+                goto end;
+            }
+
             /* set it all */
             while (edit->children) {
                 ret = edit_create(orig_doc, edit->children, running, e);

@@ -132,6 +132,8 @@ srv_process_rpc(struct nc_session *session, const nc_rpc *rpc)
         reply = nc_reply_error(err);
     } else if (reply == NCDS_RPC_NOT_APPLICABLE) {
         err = nc_err_new(NC_ERR_OP_FAILED);
+        nc_err_set(err, NC_ERR_PARAM_MSG,
+                   "Request is not applicable to the data managed by the server");
         reply = nc_reply_error(err);
     }
 

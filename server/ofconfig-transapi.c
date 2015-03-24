@@ -40,7 +40,7 @@
 
 /* transAPI version which must be compatible with libnetconf */
 
-/* int transapi_version = 5; */
+/* int transapi_version = 6; */
 
 /* Signal to libnetconf that configuration data were modified by any callback.
  * 0 - data not modified
@@ -114,7 +114,8 @@ ofc_transapi_close(void)
 
 int
 callback_top(void **UNUSED(data), XMLDIFF_OP UNUSED(op),
-             xmlNodePtr UNUSED(node), struct nc_err **UNUSED(error))
+             xmlNodePtr UNUSED(old), xmlNodePtr UNUSED(new),
+             struct nc_err **UNUSED(error))
 {
     nc_verb_verbose("OF-CONFIG data affected.");
 
@@ -149,6 +150,7 @@ struct transapi_rpc_callbacks ofc_rpc_clbks = {
 
 /* overall structure providing content of this module to the libnetconf */
 struct transapi ofc_transapi = {
+    .version = 6,
     .init = ofc_transapi_init,
     .close = ofc_transapi_close,
     .get_state = ofc_status_clb,

@@ -44,7 +44,7 @@
 
 /* transAPI version which must be compatible with libnetconf */
 
-/* int transapi_version = 5; */
+/* int transapi_version = 6; */
 
 /* Signal to libnetconf that configuration data were modified by any callback.
  * 0 - data not modified
@@ -109,13 +109,14 @@ struct ns_pair server_namespace_mapping[] = {
 int
 callback_srv_netconf_srv_ssh_srv_listen_oneport(void **UNUSED(data),
                                                 XMLDIFF_OP op,
-                                                xmlNodePtr node,
+                                                xmlNodePtr UNUSED(old),
+                                                xmlNodePtr new,
                                                 struct nc_err **error)
 {
     char *port;
 
     if (op != XMLDIFF_REM) {
-        port = (char *) xmlNodeGetContent(node);
+        port = (char *) xmlNodeGetContent(new);
         nc_verb_verbose("%s: port %s", __func__, port);
         if (asprintf
             (&sshd_listen, "Port %s\nListenAddress 0.0.0.0\nListenAddress ::",
@@ -141,7 +142,8 @@ callback_srv_netconf_srv_ssh_srv_listen_oneport(void **UNUSED(data),
 int
 callback_srv_netconf_srv_ssh_srv_listen_manyports(void **UNUSED(data),
                                                   XMLDIFF_OP op,
-                                                  xmlNodePtr node,
+                                                  xmlNodePtr UNUSED(old),
+                                                  xmlNodePtr new,
                                                   struct nc_err **error)
 {
     xmlNodePtr n;
@@ -149,7 +151,7 @@ callback_srv_netconf_srv_ssh_srv_listen_manyports(void **UNUSED(data),
     int ret = EXIT_SUCCESS;
 
     if (op != XMLDIFF_REM) {
-        for (n = node->children; n != NULL && (addr == NULL || port == NULL);
+        for (n = new->children; n != NULL && (addr == NULL || port == NULL);
              n = n->next) {
             if (n->type != XML_ELEMENT_NODE) {
                 continue;
@@ -189,7 +191,8 @@ callback_srv_netconf_srv_ssh_srv_listen_manyports(void **UNUSED(data),
  */
 int
 callback_srv_netconf_srv_ssh_srv_listen(void **UNUSED(data), XMLDIFF_OP op,
-                                        xmlNodePtr UNUSED(node),
+                                        xmlNodePtr UNUSED(old),
+                                        xmlNodePtr new,
                                         struct nc_err **error)
 {
     int cfgfile, running_cfgfile;
@@ -311,7 +314,8 @@ server_transapi_init(xmlDocPtr * UNUSED(running))
         ncds_feature_isenabled("ietf-netconf-server", "inbound-ssh")) {
         doc =
             xmlReadDoc(BAD_CAST
-                       "<netconf xmlns=\"urn:ietf:params:xml:ns:yang:ietf-netconf-server\"><ssh><listen><port>830</port></listen></ssh></netconf>",
+                       "<netconf xmlns=\"urn:ietf:params:xml:ns:yang:ietf-netconf-server\">"
+                       "<ssh><listen><port>830</port></listen></ssh></netconf>",
                        NULL, NULL, 0);
         if (doc == NULL) {
             nc_verb_error("Unable to parse default configuration.");
@@ -320,8 +324,9 @@ server_transapi_init(xmlDocPtr * UNUSED(running))
         }
 
         if (callback_srv_netconf_srv_ssh_srv_listen_oneport
-            (NULL, XMLDIFF_ADD, doc->children->children->children->children,
-             &error) != EXIT_SUCCESS) {
+                (NULL, XMLDIFF_ADD, NULL,
+                doc->children->children->children->children,
+                &error) != EXIT_SUCCESS) {
             if (error != NULL) {
                 str_err = nc_err_get(error, NC_ERR_PARAM_MSG);
                 if (str_err != NULL) {
@@ -333,8 +338,8 @@ server_transapi_init(xmlDocPtr * UNUSED(running))
             return (EXIT_FAILURE);
         }
         if (callback_srv_netconf_srv_ssh_srv_listen
-            (NULL, XMLDIFF_ADD, doc->children->children->children,
-             &error) != EXIT_SUCCESS) {
+                (NULL, XMLDIFF_ADD, NULL, doc->children->children->children,
+                &error) != EXIT_SUCCESS) {
             if (error != NULL) {
                 str_err = nc_err_get(error, NC_ERR_PARAM_MSG);
                 if (str_err != NULL) {
@@ -395,6 +400,7 @@ struct transapi_rpc_callbacks server_rpc_clbks = {
 
 /* overall structure providing content of this module to the libnetconf */
 struct transapi server_transapi = {
+    .version = 6,
     .init = server_transapi_init,
     .close = server_transapi_close,
     .get_state = server_get_state_data,

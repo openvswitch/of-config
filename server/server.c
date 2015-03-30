@@ -56,7 +56,8 @@ static void
 print_usage(char *progname)
 {
     fprintf(stdout, "Usage: %s [-fh] [-d OVSDB] [-v level]\n", progname);
-    fprintf(stdout, " -d,--db  OVSDB         socket path to communicate with OVSDB\n");
+    fprintf(stdout, " -d,--db  OVSDB         socket path to communicate with OVSDB\n"
+                    "                        (e.g. -d unix://var/run/openvswitch/db.sock)\n");
     fprintf(stdout, " -f,--foreground        run in foreground\n");
     fprintf(stdout, " -h,--help              display help\n");
     fprintf(stdout, " -v,--verbose level     verbose output level\n");

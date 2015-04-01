@@ -142,9 +142,9 @@ Path to configured OVS directory must be passed:
 
     [of-config]$ ./configure --with-ovs-srcdir=/root/openvswitch-2.3.1 PKG_CONFIG_PATH=/usr/local/lib/pkgconfig/
 
-Note: libnetconf was installed with default prefix (/usr/local/). That means pc file is stored in
-/usr/local/lib/pkgconfig/. If it is not problem for pkg-config to detect pc files in this path,
-setting of PKG_CONFIG_PATH variable can be omitted.
+Note: libnetconf was installed with default prefix (/usr/local/). That means the .pc file is located in
+/usr/local/lib/pkgconfig/. On some distros, pkg-config ignores .pc files in this location so setting
+the PKG_CONFIG_PATH is a way to make pkg-config search for .pc files there.
 
 OF-CONFIG Build
 ---------------

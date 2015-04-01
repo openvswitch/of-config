@@ -100,7 +100,7 @@ OF-CONFIG Installation
 pyang
 -----
 
-    [~]# tar -xf pyang-1.4.1.tar.gz && cd pyang-1.4.1 && python setup.py install
+    [~]$ tar -xf pyang-1.4.1.tar.gz && cd pyang-1.4.1 && python setup.py install
 
 To convert configuration data model into different format, use:
 
@@ -113,11 +113,13 @@ libnetconf
 
 libnetconf can be installed simply by:
 
-    [~]# git clone https://code.google.com/p/libnetconf
+    [~]$ git clone https://code.google.com/p/libnetconf
 
-    [~]# cd libnetconf
+    [~]$ cd libnetconf
 
-    [libnetconf]# ./configure && make && make install
+    [libnetconf]$ ./configure && make
+
+    [libnetconf]# make install
 
 libnetconf is shipped with lnctool utility that can be used to generate validation schemas
 for configuration data model. To create validation schemas use:
@@ -138,7 +140,7 @@ The following steps are based on previous guide.
 After successful configuration and build of Open vSwitch package, OF-CONFIG can be configured.
 Path to configured OVS directory must be passed:
 
-    [of-config]# ./configure --with-ovs-srcdir=/root/openvswitch-2.3.1 PKG_CONFIG_PATH=/usr/local/lib/pkgconfig/
+    [of-config]$ ./configure --with-ovs-srcdir=/root/openvswitch-2.3.1 PKG_CONFIG_PATH=/usr/local/lib/pkgconfig/
 
 Note: libnetconf was installed with default prefix (/usr/local/). That means pc file is stored in
 /usr/local/lib/pkgconfig/. If it is not problem for pkg-config to detect pc files in this path,
@@ -149,7 +151,7 @@ OF-CONFIG Build
 
 After successful configuration of OF-CONFIG, it can be build and installed using standard steps:
 
-    [of-config]# make
+    [of-config]$ make
 
     [of-config]# make install
 

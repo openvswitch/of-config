@@ -64,7 +64,7 @@ Owned-certificate
 -----------------
   * group_test_owned_cert.sh
       * reset configuration on start [reset.sh]
-      * create [create_owned_cert.sh] (expected change is checked)
+      * create [create_owned_cert.sh] (create_owned_cert.sh)
       * modify [change_owned_cert.xml] (change of configuration is checked)
       * remove [remove_owned_cert.xml]
       * create malformed certificate [create_malform_certificates.xml]

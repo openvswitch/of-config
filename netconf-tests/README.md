@@ -47,13 +47,16 @@ Port & Queue
 ------------
 
   * group_test_port.sh
-      * reset configuration on start [reset.sh]
-      * create and remove port [create_port_eth1.sh, remove_port_eth1.sh]
-      * modify port configuration (admin-state, no-receive, no-packet-in, no-forward) [openflow_set.sh]
+      * reset configuration on start [reset.sh] (reset.sh)
+      * create and remove port [create_port_eth1.sh, remove_port_eth1.sh] (create_port_eth1.sh, remove_port_eth1.sh)
+      * modify port configuration (admin-state, no-receive, no-packet-in, no-forward) [openflow_set.sh] (openflow_set.sh)
       * modify advertised [change_port_advertised.xml]
+        (change_port_advertised.xml)
       * modify request-number [change_port_reqnum.xml]
+        (change_port_reqnum.xml)
       * create, modify, remove queue [create_modify_remove_queue.sh]
-      * create, modify, remove port with tunnel configuration [create_modify_remove_tunnel.sh]
+        (create_modify_remove_queue.sh)
+      * create, modify, remove port with tunnel configuration [create_modify_remove_tunnel.sh] (create_modify_remove_tunnel.sh)
       * configuration after tests should be equal to state after reset (it is checked)
       * create multiple ports
       * create multiple queues
@@ -63,17 +66,18 @@ Port & Queue
 Owned-certificate
 -----------------
   * group_test_owned_cert.sh
-      * reset configuration on start [reset.sh]
-      * create [create_owned_cert.sh] (create_owned_cert.sh)
-      * modify [change_owned_cert.xml] (change of configuration is checked)
-      * remove [remove_owned_cert.xml]
+      * reset configuration on start [reset.sh] (reset.sh)
+      * create (expected change is checked) [create_owned_cert.sh] (create_owned_cert.sh)
+      * modify (change of configuration is checked) [change_owned_cert.xml] (change_owned_cert.xml)
+      * remove [remove_owned_cert.xml] (remove_owned_cert.xml)
       * create malformed certificate [create_malform_certificates.xml]
+        (create_malform_certificates.xml)
       * configuration after tests should be equal to state after reset (it is checked)
 
 External-certificate
 -----------------
   * group_test_ext_cert.sh
-      * reset configuration on start [reset.sh]
+      * reset configuration on start [reset.sh] (reset.sh)
       * create [create_ext_cert.sh] (expected change is checked)
       * modify [change_ext_cert.xml] (change of configuration is checked)
       * remove [remove_ext_cert.xml]
@@ -84,7 +88,7 @@ Flow-table
 ----------
 
   * group_test_flowtable.sh
-      * reset configuration on start [reset.sh]
+      * reset configuration on start [reset.sh] (reset.sh)
       * create [create_flowtable.sh] (expected change is checked)
       * modify [change_flowtable.xml] (change of configuration is checked)
       * remove [remove_flowtable.xml]
@@ -107,7 +111,7 @@ Switch
 Controller
 ----------
   * group_test_controller.sh
-      * reset configuration on start [reset.sh]
+      * reset configuration on start [reset.sh] (reset.sh)
       * create controller [create_controller.xml] (expected change is checked)
       * modify controller (ip-address, port, local-ip-address, protocol) [change_controller.xml] (change of configuration is checked)
       * remove controller [remove_controller.xml]

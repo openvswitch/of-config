@@ -1219,6 +1219,7 @@ get_bridges_config(void)
     const char *resid, *cert_resid = NULL;
     struct ovsrec_port *port;
     struct ds string, aux;
+    char dpid[24];
     size_t i, j;
 
     /* prepare certificate info, which is global for all bridges */
@@ -1231,8 +1232,18 @@ get_bridges_config(void)
     OVSREC_BRIDGE_FOR_EACH(row, ovsdb_handler->idl) {
         ds_put_format(&string, "<switch>");
         ds_put_format(&string, "<id>%s</id>", row->name);
-        ds_put_format(&string, "<datapath-id>%s</datapath-id>",
-                      row->datapath_id);
+
+        if(row->datapath_id) {
+            for (i = 0, j = 1; j < 24; j++) {
+                if (!(j % 3)) {
+                    dpid[j - 1] = ':';
+                } else {
+                    dpid[j - 1] = row->datapath_id[i++];
+                }
+            }
+            dpid[j - 1] = '\0';
+            ds_put_format(&string, "<datapath-id>%s</datapath-id>", dpid);
+        }
 
         /* enabled is not handled: it is too complicated to handle it in
          * combination with the OVSDB's garbage collection. We would have to

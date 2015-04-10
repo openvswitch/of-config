@@ -147,8 +147,9 @@ of_open_vconn(const char *name, struct vconn **vconnp)
     enum ofputil_protocol protocol;
     char *bridge_path = NULL;
     int ofp_version;
-    int error;
+    int error, max_try;
     bool ret = false;
+    struct timespec timeout = {1, 0};
 
     if (asprintf(&bridge_path, "%s/%s.mgmt", ovs_rundir(), name) == -1) {
         return false;
@@ -162,26 +163,38 @@ of_open_vconn(const char *name, struct vconn **vconnp)
         goto cleanup;
     }
 
-    if (strchr(name, ':')) {
-        vconn_open(name, OFPUTIL_DEFAULT_VERSIONS, DSCP_DEFAULT, vconnp);
-    } else if (!of_open_vconn_socket(name, vconnp)) {
-        /* Fall Through. */
-    } else if (!of_open_vconn_socket(bridge_path, vconnp)) {
-        /* Fall Through. */
-    } else if (!of_open_vconn_socket(sock_name, vconnp)) {
-        /* Fall Through. */
-    } else {
-        nc_verb_error("OpenFlow: %s is not a bridge or a socket.", name);
-        goto cleanup;
-    }
+    max_try = 30;
+    /* After creation of a new bridge, it lasts some time
+     * before the socket is ready -> repeat connection until
+     * the 'max_try' is 0 or the connection is successful. */
+    do {
+        if (strchr(name, ':')) {
+            vconn_open(name, OFPUTIL_DEFAULT_VERSIONS, DSCP_DEFAULT, vconnp);
+        } else if (!of_open_vconn_socket(name, vconnp)) {
+            /* Fall Through. */
+        } else if (!of_open_vconn_socket(bridge_path, vconnp)) {
+            /* Fall Through. */
+        } else if (!of_open_vconn_socket(sock_name, vconnp)) {
+            /* Fall Through. */
+        } else {
+            nc_verb_error("OpenFlow: %s is not a bridge or a socket.", name);
+            goto cleanup;
+        }
 
-    nc_verb_verbose("OpenFlow: connecting to %s", vconn_get_name(*vconnp));
-    error = vconn_connect_block(*vconnp);
-    if (error) {
-        nc_verb_error("OpenFlow: %s: failed to connect to socket (%s).", name,
-                      ovs_strerror(error));
-        goto cleanup;
-    }
+        nc_verb_verbose("OpenFlow: connecting to %s", vconn_get_name(*vconnp));
+        error = vconn_connect_block(*vconnp);
+        if (error) {
+            nc_verb_error("OpenFlow: %s: failed to connect to socket (%s).",
+                          name, ovs_strerror(error));
+            if (--max_try == 0) {
+                /* max try elapsed, giving up... */
+                goto cleanup;
+            }
+            vconn_close(*vconnp);
+            nanosleep(&timeout, NULL);
+        }
+    } while (error == ECONNRESET);
+    nc_verb_verbose("OpenFlow: %s: successful connection.", name);
 
     ofp_version = vconn_get_version(*vconnp);
     protocol = ofputil_protocol_from_ofp_version(ofp_version);

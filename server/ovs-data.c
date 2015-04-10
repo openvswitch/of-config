@@ -621,25 +621,9 @@ static void
 find_and_append_smap_val(const struct smap *s, const char *key,
                          const char *elem, struct ds *string)
 {
-    int i, j;
-    char dpid[24];
-
     const char *value = smap_get(s, key);
 
     if (value != NULL) {
-        /* exception for datapath-id format conversion */
-        if (!strcmp(elem, "datapath-id")) {
-            for (i = 0, j = 1; j < 24; j++) {
-                if (!(j % 3)) {
-                    dpid[j - 1] = ':';
-                } else {
-                    dpid[j - 1] = value[i++];
-                }
-            }
-            dpid[j - 1] = '\0';
-            value = dpid;
-        }
-
         ds_put_format(string, "<%s>%s</%s>", elem, value, elem);
     }
 }
@@ -1248,6 +1232,7 @@ get_bridges_config(void)
     const char *resid, *cert_resid = NULL;
     struct ovsrec_port *port;
     struct ds string, aux;
+    char dpid[24];
     size_t i, j;
 
     /* prepare certificate info, which is global for all bridges */
@@ -1260,8 +1245,18 @@ get_bridges_config(void)
     OVSREC_BRIDGE_FOR_EACH(row, ovsdb_handler->idl) {
         ds_put_format(&string, "<switch>");
         ds_put_format(&string, "<id>%s</id>", row->name);
-        find_and_append_smap_val(&row->other_config, "datapath-id",
-                                 "datapath-id", &string);
+
+        if(row->datapath_id) {
+            for (i = 0, j = 1; j < 24; j++) {
+                if (!(j % 3)) {
+                    dpid[j - 1] = ':';
+                } else {
+                    dpid[j - 1] = row->datapath_id[i++];
+                }
+            }
+            dpid[j - 1] = '\0';
+            ds_put_format(&string, "<datapath-id>%s</datapath-id>", dpid);
+        }
 
         /* enabled is not handled: it is too complicated to handle it in
          * combination with the OVSDB's garbage collection. We would have to

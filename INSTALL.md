@@ -146,6 +146,13 @@ Note: libnetconf was installed with default prefix (/usr/local/). That means the
 /usr/local/lib/pkgconfig/. On some distros, pkg-config ignores .pc files in this location so setting
 the PKG_CONFIG_PATH is a way to make pkg-config search for .pc files there.
 
+By default, the server uses D-Bus internal communication. Therefore, the access rights configuration
+settings can be found at /etc/dbus-1/system.d/org.opennetworking.ofc.conf file. If you need to avoid
+D-Bus usage, use the configure's --disable-dbus option. In such a case, the server is going to use
+UNIX sockets for the internal communication. While D-Bus allows you to limit users and groups allowed
+to connect to ofc-server, there is no such configuration when the sockets are used for internal
+communication.
+
 OF-CONFIG Build
 ---------------
 
@@ -165,6 +172,12 @@ By default, ofc-server starts in daemon mode. To avoid daemon mode, pass -f para
 ofc-server supports some parameters that can be found in help: ofc-server -h
 
 Useful parameter is -v<level> that specifies level of verbose output.
+
+    [of-config]# ofc-server -v 3 -f
+
+Since ofc-server is supposed to communicate with OVSDB, ofc-server has to run with
+the sufficient privileges to access OVSDB interfaces (sockets). Usually, it means running
+ofc-server with the root privileges.
 
 Troubleshooting
 ===============

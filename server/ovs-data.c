@@ -149,7 +149,7 @@ of_open_vconn(const char *name, struct vconn **vconnp)
     int ofp_version;
     int error, max_try;
     bool ret = false;
-    struct timespec timeout = {1, 0};
+    const struct timespec timeout = {1, 0};
 
     if (asprintf(&bridge_path, "%s/%s.mgmt", ovs_rundir(), name) == -1) {
         return false;
@@ -178,7 +178,7 @@ of_open_vconn(const char *name, struct vconn **vconnp)
             /* Fall Through. */
         } else {
             nc_verb_error("OpenFlow: %s is not a bridge or a socket.", name);
-            goto cleanup;
+            goto timeout;
         }
 
         nc_verb_verbose("OpenFlow: connecting to %s", vconn_get_name(*vconnp));
@@ -186,15 +186,27 @@ of_open_vconn(const char *name, struct vconn **vconnp)
         if (error) {
             nc_verb_error("OpenFlow: %s: failed to connect to socket (%s).",
                           name, ovs_strerror(error));
+timeout:
             if (--max_try == 0) {
-                /* max try elapsed, giving up... */
+                /* max_try elapsed, giving up... */
                 goto cleanup;
             }
-            vconn_close(*vconnp);
+            if (*vconnp) {
+                vconn_close(*vconnp);
+                *vconnp = NULL;
+            }
             nanosleep(&timeout, NULL);
         }
-    } while (error == ECONNRESET);
-    nc_verb_verbose("OpenFlow: %s: successful connection.", name);
+        /* Repeat when we haven't successful connection.  When the
+         * socket is not ready yet, OVS disconnects us (ECONNRESET). */
+    } while (!(*vconnp) || error == ECONNRESET);
+
+    if (*vconnp) {
+        nc_verb_verbose("OpenFlow: %s: successful connection.", name);
+    } else {
+        nc_verb_error("OpenFlow: %s: connection failed, giving up.", name);
+        goto cleanup;
+    }
 
     ofp_version = vconn_get_version(*vconnp);
     protocol = ofputil_protocol_from_ofp_version(ofp_version);

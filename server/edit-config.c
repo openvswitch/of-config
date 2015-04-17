@@ -1310,8 +1310,10 @@ edit_delete(xmlNodePtr node, int running, int log, struct nc_err **e)
             /* key (id) cannot be deleted */
             if (xmlStrEqual(node->name, BAD_CAST "datapath-id")) {
                 ret = txn_mod_bridge_datapath(key, NULL, e);
-            } else if (xmlStrEqual(node->name, BAD_CAST "controllers")) {
-                while (node->children) {        /* controller */
+            } else if (xmlStrEqual(node->name, BAD_CAST "controllers")
+                       || xmlStrEqual(node->name, BAD_CAST "resources")) {
+                while (node->children) {
+                    /* controller, content of resources (port, queue, ...) */
                     if ((ret = edit_delete(node->children, running, log, e))) {
                         break;
                     }
@@ -1724,8 +1726,10 @@ edit_create(xmlDocPtr orig_doc, xmlNodePtr edit, int running,
             if (xmlStrEqual(edit->name, BAD_CAST "datapath-id")) {
                 aux = edit->children ? edit->children->content : NULL;
                 ret = txn_mod_bridge_datapath(key, aux, e);
-            } else if (xmlStrEqual(edit->name, BAD_CAST "controllers")) {
-                while (edit->children) {        /* controller */
+            } else if (xmlStrEqual(edit->name, BAD_CAST "controllers")
+                       || xmlStrEqual(edit->name, BAD_CAST "resources")) {
+                while (edit->children) {
+                    /* controller, content of resources (port, queue, ...) */
                     ret = edit_create(orig_doc, edit->children, running, e);
                     if (ret) {
                         break;

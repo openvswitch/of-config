@@ -75,3 +75,10 @@ manipualation. The test scripts are intended for use with Netopeer CLI client,
 but the test data can be used freely with any other NETCONF client. More
 information can be found in [netconf-tests/README.md].
 
+
+
+[INSTALL.md]:INSTALL.md
+[INSTALL.Vagrantmd]:INSTALL.Vagrant.md
+[netconf-tests]:netconf-tests
+[netconf-tests/README.md]:netconf-tests/README.md
+

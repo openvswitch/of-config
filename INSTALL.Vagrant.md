@@ -5,30 +5,36 @@ This document describes how to build and install OF-CONFIG server and its depend
 The goal is to simplify the installation setup and get started with using OF-CONFIG server.
 
 Requirements
-============
+------------
 
 The guide assumes that Virtualbox and Vagrant are installed in your machine.
 You can download these software here:
 
-Virtualbox: https://www.virtualbox.org/wiki/Downloads
-Vagrant: http://www.vagrantup.com/downloads
+- Virtualbox: https://www.virtualbox.org/wiki/Downloads
+- Vagrant: http://www.vagrantup.com/downloads
 
 Installation
-============
+------------
 
-Start the VM Installation using:
-vagrant up (this will take few minutes)
+Start the VM Installation using (this will take few minutes):
+```
+vagrant up
+```
 
 Once the installation is complete, SSH into the VM:
+```
 vagrant ssh
+```
 
 Run
-===
+---
 Run the ofc-server using:
+```
 ofc-server -v 3 -f
+```
 
 Troubleshooting
-===============
+---------------
 
 Note: the current VM is started with a private network address and hence
 cannot be reached via public network. If you prefer setting up the VM

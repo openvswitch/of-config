@@ -57,3 +57,28 @@ for each connected OF-CONFIG client.
         |  OVSDB  |                 |
         |  server |<----------------+
         +---------+
+
+
+Install
+-------
+
+To install OF-CONFIG server on a regular Linux host, please follow
+[INSTALL.md]. To build and install OF-CONFIG server in the Vagrant
+environment, see [INSTALL.Vagrant.md].
+
+ 
+Test Cases
+----------
+
+The [netconf-tests] subdirectory contains test cases for configuration data
+manipualation. The test scripts are intended for use with Netopeer CLI client,
+but the test data can be used freely with any other NETCONF client. More
+information can be found in [netconf-tests/README.md].
+
+
+
+[INSTALL.md]:INSTALL.md
+[INSTALL.Vagrantmd]:INSTALL.Vagrant.md
+[netconf-tests]:netconf-tests
+[netconf-tests/README.md]:netconf-tests/README.md
+

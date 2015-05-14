@@ -122,7 +122,16 @@ manipualation. The test scripts are intended for use with Netopeer CLI client,
 but the test data can be used freely with any other NETCONF client. More
 information can be found in [netconf-tests/README.md].
 
+Other Documentation
+-------------------
+
+The project directory contains several documents worthwhile further reading.
+- [COMPAT](./COMPAT.md) describes compatibility issues between OF-CONFIG data model and OVSDB schema.
+- [IMPLEMENTATION](./IMPLEMENTATION.md) includes notes how the specific OF-CONFIG parts were implemented.
+- [MODEL](./MODEL.md) summarizes our experiences with the oficial OF-CONFIG 1.2 data model and issues we faced.
+
 [INSTALL.md]:INSTALL.md
 [INSTALL.Vagrantmd]:INSTALL.Vagrant.md
 [netconf-tests]:netconf-tests
 [netconf-tests/README.md]:netconf-tests/README.md
+

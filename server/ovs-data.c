@@ -685,8 +685,9 @@ get_flow_tables_config(void)
                           resource_id);
         }
         if (row->name) {
-            ds_put_format(&string, "<name>%s</name></flow-table>", row->name);
+            ds_put_format(&string, "<name>%s</name>", row->name);
         }
+        ds_put_format(&string, "</flow-table>");
     }
     return string.length ? ds_steal_cstr(&string) : NULL;
 }

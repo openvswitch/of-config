@@ -26,6 +26,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <syslog.h>
+#include <unistd.h>
+#include <sys/types.h>
 
 #include <libnetconf.h>
 
@@ -109,6 +111,9 @@ ofcds_free(void *UNUSED(data))
     /* dump startup to persistent storage */
     if (gds_startup) {
         xmlSaveFormatFile(OFC_DATADIR "/startup.xml", gds_startup, 1);
+    } else {
+        /* erase the file */
+        truncate(OFC_DATADIR "/startup.xml", 0);
     }
 
     /* cleanup locks */

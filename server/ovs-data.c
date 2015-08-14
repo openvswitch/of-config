@@ -147,7 +147,7 @@ of_open_vconn(const char *name, struct vconn **vconnp)
     enum ofputil_protocol protocol;
     char *bridge_path = NULL;
     int ofp_version;
-    int error, max_try;
+    int error = 0, max_try;
     bool ret = false;
     const struct timespec timeout = {1, 0};
 

@@ -36,7 +36,7 @@ SCRIPT
 
 $install_libnetconf = <<SCRIPT
 cd /root/
-git clone https://code.google.com/p/libnetconf
+git clone https://github.com/CESNET/libnetconf
 cd libnetconf
 ./configure && make
 make install
